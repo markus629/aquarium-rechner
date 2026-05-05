@@ -49,6 +49,9 @@
   .form-row input { padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; }
   .form-row input[type="date"] { width:170px; }
   .form-row input[type="number"] { width:110px; text-align:right; }
+  .form-row-multi { gap:1.5rem 2rem; align-items:center; }
+  .form-row-multi .form-field { display:flex; align-items:center; gap:0.6rem; }
+  .form-row-multi .form-field label { font-weight:600; min-width:0; }
   .btn { padding:0.6rem 1.2rem; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
   .btn-primary { background:linear-gradient(135deg,var(--orange),var(--orange-dark)); color:#fff; box-shadow:0 4px 10px rgba(232,115,42,0.3); }
   .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 14px rgba(232,115,42,0.4); }
@@ -181,17 +184,19 @@
     <p class="info-line" style="font-size:0.78rem;">Letzte Zeile leer ausfüllen und mit ✓ als neues Element speichern. Vorhandene Elemente lassen sich mit − löschen (Mess-Historie bleibt erhalten).</p>
 
     <h3>Mischung</h3>
-    <div class="form-row">
-      <label>Tagesdosis je Lösung (ml/Tag)</label>
-      <input type="number" id="dailyMl" min="0" step="0.1" value="5">
-    </div>
-    <div class="form-row">
-      <label>ICP-Abstand (Tage)</label>
-      <input type="number" id="icpIntervalDays" min="1" step="1" value="30">
-    </div>
-    <div class="form-row">
-      <label>Sicherheit (Tage)</label>
-      <input type="number" id="safetyDays" min="0" step="1" value="10">
+    <div class="form-row form-row-multi">
+      <div class="form-field">
+        <label>Tagesdosis je Lösung (ml/Tag)</label>
+        <input type="number" id="dailyMl" min="0" step="0.1" value="5">
+      </div>
+      <div class="form-field">
+        <label>ICP-Abstand (Tage)</label>
+        <input type="number" id="icpIntervalDays" min="1" step="1" value="30">
+      </div>
+      <div class="form-field">
+        <label>Sicherheit (Tage)</label>
+        <input type="number" id="safetyDays" min="0" step="1" value="10">
+      </div>
     </div>
     <div class="form-row" style="font-size:0.8rem; color:var(--text-light);">
       <label>Ergibt</label>
@@ -202,13 +207,15 @@
       <input type="number" id="capPct" step="1" value="25">
     </div>
     <h3>Glättung</h3>
-    <div class="form-row">
-      <label>Glättungs-Fenster (Anzahl Messungen)</label>
-      <input type="number" id="smoothN" min="1" max="10" step="1" value="3">
-    </div>
-    <div class="form-row">
-      <label>Totband (% von Min/Optimal/Max)</label>
-      <input type="number" id="deadbandPct" min="0" max="100" step="5" value="50">
+    <div class="form-row form-row-multi">
+      <div class="form-field">
+        <label>Glättungs-Fenster (Anzahl Messungen)</label>
+        <input type="number" id="smoothN" min="1" max="10" step="1" value="3">
+      </div>
+      <div class="form-field">
+        <label>Totband (% von Min/Optimal/Max)</label>
+        <input type="number" id="deadbandPct" min="0" max="100" step="5" value="50">
+      </div>
     </div>
     <p class="info-line" style="font-size:0.78rem;">Ist der Messwert innerhalb dieses Anteils zwischen Optimal und Min/Max, wird die alte Dosis beibehalten (kein Reagieren auf Mess-Rauschen).</p>
 
