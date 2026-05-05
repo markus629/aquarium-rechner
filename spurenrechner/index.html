@@ -49,9 +49,14 @@
   .form-row input { padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; }
   .form-row input[type="date"] { width:170px; }
   .form-row input[type="number"] { width:110px; text-align:right; }
-  .form-row-multi { gap:1.5rem 2rem; align-items:center; }
-  .form-row-multi .form-field { display:flex; align-items:center; gap:0.6rem; }
-  .form-row-multi .form-field label { font-weight:600; min-width:0; }
+  .form-row-multi { gap:0.5rem 1rem; align-items:center; flex-wrap:nowrap; }
+  .form-row-multi .form-field { display:flex; align-items:center; gap:0.5rem; flex:1 1 0; min-width:0; }
+  .form-row-multi .form-field label { font-weight:600; min-width:0; font-size:0.9rem; line-height:1.2; }
+  .form-row-multi .form-field input[type="number"] { width:70px; flex:0 0 auto; }
+  @media (max-width: 600px) {
+    .form-row-multi .form-field label { font-size:0.8rem; }
+    .form-row-multi { gap:0.4rem; }
+  }
   .btn { padding:0.6rem 1.2rem; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
   .btn-primary { background:linear-gradient(135deg,var(--orange),var(--orange-dark)); color:#fff; box-shadow:0 4px 10px rgba(232,115,42,0.3); }
   .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 14px rgba(232,115,42,0.4); }
