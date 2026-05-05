@@ -19,3 +19,14 @@ Plant Tagesdosen einzelner Spurenelemente basierend auf ICP-Messwerten und Verbr
 ## Hosting
 
 Statische HTML-Seiten — keine Server, keine Datenbanken. Alles läuft im Browser. Daten verlassen niemals deinen Computer.
+
+## Lizenz
+
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+Du darfst das Material teilen und bearbeiten, sofern du:
+- **Namensnennung** vornimmst (Markus / markus629)
+- es **nicht für kommerzielle Zwecke** nutzt
+- abgeleitete Werke unter der **gleichen Lizenz** weitergibst
+
+Vollständiger Lizenztext: [LICENSE](LICENSE)
