@@ -1,0 +1,1775 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C&R Aquarium Rechner</title>
+  <style>
+    :root {
+      --blue: #1a73a7; --blue-dark: #125a84; --blue-light: #e8f4fb;
+      --orange: #e8732a; --orange-dark: #c45f1f;
+      --green: #2e9e5a; --yellow: #e6a817; --red: #d94040;
+      --bg: #f0f4f8; --card: #fff; --text: #1a2a3a; --text-light: #5a6a7a;
+      --border: #d0d8e0; --radius: 12px; --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    input[type="number"] { -moz-appearance:textfield; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; overflow:hidden; }
+    header::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:20px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 20'%3E%3Cpath d='M0,10 C200,0 400,20 600,10 C800,0 1000,20 1200,10 L1200,20 L0,20 Z' fill='%23f0f4f8'/%3E%3C/svg%3E") no-repeat; background-size:cover; }
+    header h1 { font-size:1.8rem; font-weight:700; }
+    header p { opacity:0.85; font-size:0.95rem; margin-top:0.25rem; }
+    main { max-width:960px; margin:0 auto; padding:1.5rem 1rem 3rem; }
+    .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
+    .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); }
+    .card h3 { font-size:1rem; color:var(--text); margin:1.25rem 0 0.5rem; }
+    .param-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; }
+    .param-row label { font-weight:600; white-space:nowrap; min-width:180px; }
+    .param-row input { width:120px; padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; text-align:right; }
+    .param-row .unit { color:var(--text-light); font-size:0.9rem; }
+    .param-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem 1rem; margin-bottom:0.75rem; }
+    .param-cell { display:flex; flex-direction:column; gap:0.3rem; }
+    .param-cell label { font-weight:600; font-size:0.85rem; white-space:nowrap; }
+    .param-cell input { width:80px; padding:0.45rem 0.6rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; text-align:right; }
+    .param-cell .unit { color:var(--text-light); font-size:0.9rem; }
+    .toggle-btn { padding:0.45rem 0.8rem; border:2px solid #ccc; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; background:#e8e8e8; color:#888; transition:all 0.2s; }
+    .toggle-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+    .help-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#e0e4ea; color:#5a6a7a; font-size:0.7rem; font-weight:700; cursor:pointer; border:none; margin-left:0.3rem; vertical-align:middle; flex-shrink:0; }
+    .help-btn:hover { background:var(--blue); color:#fff; }
+    .help-popup { display:none; position:fixed; z-index:1000; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.2); padding:1rem 1.2rem; max-width:340px; font-size:0.85rem; line-height:1.5; color:var(--text); }
+    .help-popup.show { display:block; }
+    .help-popup .help-close { position:absolute; top:0.4rem; right:0.6rem; background:none; border:none; font-size:1.2rem; cursor:pointer; color:#aaa; }
+    .help-popup .help-close:hover { color:var(--text); }
+    .help-popup h4 { margin:0 0 0.5rem; font-size:0.95rem; }
+    .help-popup p { margin:0.3rem 0; }
+    .help-popup .help-diagram { background:#f5f7fa; border-radius:8px; padding:0.6rem; margin:0.5rem 0; font-family:monospace; font-size:0.75rem; line-height:1.6; white-space:pre; }
+    .element-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; }
+    .element-item { display:flex; flex-direction:column; gap:0.25rem; padding:0.75rem; border-radius:8px; background:var(--bg); }
+    .element-item:focus-within { box-shadow:0 0 0 2px var(--blue); }
+    .element-label { font-weight:600; font-size:0.9rem; display:flex; justify-content:space-between; }
+    .element-label .sym { color:var(--text-light); font-weight:400; font-size:0.8rem; }
+    .element-input-row { display:flex; align-items:center; gap:0.5rem; }
+    .element-input-row input { flex:1; padding:0.45rem 0.6rem; border:2px solid var(--border); border-radius:6px; font-size:0.95rem; text-align:right; min-width:0; transition:border-color 0.2s; }
+    .element-input-row .unit { color:var(--text-light); font-size:0.8rem; min-width:32px; }
+    .element-range { font-size:0.75rem; color:var(--text-light); }
+    .input-ok input { border-color:var(--green); }
+    .input-warn input { border-color:var(--yellow); }
+    .input-bad input { border-color:var(--red); }
+    .btn-calculate { display:block; width:100%; max-width:320px; margin:0 auto 1.5rem; padding:0.85rem 2rem; background:linear-gradient(135deg,var(--orange),var(--orange-dark)); color:#fff; border:none; border-radius:10px; font-size:1.1rem; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(232,115,42,0.3); transition:transform 0.15s,box-shadow 0.15s; }
+    .btn-calculate:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(232,115,42,0.4); }
+    .hidden { display:none !important; }
+    .results-section { animation:fadeIn 0.4s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+    /* Ausgleich-Schritte */
+    .step-card { border-left:4px solid var(--blue); }
+    .step-card.final { border-left-color:var(--green); }
+    .step-header { display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; }
+    .step-num { display:inline-flex; width:32px; height:32px; border-radius:50%; background:var(--blue); color:#fff; align-items:center; justify-content:center; font-weight:700; font-size:0.9rem; flex-shrink:0; }
+    .step-card.final .step-num { background:var(--green); }
+    .step-title { font-weight:700; font-size:1.05rem; }
+    .step-nav-btn { width:36px; height:36px; border-radius:50%; border:1px solid #ccc; background:#fff; font-size:1.3rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:var(--blue); transition:all 0.15s; }
+    .step-nav-btn:hover:not(:disabled) { background:var(--blue); color:#fff; }
+    .step-nav-btn:disabled { opacity:0.25; cursor:default; }
+    .step-info { display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1rem; }
+    .step-box { background:var(--blue-light); border-radius:8px; padding:0.75rem; text-align:center; }
+    .step-box .val { font-size:1.3rem; font-weight:700; color:var(--blue); }
+    .step-box .lbl { font-size:0.8rem; color:var(--text-light); }
+    .sol-table { width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:0.75rem; min-width:max-content; }
+    .sol-table th { text-align:left; padding:0.35rem 0.5rem; border-bottom:2px solid var(--border); color:var(--text-light); font-weight:600; font-size:0.75rem; text-transform:uppercase; white-space:nowrap; }
+    .sol-table td { padding:0.3rem 0.5rem; border-bottom:1px solid #eee; white-space:nowrap; }
+    .sol-table th:first-child, .sol-table td:first-child { position:sticky; left:0; background:#fff; z-index:1; }
+    .sol-table tbody tr:nth-child(even) td { background:#f5f7fa; }
+    .sol-table tr.zero td { color:#ccc; }
+    .sol-table .ml { font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+    .val-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    .val-table th { text-align:left; padding:0.35rem 0.5rem; border-bottom:2px solid var(--border); color:var(--text-light); font-weight:600; font-size:0.75rem; text-transform:uppercase; }
+    .val-table td { padding:0.3rem 0.5rem; border-bottom:1px solid #eee; font-variant-numeric:tabular-nums; }
+    .val-table .opt { color:var(--green); font-weight:700; }
+    .val-table .improved { color:var(--blue); }
+    .val-table .worse { color:var(--red); font-weight:700; }
+    .val-table .same { color:var(--text-light); }
+
+
+
+    /* Tabs */
+    .tabs { display:flex; gap:0; margin-bottom:0; }
+    .tab-btn { flex:1; padding:0.7rem 1rem; border:none; background:var(--bg); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; }
+    .tab-btn.active { background:var(--card); color:var(--blue); border-bottom-color:var(--blue); }
+    .tab-btn:hover:not(.active) { background:#e4e9ef; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    /* Einstellungen Liste */
+    .settings-list { display:flex; flex-direction:column; gap:0.5rem; }
+    .setting-item { display:grid; grid-template-columns:110px 28px 62px 28px 62px 28px 62px 50px 62px 22px; align-items:center; gap:0.3rem; padding:0.5rem 0.5rem; background:var(--bg); border-radius:8px; }
+    .setting-item label { font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .setting-item input { width:100%; padding:0.25rem 0.35rem; border:1.5px solid var(--border); border-radius:5px; font-size:0.82rem; text-align:right; box-sizing:border-box; }
+    .setting-item .s-lbl { font-size:0.7rem; color:var(--text-light); text-align:right; white-space:nowrap; }
+    .sol-item { display:grid; grid-template-columns:70px 50px 55px 12px 24px 55px 30px 12px 24px 55px 30px; align-items:center; gap:0.3rem; padding:0.5rem 0.5rem; background:var(--bg); border-radius:8px; }
+    .sol-item label { font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sol-item input { width:100%; padding:0.25rem 0.35rem; border:1.5px solid var(--border); border-radius:5px; font-size:0.82rem; text-align:right; box-sizing:border-box; }
+    .sol-item .s-lbl { font-size:0.7rem; color:var(--text-light); text-align:right; white-space:nowrap; }
+    .sol-item .sol-sep { color:#ccc; text-align:center; }
+
+    /* Info-Popup */
+    .info-btn { width:22px; height:22px; border-radius:50%; border:1.5px solid var(--blue); background:none; color:var(--blue); font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+    .info-btn:hover { background:var(--blue); color:#fff; }
+    circle.sol-info-ring, text.sol-info-txt { transition:all 0.15s; }
+    circle[fill="transparent"]:hover + circle.sol-info-ring { fill:var(--blue); stroke:var(--blue); }
+    circle[fill="transparent"]:hover + circle.sol-info-ring + text.sol-info-txt { fill:#fff; }
+    .info-popup { display:none; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); padding:1rem; margin-top:0.5rem; position:relative; }
+    .info-popup.open { display:block; }
+    .info-popup svg { display:block; width:100%; max-width:400px; height:auto; margin:0.5rem auto; }
+    .info-popup .info-title { font-weight:700; font-size:0.9rem; margin-bottom:0.5rem; color:var(--blue); }
+    .info-popup .info-row { display:flex; justify-content:space-between; font-size:0.8rem; padding:0.15rem 0; border-bottom:1px solid #f0f0f0; }
+    .info-popup .info-row span:first-child { color:var(--text-light); }
+    .info-popup .info-row span:last-child { font-weight:600; font-variant-numeric:tabular-nums; }
+    .info-close { position:absolute; top:6px; right:10px; background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--text-light); }
+
+    /* Feder-Visualisierung */
+    .spring-viz { margin:1rem 0; overflow-x:auto; }
+    .spring-viz > svg { display:block; width:100%; height:auto; }
+    .spring-legend svg { display:inline-block; flex-shrink:0; vertical-align:middle; }
+    .spring-legend { display:flex; gap:1.2rem; flex-wrap:wrap; padding:0.5rem 0.75rem; background:var(--bg); border-radius:8px; font-size:0.75rem; color:var(--text-light); margin-top:0.5rem; }
+    .spring-legend-item { display:flex; align-items:center; gap:0.3rem; }
+
+    .summary-card { background:linear-gradient(135deg,var(--blue-light),#dff0fa); }
+    .summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .score-big { font-size:2rem; font-weight:800; }
+    .score-big.good { color:var(--green); }
+    .score-big.ok { color:var(--yellow); }
+    .score-big.bad { color:var(--red); }
+    .hint { background:#fef7e0; border-left:4px solid var(--yellow); padding:0.75rem 1rem; border-radius:0 8px 8px 0; font-size:0.85rem; color:#6b5900; margin-top:1rem; }
+
+    footer { text-align:center; padding:1.5rem; font-size:0.8rem; color:var(--text-light); }
+    @media(max-width:640px) {
+      .element-grid { grid-template-columns:1fr; }
+      .step-info { grid-template-columns:1fr; }
+      .summary-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>C&R Aquarium Rechner</h1>
+    <p>Ausgleich durch Wasserwechsel mit speziell angepasstem Meerwasser</p>
+  </header>
+  <main>
+    <div class="card" style="padding-bottom:0.5rem">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-messwerte',this)">ICP-Messwerte</button>
+        <button class="tab-btn" onclick="switchTab('tab-settings',this)">Einstellungen</button>
+      </div>
+
+      <div id="tab-messwerte" class="tab-content active" style="padding-top:1rem">
+        <div class="param-grid">
+          <div class="param-cell">
+            <label for="volume">Aquariumvolumen:</label>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <input type="number" id="volume" value="450" min="1" step="1">
+              <span class="unit">Liter</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="param-grid" style="margin-top:0.5rem;border-top:1px solid #e0e4ea;padding-top:0.75rem">
+          <div class="param-cell">
+            <label for="psu-mess">Gemessene PSU:</label>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <input type="number" id="psu-mess" value="34.5" min="20" max="45" step="0.01" oninput="updatePsuDisplay()">
+              <span class="unit">PSU</span>
+            </div>
+          </div>
+          <div class="param-cell">
+            <label for="psu-ziel">Ziel-PSU:</label>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <input type="number" id="psu-ziel" value="34.5" min="20" max="45" step="0.01" oninput="updatePsuDisplay()">
+              <span class="unit">PSU</span>
+            </div>
+          </div>
+        </div>
+        <h3>ICP-Messwerte</h3>
+        <div class="element-grid" id="el-grid"></div>
+      </div>
+
+      <div id="tab-settings" class="tab-content" style="padding-top:1rem">
+        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem;padding:0.75rem;background:#f0f4f8;border-radius:8px">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <label style="font-weight:600;font-size:0.85rem;white-space:nowrap;min-width:180px">Max. Wasserwechsel:</label>
+            <input type="number" id="max-wc-pct" value="10" min="1" max="100" step="1" style="width:60px;padding:0.3rem 0.4rem;border:1px solid #ccc;border-radius:6px;font-size:0.9rem;text-align:center" onchange="saveState()">
+            <span style="font-size:0.8rem;color:var(--text-light)">% — Maximale Wasserwechsel-Menge pro Schritt</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <label style="font-weight:600;font-size:0.85rem;white-space:nowrap;min-width:180px">Optimal-Toleranz:</label>
+            <input type="number" id="opt-tolerance" value="5" min="1" max="50" step="1" style="width:60px;padding:0.3rem 0.4rem;border:1px solid #ccc;border-radius:6px;font-size:0.9rem;text-align:center" onchange="saveState()">
+            <span style="font-size:0.8rem;color:var(--text-light)">% — Toleranz vom Optimum für grünen Marker</span>
+            <span style="position:relative;display:inline-block">
+              <button class="info-btn" onclick="event.stopPropagation();document.getElementById('tol-info').classList.toggle('open')" title="Info zur Toleranz">i</button>
+              <div id="tol-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
+                <button class="info-close" onclick="document.getElementById('tol-info').classList.remove('open')">&times;</button>
+                Bei sehr kleinen Werten (unter 3&percnt;) kann es vorkommen, dass nicht alle Elemente exakt im Toleranzbereich landen. Der Solver optimiert alle Elemente gleichzeitig — da jede Lösung zwei Ionen enthält (z.B. CaCl₂ &rarr; Ca + Cl), lässt sich bei enger Toleranz nicht jedes Element unabhängig perfekt einstellen. Die Berechnung stoppt dann beim bestmöglichen Ergebnis.
+              </div>
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <label style="font-weight:600;font-size:0.85rem;white-space:nowrap;min-width:180px" for="maxd-enabled">Max Δ verwenden:</label>
+            <input type="checkbox" id="maxd-enabled" checked onchange="onMaxDeltaToggle()" style="width:18px;height:18px;cursor:pointer">
+            <span style="font-size:0.8rem;color:var(--text-light)">— Wenn aus: Solver springt direkt zum Optimum (weniger Wasserwechsel-Schritte)</span>
+            <span style="position:relative;display:inline-block">
+              <button class="info-btn" onclick="event.stopPropagation();document.getElementById('maxd-info').classList.toggle('open')" title="Info zu Max Δ">i</button>
+              <div id="maxd-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
+                <button class="info-close" onclick="document.getElementById('maxd-info').classList.remove('open')">&times;</button>
+                Max Δ begrenzt, wie stark sich ein Wert pro Wasserwechsel-Schritt ändern darf. Aktiviert: schonender für empfindliche Korallen, ggf. mehr Schritte. Deaktiviert: weniger Schritte, größere Sprünge — die Max-Δ-Werte unten werden ignoriert.
+              </div>
+            </span>
+          </div>
+        </div>
+        <h3 style="margin-bottom:0.75rem">Elementbereiche (Min / Optimal / Max) <span style="font-weight:400;font-size:0.8rem;color:var(--text-light)">— Referenzwerte bei 34,5 PSU</span></h3>
+        <div class="settings-list" id="settings-grid"></div>
+        <h3 style="margin-top:1.5rem;margin-bottom:0.75rem">C&R Lösungen <span style="font-weight:400;font-size:0.8rem;color:var(--text-light)">— Konzentrationen pro 100L Meerwasser</span></h3>
+        <div class="settings-list" id="sol-grid"></div>
+      </div>
+
+    </div>
+
+    <div style="display:flex;flex-wrap:nowrap;gap:0.75rem;justify-content:center;align-items:center;margin-bottom:1.5rem;max-width:700px;margin-left:auto;margin-right:auto">
+      <button class="btn-calculate" style="margin:0;flex:1 1 0;min-width:0;width:auto;max-width:none" onclick="berechnen()">Berechnen</button>
+      <button class="btn-calculate" style="margin:0;flex:1 1 0;min-width:0;width:auto;max-width:none;background:linear-gradient(135deg,#2e9e5a 0%,#27ae60 100%)" onclick="nurDefizite()">Nur Defizite</button>
+    </div>
+
+    <div id="results" class="hidden results-section"></div>
+  </main>
+
+  <!-- Hilfe-Popups -->
+  <div class="help-popup" id="help-defizit">
+    <button class="help-close" onclick="hideHelp('help-defizit')">&times;</button>
+    <h4>Nur Defizite ausgleichen</h4>
+    <p>Gibt <strong>nur Lösungen direkt ins Becken</strong> — kein Wasser wird entnommen. Ideal wenn einzelne Werte zu niedrig sind, aber kein vollständiger Wasserwechsel nötig ist.</p>
+    <div class="help-diagram">Beispiel: Ca = 390 (opt: 425)
+
+→ CaCl2-Lösung direkt ins Becken dosieren
+→ Ca steigt auf ~420 ✅
+
+Aber: CaCl2 bringt auch Cl mit!
+→ Cl steigt leicht mit ⚠️</div>
+    <p>Elemente die bereits <strong>über Optimal</strong> liegen, können ohne Wasserwechsel nicht gesenkt werden. Der Solver ignoriert Überschüsse und gleicht nur Defizite aus, soweit möglich.</p>
+  </div>
+
+  <div class="help-popup" id="help-rezept-anleitung">
+    <button class="help-close" onclick="hideHelp('help-rezept-anleitung')">&times;</button>
+
+    <h4>Anleitung: Wasserwechsel durchführen</h4>
+    <p><strong>Empfohlene Methode</strong> (schonend für Korallen):</p>
+    <div class="help-diagram">1. Wasser aus dem Aquarium entnehmen
+2. In einem separaten Behälter:
+   Osmosewasser + C&R Lösungen mischen
+3. Gut verrühren, kurz warten
+4. Fertiges Meerwasser ins Becken geben</div>
+    <p>So kommt nur homogenes Wasser mit den Zielkonzentrationen ans Becken — keine lokalen Konzentrationsspitzen.</p>
+    <p style="margin-top:0.6rem"><strong>Bei mehreren Wasserwechseln:</strong></p>
+    <div class="help-diagram">Jeden Wasserwechsel einzeln durchführen!
+WC 1: entnehmen → mischen → zugeben
+WC 2: entnehmen → mischen → zugeben
+...
+Die Rezepte unterscheiden sich pro WC,
+weil jeder auf dem Ergebnis des
+vorherigen aufbaut.</div>
+    <p style="margin-top:0.6rem;font-size:0.8rem;color:#6b5900">⚠️ Konzentrierte Lösungen <strong>nicht</strong> direkt ins Becken geben — lokale Spitzen können SPS-Korallen schädigen.</p>
+  </div>
+
+  <footer>Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.</footer>
+
+  <script>
+    // ===== DATEN =====
+    const EL = [
+      { key:'Cl', name:'Chlor',    min:19000, opt:19500, max:20000, unit:'mg/l', ex:19367, w:1, maxDelta:200 },
+      { key:'Na', name:'Natrium',   min:10300, opt:10800, max:11300, unit:'mg/l', ex:10895, w:1, maxDelta:100 },
+      { key:'Mg', name:'Magnesium', min:1230,  opt:1320,  max:1400,  unit:'mg/l', ex:1346, w:1, maxDelta:50 },
+      { key:'S',  name:'Schwefel',  min:865,   opt:920,   max:960,   unit:'mg/l', ex:907.5, w:1, maxDelta:30 },
+      { key:'Ca', name:'Calcium',   min:400,   opt:425,   max:440,   unit:'mg/l', ex:411.7, w:1, maxDelta:20 },
+      { key:'K',  name:'Kalium',    min:380,   opt:405,   max:420,   unit:'mg/l', ex:393.3, w:1, maxDelta:15 },
+      { key:'Br', name:'Brom',      min:55,    opt:68,    max:80,    unit:'mg/l', ex:67.6, w:1, maxDelta:5 },
+      { key:'Sr', name:'Strontium', min:7.5,   opt:8.2,   max:9.5,   unit:'mg/l', ex:8.29, w:1, maxDelta:0.5 },
+      { key:'B',  name:'Bor',       min:4,     opt:4.5,   max:6,     unit:'mg/l', ex:4.42, w:1, maxDelta:0.5 },
+      { key:'F',  name:'Fluorid',   min:1.0,   opt:1.3,   max:1.8,   unit:'mg/l', ex:1.50, w:1, maxDelta:0.1 },
+    ];
+
+    // C&R Lösungen: mlRef = ml pro 100L für Standardrezept, catInc/anInc = Konzentrationserhöhung
+    const SOL = [
+      { name:'NaCl',    mlRef:100, cat:'Na', catInc:120,  an:'Cl', anInc:185 },
+      { name:'MgCl2',   mlRef:10,  cat:'Mg', catInc:10,   an:'Cl', anInc:29.2 },
+      { name:'MgSO4',   mlRef:20,  cat:'Mg', catInc:10,   an:'S',  anInc:13.2 },
+      { name:'KCl',     mlRef:10,  cat:'K',  catInc:10,   an:'Cl', anInc:9.1 },
+      { name:'KBr',     mlRef:1,   cat:'K',  catInc:0.5,  an:'Br', anInc:1 },
+      { name:'K2SO4',   mlRef:25,  cat:'K',  catInc:10,   an:'S',  anInc:4.1 },
+      { name:'CaCl2',   mlRef:5,   cat:'Ca', catInc:10,   an:'Cl', anInc:17.7 },
+      { name:'SrCl2',   mlRef:1,   cat:'Sr', catInc:1,    an:'Cl', anInc:0.8 },
+      { name:'Bor (B)', mlRef:20,  cat:'B',  catInc:0.1,  an:null, anInc:0 },
+      { name:'Na2SO4',  mlRef:50,  cat:'Na', catInc:21.5, an:'S',  anInc:15 },
+      { name:'NaF',     mlRef:10,  cat:'Na', catInc:0.55, an:'F',  anInc:0.45 },
+    ];
+
+    // mg pro ml Lösung (Rate)
+    SOL.forEach(s => {
+      s.catR = (s.catInc * 100) / s.mlRef;
+      s.anR = s.an ? (s.anInc * 100) / s.mlRef : 0;
+    });
+    const eIdx = {}; EL.forEach((e,i) => eIdx[e.key] = i);
+
+    // Referenz-PSU: Alle Zielwerte (min/opt/max) und das Rezept sind für diese PSU definiert
+    const REF_PSU = 34.5;
+
+    function getOptTolerance() { return (parseFloat(document.getElementById('opt-tolerance')?.value) || 5) / 100; }
+    function isMaxDeltaEnabled() {
+      const cb = document.getElementById('maxd-enabled');
+      return cb ? cb.checked : true;
+    }
+    function onMaxDeltaToggle() {
+      const enabled = isMaxDeltaEnabled();
+      EL.forEach(e => {
+        const inp = document.getElementById('set-maxd-' + e.key);
+        if (inp) {
+          inp.disabled = !enabled;
+          inp.style.opacity = enabled ? '1' : '0.4';
+        }
+      });
+      saveState();
+    }
+    function getMessPsu() { return parseFloat(document.getElementById('psu-mess')?.value) || REF_PSU; }
+    function getZielPsu() { return parseFloat(document.getElementById('psu-ziel')?.value) || REF_PSU; }
+    function displayFactor() { return getMessPsu() / REF_PSU; }
+    function solverFactor() { return getZielPsu() / REF_PSU; }
+    const REF_ION_SUM = EL.reduce((s, e) => s + e.opt, 0);
+    function estimatePsu(vals, els) {
+      els = els || EL;
+      const sum = els.reduce((s, e) => s + (vals[e.key] || 0), 0);
+      return REF_PSU * sum / REF_ION_SUM;
+    }
+
+    // Meerwasser-Rezept: ml pro 100L in SOL-Reihenfolge
+    // NaCl, MgCl2, MgSO4, KCl, KBr, K2SO4, CaCl2, SrCl2, Bor, Na2SO4, NaF
+    const RECIPE = [8998.7, 737.8, 1164.4, 0, 68.0, 929.3, 212.5, 8.2, 900.0, 0, 28.9];
+
+    // Zielkonzentrationen des Meerwasser-Rezepts (mg/l)
+    const SEAWATER = { Na:10800, Cl:19558, Mg:1320, S:920, Ca:424, K:405, Br:68, Sr:8.2, B:4.5, F:1.3 };
+
+    // ===== UI =====
+
+    // Tab-Umschaltung
+    // ===== HILFE-POPUPS =====
+    function showHelp(event, id) {
+      event.stopPropagation();
+      // Alle schließen
+      document.querySelectorAll('.help-popup').forEach(p => p.classList.remove('show'));
+      const popup = document.getElementById(id);
+      const btn = event.currentTarget;
+      const rect = btn.getBoundingClientRect();
+
+      // Positionieren: unter dem Button, mittig
+      popup.classList.add('show');
+      const popW = popup.offsetWidth;
+      let left = rect.left + rect.width / 2 - popW / 2;
+      let top = rect.bottom + 8;
+
+      // Bildschirmrand-Check
+      if (left < 8) left = 8;
+      if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+      if (top + popup.offsetHeight > window.innerHeight - 8) top = rect.top - popup.offsetHeight - 8;
+
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+    }
+
+    function hideHelp(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    // Klick außerhalb schließt Popup
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.help-popup') && !e.target.closest('.help-btn')) {
+        document.querySelectorAll('.help-popup').forEach(p => p.classList.remove('show'));
+      }
+    });
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+
+      // Berechnen-Buttons und Ergebnisse nur auf dem Messwerte-Tab zeigen
+      const isMesswerte = tabId === 'tab-messwerte';
+      document.querySelector('.btn-calculate').parentElement.style.display = isMesswerte ? 'flex' : 'none';
+      document.getElementById('results').style.display = isMesswerte ? '' : 'none';
+    }
+
+    // ICP-Messwerte Grid
+    const grid = document.getElementById('el-grid');
+    EL.forEach(e => {
+      const d = document.createElement('div');
+      d.className = 'element-item'; d.id = 'item-'+e.key;
+      d.innerHTML = `<div class="element-label">${e.name} <span class="sym">(${e.key})</span></div>
+        <div class="element-input-row"><input type="number" id="in-${e.key}" value="${e.ex}" step="any" oninput="col('${e.key}')"><span class="unit">${e.unit}</span></div>
+        <div class="element-range" id="range-${e.key}">Min: ${e.min} | Optimal: ${e.opt} | Max: ${e.max}</div>`;
+      grid.appendChild(d);
+    });
+    EL.forEach(e => col(e.key));
+
+    function col(k) {
+      const e = EL[eIdx[k]], v = parseFloat(document.getElementById('in-'+k).value), it = document.getElementById('item-'+k);
+      it.classList.remove('input-ok','input-warn','input-bad');
+      if (isNaN(v)) return;
+      const f = displayFactor();
+      const mn = e.min * f, mx = e.max * f;
+      if (v >= mn && v <= mx) it.classList.add('input-ok');
+      else { const m = (mx-mn)*0.15; it.classList.add(v >= mn-m && v <= mx+m ? 'input-warn' : 'input-bad'); }
+    }
+
+    // PSU-skalierte Bereiche anzeigen und Farben aktualisieren
+    function updatePsuDisplay() {
+      const f = displayFactor();
+      const psu = getMessPsu();
+      const showPsu = Math.abs(psu - REF_PSU) > 0.001;
+      EL.forEach(e => {
+        const el = document.getElementById('range-'+e.key);
+        if (el) {
+          const mn = fmt(e.min * f), op = fmt(e.opt * f), mx = fmt(e.max * f);
+          el.textContent = `Min: ${mn} | Optimal: ${op} | Max: ${mx}` + (showPsu ? ` (bei ${psu.toFixed(2)} PSU)` : '');
+        }
+        col(e.key);
+      });
+    }
+
+    // Einstellungen Grid
+    const settingsGrid = document.getElementById('settings-grid');
+    EL.forEach(e => {
+      const wrapper = document.createElement('div');
+      const d = document.createElement('div');
+      d.className = 'setting-item';
+      d.innerHTML = `
+        <label>${e.name} <span style="color:var(--text-light);font-weight:400;font-size:0.75rem">(${e.key})</span></label>
+        <span class="s-lbl">Min</span>
+        <input type="number" id="set-min-${e.key}" value="${e.min}" step="any" onchange="updateSetting('${e.key}')">
+        <span class="s-lbl">Opt</span>
+        <input type="number" id="set-opt-${e.key}" value="${e.opt}" step="any" onchange="updateSetting('${e.key}')">
+        <span class="s-lbl">Max</span>
+        <input type="number" id="set-max-${e.key}" value="${e.max}" step="any" onchange="updateSetting('${e.key}')">
+        <span class="s-lbl" style="margin-left:0.4rem">Max Δ</span>
+        <input type="number" id="set-maxd-${e.key}" value="${e.maxDelta}" step="any" onchange="updateSetting('${e.key}')">
+        <button class="info-btn" onclick="toggleInfo('${e.key}')" title="Solver-Parameter anzeigen">i</button>
+      `;
+      wrapper.appendChild(d);
+      // Info-Popup (hidden by default)
+      const popup = document.createElement('div');
+      popup.className = 'info-popup';
+      popup.id = 'info-popup-' + e.key;
+      wrapper.appendChild(popup);
+      settingsGrid.appendChild(wrapper);
+    });
+
+    // Lösungen Grid
+    const solGrid = document.getElementById('sol-grid');
+    SOL.forEach((s, i) => {
+      const d = document.createElement('div');
+      d.className = 'sol-item';
+      const anPart = s.an
+        ? `<span class="sol-sep">+</span>
+           <span class="s-lbl">${s.an}</span>
+           <input type="number" id="sol-an-${i}" value="${s.anInc}" step="any" onchange="updateSol(${i})">
+           <span class="s-lbl">mg/l</span>`
+        : '';
+      d.innerHTML = `
+        <label>${s.name}</label>
+        <span class="s-lbl">ml/100L</span>
+        <input type="number" id="sol-ref-${i}" value="${s.mlRef}" step="any" onchange="updateSol(${i})">
+        <span class="sol-sep">|</span>
+        <span class="s-lbl">${s.cat}</span>
+        <input type="number" id="sol-cat-${i}" value="${s.catInc}" step="any" onchange="updateSol(${i})">
+        <span class="s-lbl">mg/l</span>
+        ${anPart}
+      `;
+      solGrid.appendChild(d);
+    });
+
+
+    function updateSol(i) {
+      const s = SOL[i];
+      const ref = parseFloat(document.getElementById('sol-ref-' + i).value);
+      const catInc = parseFloat(document.getElementById('sol-cat-' + i).value);
+      if (!isNaN(ref) && ref > 0) s.mlRef = ref;
+      if (!isNaN(catInc) && catInc >= 0) s.catInc = catInc;
+      if (s.an) {
+        const anInc = parseFloat(document.getElementById('sol-an-' + i).value);
+        if (!isNaN(anInc) && anInc >= 0) s.anInc = anInc;
+        s.anR = (s.anInc * 100) / s.mlRef;
+      }
+      s.catR = (s.catInc * 100) / s.mlRef;
+      saveState();
+    }
+
+    document.addEventListener('click', () => {
+      const ti = document.getElementById('tol-info');
+      if (ti) ti.classList.remove('open');
+    });
+
+    function toggleInfo(k) {
+      const popup = document.getElementById('info-popup-' + k);
+      const isOpen = popup.classList.contains('open');
+      // Alle schließen
+      document.querySelectorAll('.info-popup').forEach(p => p.classList.remove('open'));
+      if (!isOpen) {
+        renderInfoPopup(k);
+        popup.classList.add('open');
+      }
+    }
+
+    function renderInfoPopup(k) {
+      const e = EL[eIdx[k]];
+      const popup = document.getElementById('info-popup-' + k);
+      const rangeL = e.opt - e.min;
+      const rangeR = e.max - e.opt;
+
+      // Abweichungskurve berechnen
+      const points = [];
+      const lo = e.min - rangeL * 0.3;
+      const hi = e.max + rangeR * 0.3;
+      const steps = 80;
+      for (let i = 0; i <= steps; i++) {
+        const val = lo + (hi - lo) * i / steps;
+        const d = deviation(e, val);
+        points.push({ val, dev: d * d });
+      }
+
+      const maxDev = Math.max(...points.map(p => p.dev), 0.001);
+
+      // SVG Abweichungskurve
+      const svgW = 380, svgH = 140, padL = 45, padR = 10, padT = 15, padB = 30;
+      const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
+      const xPx = v => padL + ((v - lo) / (hi - lo)) * plotW;
+      const yPx = d => padT + plotH - (d / maxDev) * plotH;
+
+      let pathD = '';
+      points.forEach((p, i) => {
+        const x = xPx(p.val), y = yPx(p.dev);
+        pathD += (i === 0 ? 'M' : 'L') + ` ${x.toFixed(1)} ${y.toFixed(1)}`;
+      });
+
+      // ICP-Messwert
+      const curVal = parseFloat(document.getElementById('in-' + k)?.value) || e.opt;
+      const curDev = deviation(e, curVal) ** 2;
+
+      let svg = `<svg viewBox="0 0 ${svgW} ${svgH}">`;
+      svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="#ccc" stroke-width="1"/>`;
+      svg += `<line x1="${padL}" y1="${padT+plotH}" x2="${padL+plotW}" y2="${padT+plotH}" stroke="#ccc" stroke-width="1"/>`;
+      svg += `<rect x="${xPx(e.min)}" y="${padT}" width="${xPx(e.max)-xPx(e.min)}" height="${plotH}" fill="#d4edda" opacity="0.3"/>`;
+      svg += `<line x1="${xPx(e.opt)}" y1="${padT}" x2="${xPx(e.opt)}" y2="${padT+plotH}" stroke="#2e9e5a" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+      svg += `<path d="${pathD}" fill="none" stroke="${EL_COLORS[k]}" stroke-width="2"/>`;
+      svg += `<line x1="${xPx(curVal)}" y1="${padT}" x2="${xPx(curVal)}" y2="${padT+plotH}" stroke="${EL_COLORS[k]}" stroke-width="1.5" stroke-dasharray="2,2"/>`;
+      svg += `<circle cx="${xPx(curVal)}" cy="${yPx(curDev)}" r="4" fill="${EL_COLORS[k]}" stroke="#fff" stroke-width="1.5"/>`;
+      svg += `<text x="${xPx(e.min)}" y="${padT+plotH+14}" text-anchor="middle" font-size="8" fill="#999">${e.min}</text>`;
+      svg += `<text x="${xPx(e.opt)}" y="${padT+plotH+14}" text-anchor="middle" font-size="8" fill="#2e9e5a" font-weight="700">Opt ${e.opt}</text>`;
+      svg += `<text x="${xPx(e.max)}" y="${padT+plotH+14}" text-anchor="middle" font-size="8" fill="#999">${e.max}</text>`;
+      svg += `<text x="${padL-4}" y="${padT+4}" text-anchor="end" font-size="8" fill="#999">${maxDev.toFixed(2)}</text>`;
+      svg += `<text x="${padL-4}" y="${padT+plotH+4}" text-anchor="end" font-size="8" fill="#999">0</text>`;
+      svg += `<text x="${padL}" y="${padT-3}" font-size="8" fill="#999">Abweichung (normalisiert²)</text>`;
+      svg += `<text x="${padL+plotW}" y="${padT+plotH+22}" text-anchor="end" font-size="8" fill="#999">${e.unit}</text>`;
+      svg += `<text x="${xPx(curVal)}" y="${padT-3}" text-anchor="middle" font-size="8" font-weight="700" fill="${EL_COLORS[k]}">ICP: ${fmt(curVal)}</text>`;
+      svg += `</svg>`;
+
+      popup.innerHTML = `
+        <button class="info-close" onclick="toggleInfo('${k}')">&times;</button>
+        <div class="info-title">${e.name} (${k}) — Parameter</div>
+        ${svg}
+        <div class="info-row"><span>Bereich unter Opt</span><span>${fmt(rangeL)} ${e.unit}</span></div>
+        <div class="info-row"><span>Bereich über Opt</span><span>${fmt(rangeR)} ${e.unit}</span></div>
+        <div class="info-row"><span>Abweichung ICP-Wert</span><span>${curDev.toFixed(4)}</span></div>
+      `;
+    }
+
+    function updateSetting(k) {
+      const e = EL[eIdx[k]];
+      const newMin = parseFloat(document.getElementById('set-min-'+k).value);
+      const newOpt = parseFloat(document.getElementById('set-opt-'+k).value);
+      const newMax = parseFloat(document.getElementById('set-max-'+k).value);
+      if (!isNaN(newMin)) e.min = newMin;
+      if (!isNaN(newOpt)) e.opt = newOpt;
+      if (!isNaN(newMax)) e.max = newMax;
+      const newMaxD = parseFloat(document.getElementById('set-maxd-'+k).value);
+      if (!isNaN(newMaxD) && newMaxD > 0) e.maxDelta = newMaxD;
+      // Range-Anzeige im Messwerte-Tab aktualisieren (PSU-skaliert)
+      updatePsuDisplay();
+    }
+
+    // Gewichte werden jetzt intern vom Solver gehandhabt
+
+    // ===== MODELL =====
+    // Pure PSU-Skalierung: erzeugt Kopie, mutiert keine Globals
+    function getScaledEL(sf) {
+      return EL.map(e => ({
+        key: e.key, name: e.name, unit: e.unit, ex: e.ex,
+        min: e.min * sf, opt: e.opt * sf, max: e.max * sf, w: e.w,
+        maxDelta: e.maxDelta * sf
+      }));
+    }
+
+    // Neue Konzentration nach Entnahme von R Litern und Zugabe von Lösungen (ml[])
+    function newConc(V, R, ml, cur, els) {
+      els = els || EL;
+      const nc = {};
+      els.forEach(e => {
+        let mg = cur[e.key] * (V - R);
+        SOL.forEach((s,i) => {
+          if (ml[i] <= 0) return;
+          if (s.cat === e.key) mg += ml[i] * s.catR;
+          if (s.an === e.key) mg += ml[i] * s.anR;
+        });
+        nc[e.key] = mg / V;
+      });
+      return nc;
+    }
+
+    // Aktiver PSU-Skalierungsfaktor für Visualisierung (gesetzt von render())
+    let _vizSf = 1;
+
+    // Normalisierte Abweichung: 0 = Optimum, 1 = am Rand (min/max), >1 = außerhalb
+    function deviation(e, val) {
+      const diff = val - e.opt;
+      const range = diff <= 0 ? (e.opt - e.min) : (e.max - e.opt);
+      if (range <= 0) return 0;
+      return diff / range;
+    }
+
+    // Gesamtkosten: Summe der quadrierten gewichteten Abweichungen
+    function cost(nc, els) {
+      els = els || EL;
+      let c = 0;
+      els.forEach(e => { const d = deviation(e, nc[e.key]); c += d * d * e.w; });
+      return c;
+    }
+
+    // ===== LÖSER: NNLS mit adaptivem Reweighting =====
+    // NNLS-Kern: Active-Set-Methode für min ‖WA×ml − Wb‖², ml ≥ 0
+    function nnls(WA, Wb, nSol) {
+      const active = new Array(nSol).fill(true);
+      const ml = new Array(nSol).fill(0);
+
+      for (let pass = 0; pass < 30; pass++) {
+        const residual = Wb.map((wbj, j) =>
+          wbj - WA[j].reduce((s, a, i) => s + a * ml[i], 0)
+        );
+        const grad = Array.from({length: nSol}, (_, i) =>
+          WA.reduce((s, row, j) => s + row[i] * residual[j], 0)
+        );
+
+        let maxGrad = -1, maxIdx = -1;
+        active.forEach((isActive, i) => {
+          if (isActive && grad[i] > maxGrad) { maxGrad = grad[i]; maxIdx = i; }
+        });
+        if (maxGrad < 1e-6 || maxIdx < 0) break;
+
+        active[maxIdx] = false;
+
+        let innerDone = false;
+        for (let inner = 0; inner < 30 && !innerDone; inner++) {
+          const freeIdx = active.map((a, i) => !a ? i : -1).filter(i => i >= 0);
+          const nf = freeIdx.length;
+
+          const G = Array.from({length: nf}, (_, ii) =>
+            Array.from({length: nf}, (_, kk) =>
+              WA.reduce((s, row, j) => s + row[freeIdx[ii]] * row[freeIdx[kk]], 0)
+            )
+          );
+          const h = freeIdx.map(idx =>
+            WA.reduce((s, row, j) => s + row[idx] * Wb[j], 0)
+          );
+
+          const aug = G.map((row, i) => [...row, h[i]]);
+          for (let col = 0; col < nf; col++) {
+            let mxV = Math.abs(aug[col][col]), mxR = col;
+            for (let row = col + 1; row < nf; row++) {
+              if (Math.abs(aug[row][col]) > mxV) { mxV = Math.abs(aug[row][col]); mxR = row; }
+            }
+            [aug[col], aug[mxR]] = [aug[mxR], aug[col]];
+            if (Math.abs(aug[col][col]) < 1e-12) continue;
+            const p = aug[col][col];
+            for (let c = col; c <= nf; c++) aug[col][c] /= p;
+            for (let row = 0; row < nf; row++) {
+              if (row === col) continue;
+              const f = aug[row][col];
+              for (let c = col; c <= nf; c++) aug[row][c] -= f * aug[col][c];
+            }
+          }
+          const x = aug.map(row => row[nf]);
+
+          let allPos = true;
+          let minRatio = Infinity, minRatioIdx = -1;
+          x.forEach((xi, ii) => {
+            if (xi < 0) {
+              allPos = false;
+              const ratio = ml[freeIdx[ii]] / (ml[freeIdx[ii]] - xi);
+              if (ratio < minRatio) { minRatio = ratio; minRatioIdx = ii; }
+            }
+          });
+
+          if (allPos) {
+            freeIdx.forEach((idx, ii) => { ml[idx] = x[ii]; });
+            innerDone = true;
+          } else {
+            freeIdx.forEach((idx, ii) => {
+              ml[idx] += minRatio * (x[ii] - ml[idx]);
+            });
+            ml[freeIdx[minRatioIdx]] = 0;
+            active[freeIdx[minRatioIdx]] = true;
+          }
+        }
+      }
+
+      return ml;
+    }
+
+    // Adaptiver Solver: ersetzt alten 4-Runden-Solver + externen autoWeights-Workaround.
+    // Konvergiert in der Regel in 3–8 Runden, maximal 20.
+    // Kernidee: Elemente die schlechter werden, bekommen aggressiv höheres Gewicht,
+    // sodass der NNLS-Solver sie in der nächsten Runde stärker priorisiert.
+
+    function solveDirect(V, R, cur, els) {
+      els = els || EL;
+      const nSol = SOL.length;
+
+      // Rate-Matrix A[j][i] (konstant über alle Runden)
+      const A = els.map(e => {
+        return SOL.map(s => {
+          let r = 0;
+          if (s.cat === e.key) r += s.catR;
+          if (s.an  === e.key) r += s.anR;
+          return r / V;
+        });
+      });
+      const b = els.map(e => e.opt - cur[e.key] * (V - R) / V);
+      const diluted = els.map(e => cur[e.key] * (V - R) / V);
+
+      let ml = new Array(nSol).fill(0);
+      // Dynamische Gewichte: starten bei den Basis-Gewichten
+      const dynW = els.map(e => e.w);
+
+      let prevCost = Infinity;
+
+      for (let rw = 0; rw < 20; rw++) {
+        // Wo landet jedes Element mit der aktuellen Lösung?
+        const afterVal = els.map((e, j) =>
+          diluted[j] + A[j].reduce((s, a, i) => s + a * ml[i], 0)
+        );
+
+        // Gewichte basierend auf:
+        // 1. Asymmetrische Normalisierung (tatsächliche Seite relativ zu Opt)
+        // 2. Aggressiver Penalty für verschlechterte Elemente
+        let anyWorse = false;
+        const W = els.map((e, j) => {
+          const overshoot = afterVal[j] > e.opt;
+          const range = overshoot ? (e.max - e.opt) : (e.opt - e.min);
+          if (range <= 0) return 0;
+
+          // Prüfe ob Element sich verschlechtert hat
+          const distBefore = Math.abs(cur[e.key] - e.opt);
+          const distAfter = Math.abs(afterVal[j] - e.opt);
+          const tolerance = (e.max - e.min) * 0.005; // 0.5% des Bereichs
+
+          if (distAfter > distBefore + tolerance) {
+            // Aggressives Boosting: ×2.5 pro Runde (statt ×1.5 im alten autoWeights)
+            dynW[j] = Math.min(dynW[j] * 2.5, 500);
+            anyWorse = true;
+          }
+
+          return Math.sqrt(dynW[j]) / range;
+        });
+
+        const WA = A.map((row, j) => row.map(v => v * W[j]));
+        const Wb = b.map((v, j) => v * W[j]);
+
+        ml = nnls(WA, Wb, nSol);
+
+        // Konvergenz-Check: kein Element mehr schlechter → fertig
+        if (!anyWorse && rw > 0) break;
+
+        // Kosten-basierter Konvergenz-Check
+        const newAfter = els.map((e, j) =>
+          diluted[j] + A[j].reduce((s, a, i) => s + a * ml[i], 0)
+        );
+        const curCost = els.reduce((c, e, j) => {
+          const d = deviation(e, newAfter[j]);
+          return c + d * d * dynW[j];
+        }, 0);
+
+        if (Math.abs(prevCost - curCost) / (prevCost + 1e-10) < 1e-8) break;
+        prevCost = curCost;
+      }
+
+      return ml;
+    }
+
+
+    function optimize(V, R, startValues, count, defizitOnly, els) {
+      els = els || EL;
+      count = count || 1;
+      const steps = [];
+      let cur = { ...startValues };
+
+      function roundMl(arr) {
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] < 0.05) arr[i] = 0;
+          else if (arr[i] < 5) arr[i] = Math.round(arr[i] * 100) / 100;
+          else if (arr[i] < 50) arr[i] = Math.round(arr[i] * 10) / 10;
+          else arr[i] = Math.round(arr[i] * 10) / 10;
+        }
+      }
+
+      for (let s = 0; s < count; s++) {
+        if (cost(cur, els) < 0.0005) break;
+
+        let ml = solveDirect(V, R, cur, els);
+        roundMl(ml);
+
+        let totalMl = ml.reduce((a, b) => a + b, 0);
+
+        let Rf = R;
+        let osmosis = 0;
+        if (!defizitOnly) {
+          for (let attempt = 0; attempt < 3 && totalMl / 1000 >= Rf; attempt++) {
+            Rf = Math.ceil((totalMl / 1000 + 0.5) * 2) / 2;
+            ml = solveDirect(V, Rf, cur, els);
+            roundMl(ml);
+            totalMl = ml.reduce((a, b) => a + b, 0);
+          }
+          osmosis = Rf - totalMl / 1000;
+        }
+        const nc = newConc(V, Rf, ml, cur, els);
+
+        steps.push({
+          step: s + 1, R: Rf, ml, totalMl,
+          osmosis, before: { ...cur }, after: nc
+        });
+
+        cur = { ...nc };
+      }
+
+      return steps;
+    }
+
+    function allGreen(afterVals, els) {
+      els = els || EL;
+      const tol = getOptTolerance();
+      return els.every(e => Math.abs(afterVals[e.key] - e.opt) < (e.max - e.min) * tol);
+    }
+
+    // Konvergenz-Check für Iterations-Schleifen: mindestens 3% Toleranz,
+    // damit bei enger User-Toleranz nicht unnötig viele Schritte entstehen.
+    // Die Anzeige (grüne Marker) nutzt weiterhin die User-Toleranz.
+    function converged(afterVals, els) {
+      els = els || EL;
+      const tol = Math.max(getOptTolerance(), 0.03);
+      return els.every(e => Math.abs(afterVals[e.key] - e.opt) < (e.max - e.min) * tol);
+    }
+
+    // ===== BERECHNUNG =====
+
+    // Findet das maximale WW%, bei dem kein Element min/max verletzt
+    function getMaxWcPct() {
+      return parseInt(document.getElementById('max-wc-pct').value) || 10;
+    }
+
+    function findMaxSafeWcPct(V, cur, els) {
+      const maxAllowed = getMaxWcPct();
+      // Prüft ob bei gegebenem WW% kein Element min/max verletzt.
+      // Nutzt optimize() OHNE Max-Δ — das zeigt die echte Grenze,
+      // weil der Solver versucht direkt zum Optimum zu springen.
+      // Für Werte außerhalb min/max: tolerant (darf sich nicht verschlechtern).
+      function safeAtPct(pct) {
+        const R = Math.round(V * pct / 100 * 2) / 2;
+        if (R <= 0) return false;
+        const steps = optimize(V, R, cur, 1, false, els);
+        if (steps.length === 0) return true;
+        return els.every(e => {
+          const before = cur[e.key];
+          const after = steps[0].after[e.key];
+          const wasInside = before >= e.min && before <= e.max;
+          if (wasInside) {
+            // Strikt: muss innerhalb bleiben
+            return after >= e.min - 0.01 && after <= e.max + 0.01;
+          } else {
+            // Tolerant: darf sich nicht verschlechtern
+            const distBefore = before < e.min ? e.min - before : before - e.max;
+            const distAfter = after < e.min ? e.min - after : (after > e.max ? after - e.max : 0);
+            return distAfter <= distBefore + 0.5;
+          }
+        });
+      }
+      let lo = 1, hi = Math.min(maxAllowed, 100);
+      if (!safeAtPct(1)) return 1;
+      if (safeAtPct(hi)) return hi;
+      while (lo < hi - 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (safeAtPct(mid)) lo = mid;
+        else hi = mid;
+      }
+      return lo;
+    }
+
+    // Einen Solver-Schritt mit Max-Δ-begrenzten Zielen berechnen
+    function solveConstrained(V, R, curVals, defizit = false, els) {
+      if (!isMaxDeltaEnabled()) {
+        return optimize(V, R, curVals, 1, defizit, els);
+      }
+      let anyClamped = false;
+      const cEls = els.map(e => {
+        const c = curVals[e.key];
+        const diff = e.opt - c;
+        let newOpt;
+        if (Math.abs(diff) <= e.maxDelta) {
+          newOpt = e.opt;
+        } else if (diff > 0) {
+          newOpt = c + e.maxDelta; anyClamped = true;
+        } else {
+          newOpt = c - e.maxDelta; anyClamped = true;
+        }
+        return { ...e, opt: newOpt, min: Math.min(e.min, newOpt - e.maxDelta), max: Math.max(e.max, newOpt + e.maxDelta) };
+      });
+      const solverEls = anyClamped ? cEls : els;
+      return optimize(V, R, curVals, 1, defizit, solverEls);
+    }
+
+    // Hauptfunktion: Iterativer Wasserwechsel
+    // Pro Schritt: max. sicheres WW% ermitteln (min/max + Max-WW-Einstellung),
+    // Solver mit Max-Δ-begrenzten Zielen laufen lassen, wiederholen bis grün.
+    // Jeder Schritt basiert auf den tatsächlich erreichten Werten —
+    // WW-Menge kann sich von Schritt zu Schritt ändern.
+    function berechnen() {
+      const V = parseFloat(document.getElementById('volume').value);
+      if (!V || V <= 0) { alert('Bitte Aquariumvolumen eingeben.'); return; }
+
+      const cur = {};
+      let ok = true;
+      EL.forEach(e => {
+        const v = parseFloat(document.getElementById('in-' + e.key).value);
+        if (isNaN(v) || v < 0) { ok = false; return; }
+        cur[e.key] = v;
+      });
+      if (!ok) { alert('Bitte alle Messwerte eingeben.'); return; }
+
+      const sf = solverFactor();
+      const sEL = getScaledEL(sf);
+
+      if (cost(cur, sEL) < 0.0005) {
+        const out = document.getElementById('results');
+        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>✅ Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
+        out.classList.remove('hidden');
+        out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      const allSteps = [];
+      let curVals = { ...cur };
+
+      for (let iter = 0; iter < 50; iter++) {
+        if (converged(curVals, sEL)) break;
+
+        // Max. sicheres WW% für aktuelle Werte ermitteln
+        const maxPct = findMaxSafeWcPct(V, curVals, sEL);
+
+        // Prüfen ob maxPct schon allGreen erreicht → dann Minimum suchen
+        let usePct = maxPct;
+        const maxR = Math.round(V * maxPct / 100 * 2) / 2;
+        const testMax = solveConstrained(V, maxR, curVals, false, sEL);
+        if (testMax.length > 0 && allGreen(testMax[0].after, sEL)) {
+          // Binärsuche: kleinstes WW% das noch allGreen erreicht
+          let lo = 1, hi = maxPct;
+          while (lo < hi - 1) {
+            const mid = Math.floor((lo + hi) / 2);
+            const midR = Math.round(V * mid / 100 * 2) / 2;
+            const midSteps = solveConstrained(V, midR, curVals, false, sEL);
+            if (midSteps.length > 0 && allGreen(midSteps[0].after, sEL)) {
+              hi = mid;
+            } else {
+              lo = mid;
+            }
+          }
+          usePct = hi;
+        } else if (testMax.length > 0) {
+          // allGreen nicht erreichbar (maxDelta-begrenzt) →
+          // kleinstes WW% suchen, das ähnlichen Fortschritt bringt
+          const costMax = cost(testMax[0].after, sEL);
+          const threshold = costMax * 1.01 + 0.0005;
+          let lo = 1, hi = maxPct;
+          while (lo < hi - 1) {
+            const mid = Math.floor((lo + hi) / 2);
+            const midR = Math.round(V * mid / 100 * 2) / 2;
+            const midSteps = solveConstrained(V, midR, curVals, false, sEL);
+            if (midSteps.length > 0 && cost(midSteps[0].after, sEL) <= threshold) {
+              hi = mid;
+            } else {
+              lo = mid;
+            }
+          }
+          usePct = hi;
+        }
+
+        const R = Math.round(V * usePct / 100 * 2) / 2;
+        if (R <= 0) break;
+
+        // Solver mit Max-Δ-begrenzten Zielen
+        const steps = solveConstrained(V, R, curVals, false, sEL);
+        if (steps.length === 0) break;
+
+        // Fortschritt prüfen
+        const costBefore = cost(curVals, sEL);
+        const costAfter = cost(steps[0].after, sEL);
+        if (costAfter >= costBefore - 0.0001 && iter > 0) break;
+
+        allSteps.push({ ...steps[0], step: allSteps.length + 1 });
+        curVals = { ...steps[0].after };
+      }
+
+      saveState();
+      render(allSteps, cur, sf, false, sEL);
+    }
+
+    // Nur Defizite ausgleichen: Nur dosieren (kein Wasserwechsel),
+    // pro Schritt Max-Δ respektieren, wiederholen bis kein Fortschritt mehr
+    // oder ein Wert die Min/Max-Grenzen überschreiten würde.
+    function nurDefizite() {
+      const V = parseFloat(document.getElementById('volume').value);
+      if (!V || V <= 0) { alert('Bitte Aquariumvolumen eingeben.'); return; }
+
+      const cur = {};
+      let ok = true;
+      EL.forEach(e => {
+        const v = parseFloat(document.getElementById('in-' + e.key).value);
+        if (isNaN(v) || v < 0) { ok = false; return; }
+        cur[e.key] = v;
+      });
+      if (!ok) { alert('Bitte alle Messwerte eingeben.'); return; }
+
+      const sf = solverFactor();
+      const sEL = getScaledEL(sf);
+
+      if (cost(cur, sEL) < 0.0005) {
+        const out = document.getElementById('results');
+        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>✅ Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
+        out.classList.remove('hidden');
+        out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      const allSteps = [];
+      let curVals = { ...cur };
+
+      for (let iter = 0; iter < 50; iter++) {
+        if (converged(curVals, sEL)) break;
+
+        // Deficit-only: R=0, defizitOnly=true
+        const steps = solveConstrained(V, 0, curVals, true, sEL);
+        if (steps.length === 0) break;
+        if (steps[0].totalMl < 0.01) break;
+
+        // Prüfen ob ein Wert sich verschlechtert (weiter von min/max entfernt)
+        const wouldWorsen = sEL.some(e => {
+          const before = curVals[e.key];
+          const after = steps[0].after[e.key];
+          // Abstand zu erlaubtem Bereich: 0 wenn innerhalb, sonst positiv
+          const distBefore = before < e.min ? e.min - before : (before > e.max ? before - e.max : 0);
+          const distAfter = after < e.min ? e.min - after : (after > e.max ? after - e.max : 0);
+          // Verschlechtert = war innerhalb und geht raus, oder war draußen und geht weiter weg
+          return distAfter > distBefore + 0.1;
+        });
+        if (wouldWorsen) break;
+
+        // Fortschritt prüfen: wird es insgesamt besser?
+        const costBefore = cost(curVals, sEL);
+        const costAfter = cost(steps[0].after, sEL);
+        if (costAfter >= costBefore - 0.0001 && iter > 0) break;
+
+        allSteps.push({ ...steps[0], step: allSteps.length + 1 });
+        curVals = { ...steps[0].after };
+      }
+
+      saveState();
+
+      if (allSteps.length === 0 && !allGreen(cur, sEL)) {
+        const out = document.getElementById('results');
+        out.innerHTML = '<div class="card" style="text-align:center"><h2 style="color:#c0392b">⚠️ Keine Dosierung möglich</h2><p style="margin-top:0.5rem;color:var(--text-light)">Einige Werte liegen außerhalb des Optimums, können aber nicht durch Dosierung verbessert werden, ohne andere Werte zu verschlechtern.<br><strong>Empfehlung:</strong> Nutze „Berechnen" für einen Wasserwechsel.</p></div>';
+        out.classList.remove('hidden');
+        out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      render(allSteps, cur, sf, true, sEL);
+    }
+
+    // ===== ANZEIGE =====
+    let _renderSteps = [];
+    let _renderOriginal = {};
+
+    function render(steps, original, sf, defizitMode, sEL) {
+      sEL = sEL || getScaledEL(sf || 1);
+      _renderSteps = steps;
+      _renderOriginal = original;
+      _vizSf = sf || 1;
+      window._renderSEL = sEL; // Für Animation verfügbar
+
+      const out = document.getElementById('results');
+      out.classList.remove('hidden');
+      out.innerHTML = '';
+
+      if (steps.length === 0) {
+        let optHtml = `<div class="card summary-card"><h2>Ergebnis</h2>
+          <div style="text-align:center;padding:1rem 0">
+            <span class="score-big good">0.0%</span>
+            <div style="font-size:0.9rem;color:var(--text-light);margin-top:0.25rem">Gesamtabweichung</div>
+            <div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:0.75rem">✅ Alle Werte sind optimal — kein Wasserwechsel nötig!</div>
+          </div>
+        </div>`;
+
+        optHtml += `<div class="card"><h3 style="margin-bottom:0.75rem">Aktuelle Werte</h3>
+          <table class="val-table"><thead><tr><th>Element</th><th>Messwert</th><th>Optimal</th><th>Abweichung</th></tr></thead><tbody>`;
+        sEL.forEach(e => {
+          const v = original[e.key];
+          const d = Math.abs(deviation(e, v));
+          const cls = d < 0.05 ? 'opt' : d < 0.5 ? 'improved' : 'worse';
+          optHtml += `<tr><td>${e.name} (${e.key})</td><td>${fmt(v)}</td><td>${fmt(e.opt)}</td><td class="${cls}">${(d * 100).toFixed(1)}%</td></tr>`;
+        });
+        optHtml += `</tbody></table></div>`;
+
+        out.innerHTML = optHtml;
+        return;
+      }
+
+      // Übersicht
+      const totalR = steps.reduce((a, s) => a + s.R, 0);
+      const totalCR = steps.reduce((a, s) => a + s.totalMl, 0);
+      const finalAfter = steps[steps.length - 1].after;
+      const costBefore = cost(original, sEL);
+      const costFinal = cost(finalAfter, sEL);
+      const scoreBefore = (Math.sqrt(costBefore) * 100).toFixed(1);
+      const scoreFinal = (Math.sqrt(costFinal) * 100).toFixed(1);
+
+      const V = parseFloat(document.getElementById('volume').value);
+      const zielPsu = getZielPsu();
+      const messPsu = getMessPsu();
+      const psuChanged = Math.abs(messPsu - zielPsu) > 0.001;
+      const nDefizit = steps.filter(s => s.R === 0).length;
+      const nWC = steps.filter(s => s.R > 0).length;
+      const modeLabel = nWC === 0 ? 'Defizit-Ausgleich' : 'Optimaler Wasserwechsel';
+      let html = '';
+      html += `<div class="card summary-card"><h2>${modeLabel}</h2>`;
+      if (psuChanged) {
+        html += `<div style="background:#e8f4fb;border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:0.75rem;font-size:0.85rem;color:var(--blue-dark)">
+          🧂 PSU-Korrektur: <strong>${messPsu.toFixed(2)} → ${zielPsu.toFixed(2)} PSU</strong> — Zielwerte und Rezept entsprechend skaliert.
+        </div>`;
+      }
+      // Zusammenfassung der Phasen
+      const phaseInfo = [];
+      if (nDefizit > 0) phaseInfo.push(`${nDefizit}× Dosierung`);
+      if (nWC > 0) phaseInfo.push(`${nWC}× Wasserwechsel`);
+
+      html += `<div class="summary-grid">
+        <div><div style="font-size:0.85rem;color:var(--text-light)">Gesamtabweichung</div>
+          <span class="score-big bad">${scoreBefore}%</span> <span style="font-size:1.2rem"> → </span>
+          <span class="score-big ${scoreFinal < 5 ? 'good' : scoreFinal < 20 ? 'ok' : 'bad'}">${scoreFinal}%</span></div>
+        <div><div style="font-size:0.85rem;color:var(--text-light)">${steps.length} Schritte (${phaseInfo.join(' + ')})</div>
+          ${totalR > 0 ? `<div style="font-size:0.95rem"><strong>${totalR.toFixed(1)} L</strong> entnehmen (${(totalR/V*100).toFixed(1)}% des Beckens)</div>` : ''}
+          <div style="font-size:0.95rem"><strong>${(totalCR/1000).toFixed(2)} L</strong> C&R Lösungen</div>
+          ${totalR > 0 ? `<div style="font-size:0.95rem"><strong>${(totalR - totalCR/1000).toFixed(2)} L</strong> Osmosewasser</div>` : ''}
+          ${totalR === 0 ? `<div style="font-size:0.8rem;color:var(--text-light);margin-top:0.25rem">Kein Wasser wird entnommen</div>` : ''}
+        </div>
+      </div></div>`;
+
+      window._steps = steps;
+      window._currentStep = 0;
+
+      steps.forEach((st, si) => {
+        const stepCost = cost(st.after, sEL);
+        const stepScore = (Math.sqrt(stepCost) * 100).toFixed(1);
+
+        html += `<div class="card step-card" id="step-card-${si}" style="display:${si === 0 ? 'block' : 'none'}">`;
+
+        const isDefizitStep = st.R === 0;
+        if (steps.length > 1) {
+          const stepLabel = isDefizitStep ? 'Dosierung direkt ins Becken' : 'Wasserwechsel mit angepasstem Meerwasser';
+          html += `<div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;margin-bottom:0.5rem">
+            <button onclick="showStep(${si - 1})" id="prev-btn-${si}" class="step-nav-btn" ${si === 0 ? 'disabled' : ''}>&lsaquo;</button>
+            <span style="font-size:0.95rem;font-weight:600">${st.step} von ${steps.length} — ${stepLabel}</span>
+            <button onclick="showStep(${si + 1})" id="next-btn-${si}" class="step-nav-btn" ${si === steps.length - 1 ? 'disabled' : ''}>&rsaquo;</button>
+          </div>`;
+        } else {
+          const stepTitle = isDefizitStep
+            ? `Defizit-Ausgleich — Lösungen direkt ins Becken ${stepScore < 1 ? '— Perfekt!' : ''}`
+            : `Wasserwechsel mit angepasstem Meerwasser ${stepScore < 1 ? '— Perfekt!' : ''}`;
+          html += `<div class="step-header">
+            <div class="step-num">1</div>
+            <div class="step-title">${stepTitle}</div>
+          </div>`;
+        }
+
+        const improved = sEL.filter(e => {
+          const distBefore = Math.abs(st.before[e.key] - e.opt);
+          const distAfter = Math.abs(st.after[e.key] - e.opt);
+          return distAfter < distBefore - 0.01;
+        }).length;
+        const psuAfter = estimatePsu(st.after).toFixed(2);
+
+        if (isDefizitStep) {
+          html += `<div class="step-info">
+              <div class="step-box"><div class="val">${st.totalMl.toFixed(1)} ml</div><div class="lbl">C&R Lösungen gesamt</div></div>
+              <div class="step-box"><div class="val">${improved}/${sEL.length}</div><div class="lbl">Elemente verbessert</div></div>
+              <div class="step-box"><div class="val">${psuAfter}</div><div class="lbl">PSU nachher</div></div>
+            </div>`;
+        } else {
+          html += `<div class="step-info" style="grid-template-columns:1fr 1fr 1fr 1fr">
+              <div class="step-box"><div class="val">${st.R.toFixed(1)} L</div><div class="lbl">Wasser entnehmen</div></div>
+              <div class="step-box"><div class="val">${st.totalMl.toFixed(1)} ml</div><div class="lbl">C&R Lösungen</div></div>
+              <div class="step-box"><div class="val">${improved}/${sEL.length}</div><div class="lbl">Elemente verbessert</div></div>
+              <div class="step-box"><div class="val">${psuAfter}</div><div class="lbl">PSU nachher</div></div>
+            </div>`;
+        }
+
+        html += `<h3 style="margin:0.75rem 0 0.5rem">Werte Vorher → Nachher</h3>`;
+        html += `<div class="spring-viz" id="spring-viz-${si}">${buildSpringVizSVG(si, st.before, st.after, st.ml, sEL)}</div>`;
+
+        html += `</div>`;
+      });
+
+      // Rezept-Tabelle
+      const isMulti = steps.length > 1;
+      const hasAnyWC = steps.some(s => s.R > 0);
+      const rezeptTitle = !hasAnyWC
+        ? `Dosierung — Lösungen direkt ins Becken (${V} L)`
+        : `Rezept — ${steps.length} Schritte`;
+      html += `<div class="card"><div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <h3 style="margin:0">${rezeptTitle}</h3>
+        <button class="help-btn" onclick="showHelp(event,'${!hasAnyWC ? 'help-defizit' : 'help-rezept-anleitung'}')">?</button>
+      </div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">`;
+      html += `<table class="sol-table"><thead><tr><th>Bestandteil</th>`;
+      if (isMulti) {
+        steps.forEach((st, si) => {
+          const label = st.R === 0 ? `Dos. ${si + 1}` : `WC ${si + 1}`;
+          html += `<th style="text-align:right">${label}</th>`;
+        });
+        html += `<th style="text-align:right;border-left:2px solid var(--border)">Σ Gesamt</th>`;
+      } else {
+        html += `<th style="text-align:right">Menge</th>`;
+      }
+      html += `</tr></thead><tbody>`;
+
+      if (hasAnyWC) {
+        html += `<tr style="background:#e8f4fb"><td style="font-weight:700;background:#e8f4fb">💧 Osmosewasser</td>`;
+        let sumOsmo = 0;
+        steps.forEach(st => {
+          if (st.R > 0) sumOsmo += st.osmosis * 1000;
+          html += `<td class="ml" style="background:#e8f4fb">${st.R > 0 ? fmtDE(Math.round(st.osmosis * 1000)) + ' ml' : '—'}</td>`;
+        });
+        if (isMulti) html += `<td class="ml" style="background:#e8f4fb;border-left:2px solid var(--border);font-weight:700">${fmtDE(Math.round(sumOsmo))} ml</td>`;
+        html += `</tr>`;
+        html += `<tr><td colspan="${isMulti ? steps.length + 2 : 2}" style="padding:0.15rem 0;border-bottom:2px solid var(--border);font-size:0.75rem;color:var(--text-light)">C&R Lösungen</td></tr>`;
+      }
+
+      SOL.forEach((s, i) => {
+        const allZero = steps.every(st => st.ml[i] === 0);
+        const cls = allZero ? ' class="zero"' : '';
+        html += `<tr${cls}><td>${s.name}</td>`;
+        let sumMl = 0;
+        steps.forEach(st => {
+          const adj = st.ml[i];
+          sumMl += adj;
+          html += `<td class="ml">${adj > 0 ? fmtMl(adj) + ' ml' : '—'}</td>`;
+        });
+        if (isMulti) {
+          html += `<td class="ml" style="border-left:2px solid var(--border);font-weight:700">${sumMl > 0 ? fmtMl(sumMl) + ' ml' : '—'}</td>`;
+        }
+        html += `</tr>`;
+      });
+
+      html += `<tr style="border-top:2px solid var(--border);font-weight:700"><td>Σ Gesamt</td>`;
+      let grandTotal = 0;
+      steps.forEach(st => {
+        if (st.R === 0) {
+          grandTotal += st.totalMl;
+          html += `<td class="ml">${fmtMl(st.totalMl) ? fmtMl(st.totalMl) + ' ml' : '—'}</td>`;
+        } else {
+          const totalL = st.osmosis + st.totalMl / 1000;
+          grandTotal += totalL * 1000;
+          html += `<td class="ml">${fmtDE(Math.round(totalL * 1000))} ml</td>`;
+        }
+      });
+      if (isMulti) {
+        html += `<td class="ml" style="border-left:2px solid var(--border)">${fmtDE(Math.round(grandTotal))} ml</td>`;
+      }
+      html += `</tr>`;
+
+      html += `</tbody></table></div></div>`;
+
+      // Endwarnungen
+      const endWarnings = [];
+      sEL.forEach(e => {
+        const av = finalAfter[e.key];
+        if (av < e.min) endWarnings.push(`${e.name}: ${fmt(av)} (unter Min ${fmt(e.min)})`);
+        if (av > e.max) endWarnings.push(`${e.name}: ${fmt(av)} (über Max ${fmt(e.max)})`);
+      });
+      if (endWarnings.length > 0) {
+        html += `<div class="hint"><strong>Hinweis:</strong> Einige Werte liegen nach allen Ausgleichen noch außerhalb des Bereichs:<br>${endWarnings.join('<br>')}</div>`;
+      }
+
+      out.innerHTML = html;
+      out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      if (steps.length > 0) {
+        const st = steps[0];
+        animateSprings(0, st.before, st.after, st.ml, 2000);
+      }
+    }
+
+    function showStep(idx) {
+      const steps = window._steps;
+      if (!steps || idx < 0 || idx >= steps.length) return;
+      window._currentStep = idx;
+      steps.forEach((_, si) => {
+        const card = document.getElementById('step-card-' + si);
+        if (card) card.style.display = si === idx ? 'block' : 'none';
+      });
+      // Animation für den sichtbaren Schritt starten
+      const st = steps[idx];
+      animateSprings(idx, st.before, st.after, st.ml, 1500);
+    }
+
+    function fmt(v) {
+      if (v >= 1000) return Math.round(v).toLocaleString('de-DE');
+      if (v >= 100) return Math.round(v).toString();
+      if (v >= 10) return v.toFixed(1);
+      if (v >= 1) return v.toFixed(2);
+      return v.toFixed(3);
+    }
+    // Deutsche Formatierung: 1234.56 → "1.234,56"
+    function fmtDE(v, decimals = 0) {
+      return v.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    // ===== FEDER-VISUALISIERUNG =====
+    // Farb-Palette für Elemente (konsistente Zuordnung)
+    const EL_COLORS = {
+      Cl:'#4a90d9', Na:'#e8732a', Mg:'#8e44ad', S:'#e6a817',
+      Ca:'#2e9e5a', K:'#c0392b', Br:'#16a085', Sr:'#7f8c8d',
+      B:'#2980b9', F:'#d35400'
+    };
+
+
+    // ===== SVG Layout-Konstanten =====
+    const VIZ = {
+      W: 960, rowH: 38, topPad: 22,
+      springL: 40, springR: 370,
+      hoseL: 375, hoseR: 585,
+      solL: 590, solR: 870
+    };
+
+    function vizElY(i) { return VIZ.topPad + i * VIZ.rowH + VIZ.rowH / 2; }
+    function vizSolRowH() { return (EL.length * VIZ.rowH) / SOL.length; }
+    function vizSolY(i) { return VIZ.topPad + i * vizSolRowH() + vizSolRowH() / 2; }
+
+    // Baut die SVG-Struktur einmal auf mit IDs für animierbare Elemente
+    function buildSpringVizSVG(uid, beforeVals, afterVals, solMl, sEL) {
+      sEL = sEL || (window._renderSEL || EL);
+      const { W, rowH, topPad, springL, springR, hoseL, hoseR, solL, solR } = VIZ;
+      const nEl = sEL.length, nSol = SOL.length;
+      const totalH = Math.max(nEl, nSol) * rowH + 40;
+      const maxMl = Math.max(...solMl, 1);
+      const srH = vizSolRowH();
+
+      let svg = `<svg id="svg-${uid}" viewBox="0 0 ${W} ${totalH}" preserveAspectRatio="xMidYMid meet" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">`;
+      // Defs: Gradient-Übergänge für Zwei-Farben-Flaschen
+      svg += '<defs>';
+      SOL.forEach((s, i) => {
+        const catCol = EL_COLORS[s.cat] || '#888';
+        const anCol = s.an ? (EL_COLORS[s.an] || '#888') : catCol;
+        const total = s.catInc + s.anInc;
+        const catPct = total > 0 ? s.catInc / total : 1;
+        // Gradient mit weichem Übergang (4% Breite)
+        const g1 = Math.max(0, catPct * 100 - 2).toFixed(1);
+        const g2 = Math.min(100, catPct * 100 + 2).toFixed(1);
+        svg += `<linearGradient id="solgrad-${uid}-${i}" x1="0" y1="0" x2="1" y2="0">`;
+        svg += `<stop offset="0%" stop-color="${catCol}"/>`;
+        svg += `<stop offset="${g1}%" stop-color="${catCol}"/>`;
+        svg += `<stop offset="${g2}%" stop-color="${anCol}"/>`;
+        svg += `<stop offset="100%" stop-color="${anCol}"/>`;
+        svg += `</linearGradient>`;
+      });
+      svg += '</defs>';
+
+      // Überschriften
+      svg += `<text x="${(springL+springR)/2}" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#5a6a7a">Elemente</text>`;
+      svg += `<text x="${(solL+solR)/2}" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#5a6a7a">Lösungen (Flaschen)</text>`;
+
+      // === SCHLÄUCHE ===
+      SOL.forEach((s, si) => {
+        const sy = vizSolY(si);
+        const cx1 = hoseL + (hoseR - hoseL) * 0.3;
+        const cx2 = hoseL + (hoseR - hoseL) * 0.7;
+        const catIdx = sEL.findIndex(e => e.key === s.cat);
+        if (catIdx >= 0) {
+          const ey = vizElY(catIdx);
+          svg += `<path id="hose-cat-${uid}-${si}" d="M ${solL-2} ${sy} C ${cx2} ${sy}, ${cx1} ${ey}, ${springR+2} ${ey}" fill="none" stroke="${EL_COLORS[s.cat]}" stroke-width="0.5" opacity="0.06" stroke-linecap="round"/>`;
+        }
+        if (s.an) {
+          const anIdx = sEL.findIndex(e => e.key === s.an);
+          if (anIdx >= 0) {
+            const ey = vizElY(anIdx);
+            svg += `<path id="hose-an-${uid}-${si}" d="M ${solL-2} ${sy} C ${cx2} ${sy}, ${cx1} ${ey}, ${springR+2} ${ey}" fill="none" stroke="${EL_COLORS[s.an]}" stroke-width="0.5" opacity="0.06" stroke-linecap="round" stroke-dasharray="3,3"/>`;
+          }
+        }
+      });
+
+      // === ELEMENTE: Vorher/Nachher-Balken (sEL enthält PSU-skalierte Werte) ===
+      sEL.forEach((e, i) => {
+        const y = vizElY(i);
+        const bv = beforeVals[e.key], av = afterVals[e.key];
+        const padding = (e.max - e.min) * 0.3;
+        const lo = Math.min(e.min - padding, bv, av);
+        const hi = Math.max(e.max + padding, bv, av);
+        const span = hi - lo;
+        const px = v => springL + ((v - lo) / span) * (springR - springL);
+        const xMin = px(e.min), xMax = px(e.max), xOpt = px(e.opt);
+
+        // Label
+        svg += `<text x="33" y="${y+4}" text-anchor="end" font-size="11" font-weight="700" fill="${EL_COLORS[e.key]}">${e.key}</text>`;
+        // Track + grüner Bereich
+        svg += `<rect x="${springL}" y="${y-5}" width="${springR-springL}" height="10" rx="5" fill="#e8ecf0"/>`;
+        svg += `<rect x="${xMin}" y="${y-5}" width="${xMax-xMin}" height="10" rx="5" fill="${EL_COLORS[e.key] || '#d4edda'}" opacity="0.2"/>`;
+        // Optimal-Linie
+        svg += `<line x1="${xOpt}" y1="${y-8}" x2="${xOpt}" y2="${y+8}" stroke="#2e9e5a" stroke-width="1.5"/>`;
+        // Vorher-Marker (rot, statisch)
+        svg += `<rect x="${px(bv)-3}" y="${y-4}" width="6" height="8" rx="3" fill="#d94040" opacity="0.45"/>`;
+        // Nachher-Marker (animierbar, startet bei Vorher-Position)
+        svg += `<rect id="dot-${uid}-${i}" x="${px(bv)-3.5}" y="${y-4.5}" width="7" height="9" rx="3.5" fill="#4a90d9" stroke="#fff" stroke-width="0.5"/>`;
+        // Wert-Label (animierbar)
+        svg += `<text id="val-${uid}-${i}" x="${px(bv)}" y="${y-11}" text-anchor="middle" font-size="10" font-weight="700" fill="#4a90d9"></text>`;
+      });
+
+      // === FLASCHEN ===
+      SOL.forEach((s, i) => {
+        const y = vizSolY(i);
+        const barH = Math.max(srH - 8, 10);
+        const col = EL_COLORS[s.cat] || '#888';
+
+        // Hintergrund
+        svg += `<rect x="${solL}" y="${y - barH/2}" width="${solR - solL}" height="${barH}" rx="${barH/2}" fill="#e8ecf0" stroke="#d0d8e0" stroke-width="0.5"/>`;
+        // Füllung mit Zwei-Farben-Gradient (animierbar, startet mit 0 Breite)
+        svg += `<rect id="fill-${uid}-${i}" x="${solL}" y="${y - barH/2}" width="0" height="${barH}" rx="${barH/2}" fill="url(#solgrad-${uid}-${i})" opacity="0.2"/>`;
+        // ml-Text (animierbar)
+        svg += `<text id="mltxt-${uid}-${i}" x="${solL + 4}" y="${y+3.5}" text-anchor="start" font-size="9" font-weight="700" fill="#1a2a3a"></text>`;
+        // Label + Info-Button (fest bei x=945, alle untereinander)
+        svg += `<text id="sollbl-${uid}-${i}" x="${solR + 5}" y="${y+3.5}" font-size="9" font-weight="600" fill="#ccc">${s.name}</text>`;
+        const infoX = 945;
+        svg += `<circle cx="${infoX}" cy="${y}" r="12" fill="transparent" style="cursor:pointer" onclick="showSolInfo(event,'${uid}',${i})"/>`;
+        svg += `<circle cx="${infoX}" cy="${y}" r="9" fill="none" stroke="var(--blue)" stroke-width="1.5" style="pointer-events:none" class="sol-info-ring"/>`;
+        svg += `<text x="${infoX}" y="${y + 3.5}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--blue)" style="pointer-events:none" class="sol-info-txt">i</text>`;
+        // Anschluss-Punkt
+        svg += `<circle id="solnub-${uid}-${i}" cx="${solL}" cy="${y}" r="3" fill="${col}" opacity="0"/>`;
+        // Klickbarer Bereich für NaCl (Skalierung ×0.1) — nur auf Balken, nicht Label/Info
+        if (s.name === 'NaCl') {
+          svg += `<rect x="${solL}" y="${y - barH/2 - 2}" width="${solR - solL}" height="${barH + 4}" fill="transparent" style="cursor:pointer" onclick="toggleNaClScale('${uid}')"/>`;
+        }
+      });
+
+      svg += '</svg>';
+
+      // Legende
+      svg += `<div class="spring-legend">
+        <div class="spring-legend-item"><svg width="12" height="10"><rect x="3" y="1" width="6" height="8" rx="3" fill="#d94040" opacity="0.45"/></svg> Vorher</div>
+        <div class="spring-legend-item"><svg width="12" height="10"><rect x="3" y="1" width="6" height="8" rx="3" fill="#4a90d9"/></svg> Nachher</div>
+        <div class="spring-legend-item"><svg width="12" height="10"><rect x="3" y="1" width="6" height="8" rx="3" fill="#2e9e5a"/></svg> Perfekt</div>
+        <div class="spring-legend-item"><svg width="10" height="10"><line x1="5" y1="0" x2="5" y2="10" stroke="#2e9e5a" stroke-width="2"/></svg> Opt</div>
+        <div class="spring-legend-item"><svg width="16" height="10"><rect x="1" y="1" width="14" height="8" rx="4" fill="#4a90d9" opacity="0.2"/></svg> Min–Max</div>
+        <div class="spring-legend-item"><svg width="16" height="10"><path d="M1 5 C6 5,10 5,15 5" fill="none" stroke="#4a90d9" stroke-width="1.5" opacity="0.4"/></svg> Verbindung</div>
+        <div class="spring-legend-item"><svg width="16" height="10"><defs><linearGradient id="leg-sol" x1="0" y1="0" x2="1" y2="0"><stop offset="40%" stop-color="#e8732a"/><stop offset="60%" stop-color="#4a90d9"/></linearGradient></defs><rect x="1" y="1" width="14" height="8" rx="4" fill="url(#leg-sol)" opacity="0.2"/></svg> Lösung (Kation+Anion)</div>
+      </div>`;
+
+      return svg;
+    }
+
+    // Lösungs-Info Popup: Werte pro Wasserwechsel-Schritt
+    function showSolInfo(event, uid, solIdx) {
+      event.stopPropagation();
+      // Bestehendes Popup entfernen
+      const old = document.getElementById('sol-info-popup');
+      if (old) old.remove();
+
+      const s = SOL[solIdx];
+      const steps = _renderSteps;
+      if (!steps || steps.length === 0) return;
+
+      // Daten sammeln: Kation/Anion-Werte pro Schritt
+      const els = window._renderSEL || EL;
+      const catEl = els.find(e => e.key === s.cat);
+      const anEl = s.an ? els.find(e => e.key === s.an) : null;
+
+      // Prüfe ob Zielwerte vorhanden (Max-Δ Schutz aktiv)
+      const hasTargets = steps.some(st => st.targets);
+
+      let rows = '';
+      // Startwert
+      const startCat = steps[0].before[s.cat];
+      const startAn = anEl ? steps[0].before[s.an] : null;
+      rows += `<tr><td style="font-weight:600">Start</td><td>${fmt(startCat)}</td>${hasTargets ? '<td>—</td>' : ''}${anEl ? `<td>${fmt(startAn)}</td>${hasTargets ? '<td>—</td>' : ''}` : ''}<td>—</td></tr>`;
+
+      // Pro Wasserwechsel
+      steps.forEach((st, si) => {
+        const afterCat = st.after[s.cat];
+        const afterAn = anEl ? st.after[s.an] : null;
+        const ml = st.ml[solIdx];
+        let catTarget = '', anTarget = '';
+        if (hasTargets && st.targets) {
+          catTarget = `<td style="color:var(--text-light)">${fmt(st.targets[s.cat])}</td>`;
+          if (anEl) anTarget = `<td style="color:var(--text-light)">${fmt(st.targets[s.an])}</td>`;
+        } else if (hasTargets) {
+          catTarget = '<td>—</td>';
+          if (anEl) anTarget = '<td>—</td>';
+        }
+        rows += `<tr><td style="font-weight:600">WC ${si+1}</td><td>${fmt(afterCat)}</td>${catTarget}${anEl ? `<td>${fmt(afterAn)}</td>${anTarget}` : ''}<td>${fmtMl(ml) ? fmtMl(ml) + ' ml' : '—'}</td></tr>`;
+      });
+
+      // Optimum-Zeile
+      rows += `<tr style="color:var(--green);font-weight:600"><td>Optimal</td><td>${fmt(catEl.opt)}</td>${hasTargets ? `<td>${fmt(catEl.opt)}</td>` : ''}${anEl ? `<td>${fmt(anEl.opt)}</td>${hasTargets ? `<td>${fmt(anEl.opt)}</td>` : ''}` : ''}<td></td></tr>`;
+
+      const popup = document.createElement('div');
+      popup.id = 'sol-info-popup';
+      popup.className = 'help-popup show';
+      popup.innerHTML = `
+        <button class="help-close" onclick="this.parentElement.remove()">&times;</button>
+        <h4>${s.name}</h4>
+        <table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-top:0.4rem">
+          <thead><tr style="border-bottom:1px solid #ddd;color:var(--text-light);font-size:0.75rem">
+            <th style="text-align:left;padding:0.2rem 0.3rem">Schritt</th>
+            <th style="text-align:right;padding:0.2rem 0.3rem">${catEl.name}</th>
+            ${hasTargets ? `<th style="text-align:right;padding:0.2rem 0.3rem">Ziel</th>` : ''}
+            ${anEl ? `<th style="text-align:right;padding:0.2rem 0.3rem">${anEl.name}</th>${hasTargets ? `<th style="text-align:right;padding:0.2rem 0.3rem">Ziel</th>` : ''}` : ''}
+            <th style="text-align:right;padding:0.2rem 0.3rem">Menge</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      // Tabellen-Zellen rechts ausrichten (alle außer erste Spalte)
+      popup.querySelectorAll('td').forEach(td => {
+        td.style.padding = '0.2rem 0.3rem';
+        if (td !== td.parentElement.firstElementChild) td.style.textAlign = 'right';
+      });
+
+      document.body.appendChild(popup);
+
+      // Positionieren
+      const rect = event.currentTarget.getBoundingClientRect();
+      const popW = 380;
+      let left = rect.left + rect.width / 2 - popW / 2;
+      let top = rect.bottom + 8;
+      if (left < 8) left = 8;
+      if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+      if (top + 200 > window.innerHeight - 8) top = rect.top - 200;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+      popup.style.maxWidth = popW + 'px';
+      popup.style.whiteSpace = 'nowrap';
+    }
+
+    // Klick außerhalb schließt Sol-Info Popup
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#sol-info-popup') && !e.target.closest('circle[onclick*="showSolInfo"]')) {
+        const p = document.getElementById('sol-info-popup');
+        if (p) p.remove();
+      }
+    });
+
+    // NaCl-Skalierung: nur Darstellung, nicht Berechnung
+    const naclScaleState = {};
+    function toggleNaClScale(uid) {
+      naclScaleState[uid] = !naclScaleState[uid];
+      // Re-render mit gespeicherten Daten
+      const data = naclVizData[uid];
+      if (data) updateSpringViz(uid, data.before, data.cur, data.curMl, data.finalMl);
+    }
+    const naclVizData = {};
+
+    // Update animierbare SVG-Elemente per setAttribute (kein innerHTML!)
+    function updateSpringViz(uid, beforeVals, curVals, curMl, finalMl) {
+      // Daten speichern für NaCl-Skalierungs-Toggle
+      naclVizData[uid] = { before: beforeVals, cur: curVals, curMl, finalMl };
+      const { springL, springR, solL, solR } = VIZ;
+      const naclIdx = SOL.findIndex(s => s.name === 'NaCl');
+      const naclScaled = naclScaleState[uid] || false;
+      // Bei NaCl-Skalierung: displayMl mit ×0.1 für NaCl, maxMl ohne NaCl-Originalwert
+      const displayMl = finalMl.map((v, i) => (naclScaled && i === naclIdx) ? v * 0.1 : v);
+      const maxMl = Math.max(...displayMl, 1);
+      const srH = vizSolRowH();
+      const barH = Math.max(srH - 8, 10);
+
+      // Elemente: Nachher-Marker bewegen
+      EL.forEach((e, i) => {
+        const sf = _vizSf;
+        const eMin = e.min * sf, eMax = e.max * sf, eOpt = e.opt * sf;
+        const bv = beforeVals[e.key], av = curVals[e.key];
+        const padding = (eMax - eMin) * 0.3;
+        const lo = Math.min(eMin - padding, bv, av);
+        const hi = Math.max(eMax + padding, bv, av);
+        const span = hi - lo;
+        const px = v => springL + ((v - lo) / span) * (springR - springL);
+        const xCur = px(av);
+
+        const aDist = Math.abs(av - eOpt);
+        const isGood = aDist < (eMax - eMin) * getOptTolerance();
+        const col = isGood ? '#2e9e5a' : '#4a90d9';
+
+        const dotEl = document.getElementById(`dot-${uid}-${i}`);
+        const valEl = document.getElementById(`val-${uid}-${i}`);
+        if (dotEl) { dotEl.setAttribute('x', xCur - 3.5); dotEl.setAttribute('fill', col); }
+        if (valEl) { valEl.setAttribute('x', xCur); valEl.setAttribute('fill', col); valEl.textContent = fmt(av); }
+      });
+
+      // Flaschen updaten
+      SOL.forEach((s, i) => {
+        const mlVal = curMl[i];
+        const dispVal = (naclScaled && i === naclIdx) ? mlVal * 0.1 : mlVal;
+        const isActive = mlVal > 0.01;
+        const fillPct = dispVal / maxMl;
+        const fillW = isActive ? Math.max(fillPct * (solR - solL), barH) : 0;
+
+        const fillEl = document.getElementById(`fill-${uid}-${i}`);
+        const txtEl = document.getElementById(`mltxt-${uid}-${i}`);
+        const lblEl = document.getElementById(`sollbl-${uid}-${i}`);
+        const nubEl = document.getElementById(`solnub-${uid}-${i}`);
+
+        if (fillEl) fillEl.setAttribute('width', fillW);
+        if (txtEl) {
+          if (isActive) {
+            const txtX = fillW > 60 ? solL + fillW - 5 : solL + fillW + 4;
+            txtEl.setAttribute('x', txtX);
+            txtEl.setAttribute('text-anchor', fillW > 60 ? 'end' : 'start');
+            txtEl.setAttribute('fill', '#1a2a3a');
+            const scaleSuffix = (naclScaled && i === naclIdx) ? ' (×0.1)' : '';
+            txtEl.textContent = (fmtMl(mlVal) || '0') + ' ml' + scaleSuffix;
+          } else {
+            txtEl.textContent = '';
+          }
+        }
+        if (lblEl) lblEl.setAttribute('fill', isActive ? '#1a2a3a' : '#ccc');
+        if (nubEl) nubEl.setAttribute('opacity', isActive ? '0.8' : '0');
+
+        // Schläuche updaten
+        const hCat = document.getElementById(`hose-cat-${uid}-${i}`);
+        const hAn = document.getElementById(`hose-an-${uid}-${i}`);
+        const sw = isActive ? 1.5 + Math.min(fillPct * 2, 2) : 0.5;
+        const op = isActive ? 0.35 : 0.06;
+        if (hCat) { hCat.setAttribute('stroke-width', sw); hCat.setAttribute('opacity', op); }
+        if (hAn) { hAn.setAttribute('stroke-width', sw); hAn.setAttribute('opacity', op); hAn.setAttribute('stroke-dasharray', isActive ? 'none' : '3,3'); }
+      });
+    }
+
+    // ===== FEDER-ANIMATION =====
+    let springAnimId = null;
+    function animateSprings(uid, beforeVals, afterVals, solMl, durationMs) {
+      if (springAnimId) cancelAnimationFrame(springAnimId);
+      const startTime = performance.now();
+
+      function frame(now) {
+        const t = Math.min((now - startTime) / durationMs, 1);
+        const eased = 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 0.5);
+        const tClamped = Math.min(eased, 1);
+        const interp = {};
+        EL.forEach(e => {
+          interp[e.key] = beforeVals[e.key] + (afterVals[e.key] - beforeVals[e.key]) * tClamped;
+        });
+        const interpMl = solMl.map(m => m * tClamped);
+        updateSpringViz(uid, beforeVals, interp, interpMl, solMl);
+        if (t < 1) springAnimId = requestAnimationFrame(frame);
+        else springAnimId = null;
+      }
+      springAnimId = requestAnimationFrame(frame);
+    }
+
+    function fmtMl(v) {
+      const r = Math.round(v);
+      if (r <= 0) return null;
+      return fmtDE(r);
+    }
+
+    // ===== AUTO-SAVE / LOAD =====
+    const SAVE_KEY = 'cr-aqua-rechner-v1';
+
+    function saveState() {
+      try {
+        const state = {
+          volume: document.getElementById('volume').value,
+          psuMess: document.getElementById('psu-mess').value,
+          psuZiel: document.getElementById('psu-ziel').value,
+          optTolerance: document.getElementById('opt-tolerance').value,
+          maxWcPct: document.getElementById('max-wc-pct').value,
+          maxdEnabled: document.getElementById('maxd-enabled').checked,
+          icp: {},
+          settings: {}
+        };
+        EL.forEach(e => {
+          state.icp[e.key] = document.getElementById('in-' + e.key).value;
+          state.settings[e.key] = {
+            min: document.getElementById('set-min-' + e.key).value,
+            opt: document.getElementById('set-opt-' + e.key).value,
+            max: document.getElementById('set-max-' + e.key).value,
+            maxd: document.getElementById('set-maxd-' + e.key).value
+          };
+        });
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      } catch (e) { /* silent */ }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+
+        if (s.volume) document.getElementById('volume').value = s.volume;
+        if (s.psuMess) document.getElementById('psu-mess').value = s.psuMess;
+        if (s.psuZiel) document.getElementById('psu-ziel').value = s.psuZiel;
+        if (s.optTolerance) document.getElementById('opt-tolerance').value = s.optTolerance;
+        if (s.maxWcPct) document.getElementById('max-wc-pct').value = s.maxWcPct;
+        if (s.maxdEnabled != null) document.getElementById('maxd-enabled').checked = s.maxdEnabled;
+        onMaxDeltaToggle();
+
+        if (s.icp) {
+          EL.forEach(e => {
+            if (s.icp[e.key] != null) document.getElementById('in-' + e.key).value = s.icp[e.key];
+          });
+        }
+        if (s.settings) {
+          EL.forEach(e => {
+            const ss = s.settings[e.key];
+            if (!ss) return;
+            if (ss.min != null) document.getElementById('set-min-' + e.key).value = ss.min;
+            if (ss.opt != null) document.getElementById('set-opt-' + e.key).value = ss.opt;
+            if (ss.max != null) document.getElementById('set-max-' + e.key).value = ss.max;
+            if (ss.maxd != null) document.getElementById('set-maxd-' + e.key).value = ss.maxd;
+            updateSetting(e.key);
+          });
+        }
+
+        // PSU-Anzeige und Farben aktualisieren
+        updatePsuDisplay();
+      } catch (e) { /* silent */ }
+    }
+
+    // Alle Inputs überwachen → Auto-Save
+    document.querySelectorAll('input[type="number"]').forEach(inp => {
+      inp.addEventListener('input', saveState);
+      inp.addEventListener('change', saveState);
+    });
+
+    // State beim Laden wiederherstellen
+    loadState();
+  </script>
+</body>
+</html>

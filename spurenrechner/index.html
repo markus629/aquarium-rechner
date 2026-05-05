@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSCI Motion Spurenelemente Rechner</title>
+<style>
+  :root {
+    --blue:#1a73a7; --blue-dark:#125a84; --blue-light:#e8f4fb;
+    --orange:#e8732a; --orange-dark:#c45f1f;
+    --green:#2e9e5a; --yellow:#e6a817; --red:#d94040;
+    --bg:#f0f4f8; --card:#fff; --text:#1a2a3a; --text-light:#5a6a7a;
+    --border:#d0d8e0; --radius:12px; --shadow:0 2px 12px rgba(0,0,0,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  input[type="number"] { -moz-appearance:textfield; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; }
+  header h1 { font-size:1.6rem; font-weight:700; }
+  header p { opacity:0.85; font-size:0.9rem; margin-top:0.25rem; }
+  main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
+  .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
+  .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
+  .card h3 { font-size:0.95rem; color:var(--text-light); margin:1rem 0 0.5rem; text-transform:uppercase; letter-spacing:0.05em; }
+  .collapsible-body { display:none; }
+  .collapsible.open .collapsible-body { display:block; }
+  .toggle-arrow { font-size:0.85rem; color:var(--text-light); transition:transform 0.2s; cursor:pointer; user-select:none; }
+  .collapsible.open .toggle-arrow { transform:rotate(90deg); }
+  /* Tabs */
+  .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+  .tab-btn { flex:1; padding:0.85rem 1rem; border:none; background:var(--card); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; }
+  .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .tab-btn:hover:not(.active) { background:var(--bg); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .element-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
+  .element-item { display:flex; flex-direction:column; gap:0.25rem; padding:0.6rem; border-radius:8px; background:var(--bg); }
+  .element-label { font-weight:600; font-size:0.85rem; display:flex; justify-content:space-between; }
+  .element-label .sym { color:var(--text-light); font-weight:400; font-size:0.75rem; }
+  .element-input-row { display:flex; align-items:center; gap:0.4rem; }
+  .element-input-row input { flex:1; padding:0.4rem 0.5rem; border:2px solid var(--border); border-radius:6px; font-size:0.95rem; text-align:right; min-width:0; background:#fff; }
+  .element-input-row input:focus { outline:none; border-color:var(--blue); }
+  .element-input-row .unit { color:var(--text-light); font-size:0.75rem; min-width:24px; }
+  .ideal-hint { font-size:0.7rem; color:var(--text-light); }
+  .form-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; }
+  .form-row label { font-weight:600; min-width:200px; }
+  .form-row input { padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; }
+  .form-row input[type="date"] { width:170px; }
+  .form-row input[type="number"] { width:110px; text-align:right; }
+  .btn { padding:0.6rem 1.2rem; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
+  .btn-primary { background:linear-gradient(135deg,var(--orange),var(--orange-dark)); color:#fff; box-shadow:0 4px 10px rgba(232,115,42,0.3); }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 14px rgba(232,115,42,0.4); }
+  .btn-secondary { background:var(--blue-light); color:var(--blue); }
+  .btn-secondary:hover { background:#d4ebf7; }
+  .btn-ghost { background:transparent; color:var(--text-light); border:1px solid var(--border); }
+  .btn-ghost:hover { background:var(--bg); }
+  .btn-danger { background:#fbe9e9; color:var(--red); }
+  .btn-danger:hover { background:#f5d1d1; }
+  .btn-row { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem; }
+  .btn-calculate { display:block; width:100%; max-width:340px; margin:1rem auto 0.5rem; padding:0.85rem 2rem; font-size:1.05rem; }
+  .group-header { display:flex; align-items:center; gap:0.5rem; margin:1rem 0 0.5rem; }
+  .group-header .badge { padding:0.15rem 0.5rem; border-radius:4px; font-size:0.7rem; font-weight:700; text-transform:uppercase; }
+  .badge-cat { background:#fde8d6; color:var(--orange-dark); }
+  .badge-an { background:#d6ebfd; color:var(--blue-dark); }
+  .results { margin-top:1.5rem; }
+  .summary-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.75rem; margin:1rem 0; }
+  .summary-box { background:var(--blue-light); border-radius:8px; padding:0.8rem; text-align:center; }
+  .summary-box .lbl { font-size:0.75rem; color:var(--text-light); text-transform:uppercase; }
+  .summary-box .val { font-size:1.4rem; font-weight:700; color:var(--blue); margin-top:0.2rem; }
+  .summary-box.warn .val { color:var(--red); }
+  table.dose-table { width:100%; border-collapse:collapse; font-size:0.85rem; margin-top:0.5rem; }
+  table.dose-table th, table.dose-table td { padding:0.4rem 0.5rem; border-bottom:1px solid #eee; text-align:right; font-variant-numeric:tabular-nums; }
+  table.dose-table th { font-size:0.7rem; text-transform:uppercase; color:var(--text-light); text-align:right; border-bottom:2px solid var(--border); }
+  table.dose-table th:first-child, table.dose-table td:first-child { text-align:left; }
+  table.dose-table tbody tr:nth-child(even) td { background:#f8fafc; }
+  table.limits-table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+  table.limits-table th, table.limits-table td { padding:0.4rem 0.5rem; border-bottom:1px solid #eee; }
+  table.limits-table th { font-size:0.78rem; color:var(--text-light); border-bottom:2px solid var(--border); text-align:left; font-weight:600; }
+  table.limits-table tbody tr:nth-child(even) td { background:#f8fafc; }
+  table.limits-table th.num, table.limits-table td.num { text-align:right; }
+  table.limits-table input, table.limits-table select { width:100%; padding:0.3rem 0.4rem; border:1px solid var(--border); border-radius:6px; font-size:0.9rem; font-variant-numeric:tabular-nums; background:#fff; }
+  table.limits-table input[type="number"] { text-align:right; }
+  table.limits-table .action-cell { width:1%; white-space:nowrap; text-align:right; }
+  table.limits-table input:focus, table.limits-table select:focus { outline:none; border-color:var(--blue); }
+  table.limits-table .el-name { font-weight:600; }
+  table.limits-table .el-sym { color:var(--text-light); font-weight:400; font-size:0.8rem; margin-left:0.25rem; }
+  .row-action { width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; font-size:0.95rem; line-height:1; font-weight:700; display:inline-flex; align-items:center; justify-content:center; transition:filter 0.15s; }
+  .row-action.edit   { background:#e8eef5; color:#5a6a7a; }
+  .row-action.danger { background:#f5e3e3; color:#b13030; }
+  .row-action.save   { background:#dff0d8; color:#2e7d32; }
+  .row-action:hover  { filter:brightness(0.92); }
+  #new-element-row td { background:#f0f7ff; }
+  table.limits-table tr.row-editing td { background:#fff8e6; }
+  .modal-backdrop { position:fixed; inset:0; background:rgba(20,28,40,0.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+  .modal-backdrop[hidden] { display:none; }
+  .modal { background:#fff; border-radius:12px; padding:1.5rem; max-width:460px; width:calc(100% - 2rem); box-shadow:0 12px 40px rgba(0,0,0,0.25); }
+  .modal h3 { margin:0 0 0.6rem; font-size:1.05rem; color:var(--text); text-transform:none; letter-spacing:0; }
+  .modal p { margin:0 0 1rem; font-size:0.9rem; color:var(--text); line-height:1.5; }
+  .modal-buttons { display:flex; flex-direction:column; gap:0.5rem; }
+  .modal-buttons button { padding:0.7rem 1rem; border:none; border-radius:8px; font-size:0.9rem; font-weight:600; cursor:pointer; transition:filter 0.15s; }
+  .modal-buttons button:hover { filter:brightness(0.92); }
+  .modal-btn-cancel  { background:#e8eef5; color:var(--text); }
+  .modal-btn-warn    { background:#fcefd6; color:#a25800; }
+  .modal-btn-danger  { background:#f5d6d6; color:#a02020; }
+  table.limits-table .cell-ro { color:var(--text); font-variant-numeric:tabular-nums; }
+  .help-dot { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#d6dde5; color:#5a6a7a; font-size:0.7rem; font-weight:700; cursor:help; user-select:none; transition:background 0.15s; }
+  .help-dot:hover { background:var(--blue); color:#fff; }
+  .calc-detail { font-size:0.78rem; line-height:1.5; max-width:380px; }
+  .calc-detail h4 { font-size:0.85rem; margin-bottom:0.4rem; color:var(--blue); }
+  .calc-detail table { width:100%; border-collapse:collapse; font-size:0.72rem; margin:0.3rem 0; font-variant-numeric:tabular-nums; }
+  .calc-detail th, .calc-detail td { padding:0.15rem 0.3rem; border-bottom:1px solid #eee; text-align:right; }
+  .calc-detail th:first-child, .calc-detail td:first-child { text-align:left; }
+  .calc-detail th { color:var(--text-light); font-size:0.65rem; text-transform:uppercase; }
+  .calc-detail .formula { background:#f5f7fa; border-radius:6px; padding:0.4rem 0.6rem; margin:0.3rem 0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.72rem; }
+  .calc-detail .result-line { font-weight:700; color:var(--blue); margin-top:0.4rem; }
+  .calc-detail .cap-note { color:var(--yellow); font-weight:600; }
+  .delta-up { color:var(--green); font-weight:600; }
+  .delta-down { color:var(--red); font-weight:600; }
+  .delta-flag { color:var(--yellow); margin-left:0.25rem; }
+  .mix-edit { font-weight:700; outline:none; border-bottom:1px dashed transparent; padding:0 0.1rem; cursor:text; }
+  .mix-edit:hover { border-bottom-color:var(--border); }
+  .mix-edit:focus { border-bottom-color:var(--blue); background:#fff8e8; }
+  .mix-edit.edited { color:var(--orange-dark); background:#fff8e8; border-bottom-color:var(--orange); }
+  .mix-undo { background:transparent; border:none; cursor:pointer; padding:0 0.15rem; font-size:0.9rem; color:var(--orange); margin-left:0.2rem; line-height:1; }
+  .mix-undo:hover { color:var(--orange-dark); }
+  .history-table { min-width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:0.5rem; }
+  .history-table th, .history-table td { padding:0.45rem 0.5rem; border-bottom:1px solid #eee; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .history-table th { font-size:0.78rem; color:var(--text-light); text-align:left; border-bottom:2px solid var(--border); font-weight:600; }
+  .history-table tbody tr:nth-child(even) td { background:#f8fafc; }
+  .history-row.expanded { background:#eef6fc !important; }
+  .history-detail { background:#fafbfc; padding:0.75rem 1rem; border-bottom:1px solid #eee; }
+  .history-detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.75rem; }
+  .row-actions { display:flex; gap:0.3rem; }
+  .icon-btn { background:transparent; border:none; cursor:pointer; padding:0.3rem; font-size:0.95rem; color:var(--text-light); border-radius:4px; }
+  .icon-btn:hover { background:var(--bg); color:var(--text); }
+  .icon-btn.del:hover { color:var(--red); }
+  .empty { text-align:center; color:var(--text-light); padding:1.5rem; font-style:italic; }
+  .info-line { font-size:0.85rem; color:var(--text-light); margin-bottom:0.75rem; }
+  .chart-tooltip { position:absolute; z-index:300; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:0.5rem 0.6rem 0.4rem; pointer-events:none; display:none; }
+  .chart-tooltip.show { display:block; }
+  .chart-tooltip .ct-title { font-size:0.85rem; font-weight:700; margin-bottom:0.25rem; color:var(--text); }
+  .chart-tooltip .ct-legend { display:flex; gap:0.75rem; font-size:0.7rem; color:var(--text-light); margin-top:0.2rem; justify-content:center; }
+  .chart-tooltip .ct-legend span { display:inline-flex; align-items:center; gap:0.25rem; }
+  .chart-tooltip .ct-swatch { display:inline-block; width:10px; height:3px; border-radius:2px; }
+  .history-table th[data-elkey] { cursor:help; }
+  .history-table th[data-elkey]:hover { background:var(--blue-light); color:var(--blue); }
+  .toast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); background:var(--text); color:#fff; padding:0.75rem 1.25rem; border-radius:8px; font-size:0.9rem; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:200; }
+  .toast.show { opacity:0.95; }
+  @media (max-width:600px) {
+    header h1 { font-size:1.3rem; }
+    .card { padding:1rem; }
+    .form-row label { min-width:0; }
+    table.dose-table, .history-table { font-size:0.78rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>OSCI Motion Spurenelemente</h1>
+  <p>ICP-Messung erfassen · Dosierung berechnen · Historie führen</p>
+</header>
+<main>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab-main">🧪 Rechner</button>
+  <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+</div>
+
+<div id="tab-settings" class="tab-content">
+<div class="card" id="settingsCard">
+  <h2><span>⚙️ Einstellungen</span></h2>
+  <div>
+    <p class="info-line">Vorbelegt mit den Werten aus der Excel-Vorlage (normal besetzt). Änderungen werden automatisch gespeichert.</p>
+
+    <h3>Elemente &amp; Zielwerte</h3>
+    <div style="overflow-x:auto;">
+      <table class="limits-table" id="limitsTable"></table>
+    </div>
+    <p class="info-line" style="font-size:0.78rem;">Letzte Zeile leer ausfüllen und mit ✓ als neues Element speichern. Vorhandene Elemente lassen sich mit − löschen (Mess-Historie bleibt erhalten).</p>
+
+    <h3>Mischung</h3>
+    <div class="form-row">
+      <label>Tagesdosis je Lösung (ml/Tag)</label>
+      <input type="number" id="dailyMl" min="0" step="0.1" value="5">
+    </div>
+    <div class="form-row">
+      <label>ICP-Abstand (Tage)</label>
+      <input type="number" id="icpIntervalDays" min="1" step="1" value="30">
+    </div>
+    <div class="form-row">
+      <label>Sicherheit (Tage)</label>
+      <input type="number" id="safetyDays" min="0" step="1" value="10">
+    </div>
+    <div class="form-row" style="font-size:0.8rem; color:var(--text-light);">
+      <label>Ergibt</label>
+      <div id="mixSummary" style="padding:0.4rem 0;"></div>
+    </div>
+    <div class="form-row">
+      <label>Max. Anpassung pro Iteration (%)</label>
+      <input type="number" id="capPct" step="1" value="25">
+    </div>
+    <h3>Glättung</h3>
+    <div class="form-row">
+      <label>Glättungs-Fenster (Anzahl Messungen)</label>
+      <input type="number" id="smoothN" min="1" max="10" step="1" value="3">
+    </div>
+    <div class="form-row">
+      <label>Totband (% von Min/Optimal/Max)</label>
+      <input type="number" id="deadbandPct" min="0" max="100" step="5" value="50">
+    </div>
+    <p class="info-line" style="font-size:0.78rem;">Ist der Messwert innerhalb dieses Anteils zwischen Optimal und Min/Max, wird die alte Dosis beibehalten (kein Reagieren auf Mess-Rauschen).</p>
+
+    <div class="form-row">
+      <label>Graph-Zeitraum</label>
+      <select id="chartMonths" style="padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; background:#fff;">
+        <option value="3">letzte 3 Monate</option>
+        <option value="6">letzte 6 Monate</option>
+        <option value="12">letzte 12 Monate</option>
+        <option value="24">letzte 24 Monate</option>
+        <option value="0">alle</option>
+      </select>
+    </div>
+
+    <div class="btn-row" style="margin-top:1.5rem;">
+      <button class="btn btn-ghost" id="resetSettings">↺ Auf Sheet-Defaults zurücksetzen</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="tab-main" class="tab-content active">
+<div class="card">
+  <h2>🧪 Neue ICP-Messung</h2>
+  <div class="form-row">
+    <label>Datum</label>
+    <input type="date" id="measureDate">
+  </div>
+
+  <div class="group-header"><span class="badge badge-cat">Kationisch</span></div>
+  <div class="element-grid" id="measureCatGrid"></div>
+
+  <div class="group-header"><span class="badge badge-an">Anionisch</span></div>
+  <div class="element-grid" id="measureAnGrid"></div>
+
+  <div class="btn-row" style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+    <button class="btn btn-primary btn-calculate" id="calcBtn" style="flex:1; min-width:200px;">Neue Dosierung berechnen</button>
+  </div>
+
+  <div class="results" id="results" style="display:none;"></div>
+</div>
+
+<div class="card">
+  <h2>
+    <span>📋 Historie</span>
+    <span style="font-size:0.8rem; font-weight:400; color:var(--text-light);" id="historyCount"></span>
+  </h2>
+  <div id="historyContainer"></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="exportBtn">⬇️ Export JSON</button>
+    <button class="btn btn-secondary" id="importBtn">⬆️ Import JSON</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+    <button class="btn btn-danger" id="clearAllBtn">🗑 Alle löschen</button>
+  </div>
+</div>
+</div>
+
+</main>
+
+<div class="chart-tooltip" id="chartTooltip"></div>
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+  <div class="modal" id="modalBox">
+    <h3 id="modalTitle"></h3>
+    <div id="modalMsg" style="white-space:pre-line;"></div>
+    <div class="modal-buttons" id="modalBtns"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// Element-Definition als Saat-Daten; nach loadState wird diese Liste aus state.settings.elements gespeist.
+// Symbol → { name, group } für sauberes Mapping beim Anlegen neuer Elemente.
+const ICP_CATALOG = {
+  // Wasserchemie / Salz
+  "D25":  { name:"Dichte 25°C",     group:"cat" },
+  "NaCl": { name:"Salinität",       group:"cat" },
+  "KH":   { name:"Karbonathärte",   group:"cat" },
+  // Nährstoffe
+  "P":    { name:"Phosphor",        group:"an"  },
+  "PO4":  { name:"Phosphat",        group:"an"  },
+  "TNb":  { name:"Gesamt-Stickstoff", group:"an" },
+  "TC":   { name:"Gesamt-Kohlenstoff", group:"an" },
+  "TIC":  { name:"Anorg. Kohlenstoff", group:"an" },
+  "TOC":  { name:"Org. Kohlenstoff", group:"an" },
+  // Major Ionen
+  "Cl":   { name:"Chlorid",         group:"an"  },
+  "Na":   { name:"Natrium",         group:"cat" },
+  "Mg":   { name:"Magnesium",       group:"cat" },
+  "S":    { name:"Schwefel",        group:"an"  },
+  "Ca":   { name:"Calcium",         group:"cat" },
+  "K":    { name:"Kalium",          group:"cat" },
+  "Br":   { name:"Brom",            group:"an"  },
+  // Trace (anionisch)
+  "F":    { name:"Fluor",           group:"an"  },
+  "I":    { name:"Iod",             group:"an"  },
+  "V":    { name:"Vanadium",        group:"an"  },
+  "Se":   { name:"Selen",           group:"an"  },
+  // Trace (kationisch)
+  "Sr":   { name:"Strontium",       group:"cat" },
+  "B":    { name:"Bor",             group:"cat" },
+  "Co":   { name:"Kobalt",          group:"cat" },
+  "Ni":   { name:"Nickel",          group:"cat" },
+  "Fe":   { name:"Eisen",           group:"cat" },
+  "Mn":   { name:"Mangan",          group:"cat" },
+  "Cu":   { name:"Kupfer",          group:"cat" },
+  "Cr":   { name:"Chrom",           group:"cat" },
+  "Zn":   { name:"Zink",            group:"cat" },
+  "Ba":   { name:"Barium",          group:"cat" },
+  "Mo":   { name:"Molybdän",        group:"cat" },
+  "Li":   { name:"Lithium",         group:"cat" },
+  "Si":   { name:"Silizium",        group:"cat" },
+  // Schadstoff-Indikatoren
+  "As":   { name:"Arsen",           group:"cat" },
+  "Be":   { name:"Beryllium",       group:"cat" },
+  "Ag":   { name:"Silber",          group:"cat" },
+  "Sn":   { name:"Zinn",            group:"cat" },
+  "Al":   { name:"Aluminium",       group:"cat" },
+  "Sb":   { name:"Antimon",         group:"cat" },
+  "Bi":   { name:"Bismut",          group:"cat" },
+  "Pb":   { name:"Blei",            group:"cat" },
+  "Cd":   { name:"Cadmium",         group:"cat" },
+  "La":   { name:"Lanthan",         group:"cat" },
+  "Tl":   { name:"Thallium",        group:"cat" },
+  "Ti":   { name:"Titan",           group:"cat" },
+  "W":    { name:"Wolfram",         group:"cat" },
+  "Hg":   { name:"Quecksilber",     group:"cat" },
+  "Zr":   { name:"Zirconium",       group:"cat" },
+};
+
+const DEFAULT_ELEMENTS = [
+  { key:"Zn", name:"Zink",     group:"cat", ideal:4,    min:2,   max:8,   initial:1.8 },
+  { key:"Mn", name:"Mangan",   group:"cat", ideal:0.5,  min:0.1, max:1,   initial:0.45 },
+  { key:"Cu", name:"Kupfer",   group:"cat", ideal:4,    min:0.5, max:6,   initial:0.9 },
+  { key:"Fe", name:"Eisen",    group:"cat", ideal:1,    min:0,   max:2.5, initial:3.6 },
+  { key:"Cr", name:"Chrom",    group:"cat", ideal:1,    min:0.5, max:2.5, initial:0.27 },
+  { key:"Ni", name:"Nickel",   group:"cat", ideal:4,    min:0.5, max:6,   initial:13.5 },
+  { key:"Co", name:"Kobalt",   group:"cat", ideal:1,    min:0.3, max:2.5, initial:27 },
+  { key:"Mo", name:"Molybdän", group:"cat", ideal:12,   min:8,   max:20,  initial:0 },
+  { key:"F",  name:"Fluor",    group:"an",  ideal:1.3,  min:1,   max:1.8, initial:81 },
+  { key:"I",  name:"Iod",      group:"an",  ideal:65,   min:50,  max:90,  initial:1.08 },
+  { key:"V",  name:"Vanadium", group:"an",  ideal:4.5,  min:1,   max:8,   initial:0.72 },
+  { key:"Se", name:"Selen",    group:"an",  ideal:3.5,  min:1.5, max:8,   initial:1.35 },
+];
+let ELEMENTS = { cat: [], an: [] };
+let ALL_ELEMENTS = [];
+function rebuildElementBindings() {
+  const list = (state && state.settings && Array.isArray(state.settings.elements))
+    ? state.settings.elements
+    : DEFAULT_ELEMENTS;
+  ALL_ELEMENTS = list.map(e => ({ ...e }));
+  ELEMENTS = {
+    cat: ALL_ELEMENTS.filter(e => e.group === "cat"),
+    an:  ALL_ELEMENTS.filter(e => e.group === "an"),
+  };
+}
+
+const STORAGE_KEY = "spurenrechner.v1";
+const DEFAULTS = {
+  elements: DEFAULT_ELEMENTS.map(e => ({ key:e.key, name:e.name, group:e.group })),
+  ideal:   Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.ideal])),
+  min:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.min])),
+  max:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.max])),
+  initial: Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.initial])),
+  dailyMl: 5,
+  icpIntervalDays: 30, safetyDays: 10,
+  capPct: 0.25, chartMonths: 0,
+  smoothN: 3,
+  deadbandPct: 0.5,   // 50% des Min/Optimal- bzw. Optimal/Max-Abstands → kein Eingriff
+};
+
+// Asymmetrische Totband-Grenzen (innen halten = keine Korrektur)
+function deadbandBounds(key) {
+  const s = state.settings;
+  const id  = s.ideal[key];
+  const mn  = s.min[key];
+  const mx  = s.max[key];
+  const pct = s.deadbandPct ?? 0;
+  if (id == null || mn == null || mx == null) return null;
+  return {
+    low:  id - pct * (id - mn),
+    high: id + pct * (mx - id)
+  };
+}
+
+// Aus den Mischungs-Settings abgeleitet
+function mixDerived() {
+  const s = state.settings;
+  const dailyMl   = s.dailyMl || 0;
+  const totalDays = (s.icpIntervalDays || 0) + (s.safetyDays || 0);
+  const totalMl   = dailyMl * totalDays;
+  return { dailyMl, totalDays, totalMl };
+}
+
+let state = loadState();
+rebuildElementBindings();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      const ps = p.settings || {};
+      return {
+        settings: { ...DEFAULTS, ...ps,
+          elements: Array.isArray(ps.elements) && ps.elements.length ? ps.elements : DEFAULTS.elements,
+          ideal:   { ...DEFAULTS.ideal,   ...(ps.ideal   || {}) },
+          min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
+          max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
+          initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
+        },
+        measurements: Array.isArray(p.measurements) ? p.measurements : []
+      };
+    }
+  } catch(e) { console.warn("loadState failed", e); }
+  return { settings: structuredClone(DEFAULTS), measurements: [] };
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version:1, ...state }));
+}
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function fmt(v, dp=2) {
+  if (v===null||v===undefined||isNaN(v)) return "–";
+  return Number(v).toLocaleString("de-DE",{ minimumFractionDigits:dp, maximumFractionDigits:dp });
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(s){
+  if(!s) return "–";
+  const [y,m,d] = s.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._tid);
+  t._tid = setTimeout(()=>t.classList.remove("show"), 2000);
+}
+
+// Modal mit beliebig vielen Auswahlmöglichkeiten.
+// choices = [{ label, value, kind?: "cancel"|"warn"|"danger" }]
+// Liefert ein Promise, das mit value (oder null bei Backdrop-Klick/Esc) auflöst.
+function showChoiceModal(title, message, choices) {
+  return new Promise(resolve => {
+    const bd = document.getElementById("modalBackdrop");
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalMsg").textContent   = message;
+    const btns = document.getElementById("modalBtns");
+    btns.innerHTML = "";
+    const close = (val) => {
+      bd.hidden = true;
+      document.removeEventListener("keydown", onKey);
+      resolve(val);
+    };
+    const onKey = (ev) => { if (ev.key === "Escape") close(null); };
+    choices.forEach(c => {
+      const b = document.createElement("button");
+      b.textContent = c.label;
+      b.className = "modal-btn-" + (c.kind || "cancel");
+      b.addEventListener("click", () => close(c.value));
+      btns.appendChild(b);
+    });
+    bd.onclick = (ev) => { if (ev.target === bd) close(null); };
+    document.addEventListener("keydown", onKey);
+    bd.hidden = false;
+  });
+}
+
+// ── Settings UI ─────────────────────────────────────────────
+function buildSettingsGrid(containerId, field) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = "";
+  ALL_ELEMENTS.forEach(e => {
+    const div = document.createElement("div");
+    div.className = "element-item";
+    div.innerHTML = `
+      <div class="element-label">${e.name} <span class="sym">${e.key}</span></div>
+      <div class="element-input-row">
+        <input type="number" step="any" data-field="${field}" data-key="${e.key}">
+      </div>`;
+    c.appendChild(div);
+    const input = div.querySelector("input");
+    input.value = state.settings[field][e.key] ?? "";
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      state.settings[field][e.key] = isNaN(v) ? 0 : v;
+      saveState();
+    });
+  });
+}
+
+let editingElementKey = null;   // welcher Eintrag ist gerade editierbar
+
+function buildLimitsTable() {
+  const t = document.getElementById("limitsTable");
+  if (!t) return;
+  const groupSelect = (val, attrs="") => `
+    <select ${attrs}>
+      <option value="cat" ${val==="cat"?"selected":""}>Kation</option>
+      <option value="an"  ${val==="an" ?"selected":""}>Anion</option>
+    </select>`;
+  const groupLabel = g => g === "cat" ? "Kation" : g === "an" ? "Anion" : g;
+  const numIn  = (lim, key) => `<input type="number" step="any" data-lim="${lim}" data-key="${key}" value="${state.settings[lim][key] ?? ""}">`;
+  const numTxt = (lim, key) => `<span class="cell-ro">${state.settings[lim][key] ?? "–"}</span>`;
+
+  const elementRowReadOnly = e => `
+    <tr data-row-key="${e.key}">
+      <td><span class="cell-ro">${groupLabel(e.group)}</span></td>
+      <td><span class="cell-ro" style="font-weight:600;">${e.key}</span></td>
+      <td><span class="cell-ro">${e.name}</span></td>
+      <td class="num">${numTxt("min",     e.key)}</td>
+      <td class="num">${numTxt("ideal",   e.key)}</td>
+      <td class="num">${numTxt("max",     e.key)}</td>
+      <td class="num">${numTxt("initial", e.key)}</td>
+      <td class="action-cell"><button type="button" class="row-action edit" data-action="edit" data-key="${e.key}" title="Bearbeiten">✎</button></td>
+    </tr>`;
+  const elementRowEditable = e => `
+    <tr data-row-key="${e.key}" class="row-editing">
+      <td>${groupSelect(e.group, `data-meta="group" data-key="${e.key}"`)}</td>
+      <td><input type="text" maxlength="3" data-meta="key"  data-key="${e.key}" value="${e.key}"  style="width:3.5em;"></td>
+      <td><input type="text"               data-meta="name" data-key="${e.key}" value="${e.name}"></td>
+      <td class="num">${numIn("min",     e.key)}</td>
+      <td class="num">${numIn("ideal",   e.key)}</td>
+      <td class="num">${numIn("max",     e.key)}</td>
+      <td class="num">${numIn("initial", e.key)}</td>
+      <td class="action-cell" style="white-space:nowrap;">
+        <button type="button" class="row-action save" data-action="save-edit" data-key="${e.key}" title="Speichern">✓</button>
+        <button type="button" class="row-action danger" data-action="delete" data-key="${e.key}" title="Element löschen" style="margin-left:0.2rem;">−</button>
+      </td>
+    </tr>`;
+  const elementRow = e => editingElementKey === e.key ? elementRowEditable(e) : elementRowReadOnly(e);
+
+  // Bereits vergebene Symbole überspringen, damit Dropdown-Vorschläge sauber sind.
+  const usedKeys = new Set(state.settings.elements.map(x => x.key));
+  const catalogOptions = Object.entries(ICP_CATALOG)
+    .filter(([k]) => !usedKeys.has(k))
+    .map(([k, v]) => `<option value="${k}">${k} – ${v.name}</option>`).join("");
+
+  const newRow = `
+    <tr id="new-element-row">
+      <td>${groupSelect("cat", `data-new="group"`)}</td>
+      <td>
+        <input type="text" maxlength="3" data-new="key" placeholder="Sym" list="icp-symbol-list" style="width:5em;">
+        <datalist id="icp-symbol-list">${catalogOptions}</datalist>
+      </td>
+      <td><input type="text"               data-new="name" placeholder="Name"></td>
+      <td class="num"><input type="number" step="any"  data-new="min"     placeholder="Min"></td>
+      <td class="num"><input type="number" step="any"  data-new="ideal"   placeholder="Optimal"></td>
+      <td class="num"><input type="number" step="any"  data-new="max"     placeholder="Max"></td>
+      <td class="num"><input type="number" step="any"  data-new="initial" placeholder="Anf."></td>
+      <td class="action-cell"><button type="button" class="row-action save" data-action="save-new" title="Neues Element speichern">✓</button></td>
+    </tr>`;
+  t.innerHTML = `
+    <thead><tr>
+      <th>Gruppe</th><th>Sym.</th><th>Name</th>
+      <th class="num">Min</th><th class="num">Optimal</th><th class="num">Max</th>
+      <th class="num" title="ml-Konzentrat in der ersten Mischung">Anfangsdosis</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${ALL_ELEMENTS.map(elementRow).join("")}${newRow}</tbody>`;
+
+  // ✎ Bearbeiten-Button: Zeile in Edit-Modus versetzen
+  t.querySelectorAll("button[data-action='edit']").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editingElementKey = btn.dataset.key;
+      buildLimitsTable();
+    });
+  });
+  // ✓ Speichern-Button (Edit-Modus): zurück in Read-Only
+  t.querySelectorAll("button[data-action='save-edit']").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editingElementKey = null;
+      buildLimitsTable();
+      toast("Änderungen gespeichert");
+    });
+  });
+
+  // Bestehende Zellen verdrahten
+  t.querySelectorAll("input[data-lim]").forEach(input => {
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      state.settings[input.dataset.lim][input.dataset.key] = isNaN(v) ? 0 : v;
+      saveState();
+    });
+  });
+  t.querySelectorAll("[data-meta]").forEach(input => {
+    input.addEventListener("change", () => {
+      const oldKey = input.dataset.key;
+      const meta = input.dataset.meta;
+      const idx = state.settings.elements.findIndex(x => x.key === oldKey);
+      if (idx < 0) return;
+      const e = state.settings.elements[idx];
+      if (meta === "key") {
+        const newKey = input.value.trim().replace(/[^A-Za-z0-9]/g,"").slice(0,3);
+        if (!newKey || newKey === oldKey) { input.value = e.key; return; }
+        if (state.settings.elements.some(x => x.key === newKey)) {
+          alert(`Symbol "${newKey}" existiert bereits.`);
+          input.value = e.key; return;
+        }
+        // Schlüssel umbenennen — Werte-Maps mitziehen
+        ["ideal","min","max","initial"].forEach(f => {
+          if (state.settings[f][oldKey] != null) {
+            state.settings[f][newKey] = state.settings[f][oldKey];
+            delete state.settings[f][oldKey];
+          }
+        });
+        e.key = newKey;
+        if (editingElementKey === oldKey) editingElementKey = newKey;
+      } else {
+        e[meta] = input.value;
+      }
+      rebuildElementBindings();
+      saveState();
+      buildLimitsTable();
+      rebuildMeasureGrids();
+    });
+  });
+
+  // Lösch-Buttons
+  t.querySelectorAll("button[data-action='delete']").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const key = btn.dataset.key;
+      const elDef = state.settings.elements.find(x => x.key === key);
+      const elName = elDef ? `${elDef.name} (${key})` : key;
+      const histCount = state.measurements.reduce((n, m) =>
+        n + (((m.measured && m.measured[key] != null) || (m.dose && m.dose[key] != null)) ? 1 : 0), 0);
+
+      let action;
+      if (histCount === 0) {
+        action = await showChoiceModal(
+          `${elName} löschen`,
+          `Element aus der Liste entfernen? In der Historie sind keine Daten für dieses Element vorhanden.`,
+          [
+            { label: "Abbrechen",        value: "cancel",  kind: "cancel" },
+            { label: "Element löschen",  value: "element", kind: "danger" },
+          ]
+        );
+      } else {
+        action = await showChoiceModal(
+          `${elName} löschen`,
+          `In der Historie existieren Daten in ${histCount} Eintrag${histCount===1?'':'en'} für dieses Element.\n\nWas soll passieren?`,
+          [
+            { label: "Abbrechen",                     value: "cancel",  kind: "cancel" },
+            { label: "Nur Element löschen (Historie behalten)", value: "element", kind: "warn" },
+            { label: "Element + Historie löschen",    value: "all",     kind: "danger" },
+          ]
+        );
+      }
+      if (!action || action === "cancel") return;
+
+      state.settings.elements = state.settings.elements.filter(e => e.key !== key);
+      if (action === "all") {
+        state.measurements.forEach(m => {
+          if (m.measured) delete m.measured[key];
+          if (m.dose)     delete m.dose[key];
+        });
+        ["ideal","min","max","initial"].forEach(f => { if (state.settings[f]) delete state.settings[f][key]; });
+      }
+      if (editingElementKey === key) editingElementKey = null;
+      rebuildElementBindings();
+      saveState();
+      buildLimitsTable();
+      rebuildMeasureGrids();
+      renderHistory();
+      toast(action === "all" ? `${elName} + Historie gelöscht` : `${elName} aus der Liste entfernt`);
+    });
+  });
+
+  // Auto-Fill in der „Neu"-Zeile, wenn ein Katalog-Symbol gewählt wird
+  const newKeyInput   = t.querySelector('#new-element-row [data-new="key"]');
+  const newNameInput  = t.querySelector('#new-element-row [data-new="name"]');
+  const newGroupInput = t.querySelector('#new-element-row [data-new="group"]');
+  if (newKeyInput) {
+    newKeyInput.addEventListener("input", () => {
+      const k = newKeyInput.value.trim();
+      const cat = ICP_CATALOG[k];
+      if (cat) {
+        if (!newNameInput.value.trim()) newNameInput.value = cat.name;
+        if (cat.group) newGroupInput.value = cat.group;
+      }
+    });
+  }
+
+  // Neuen Eintrag speichern
+  t.querySelector("button[data-action='save-new']").addEventListener("click", () => {
+    const get = sel => t.querySelector(`#new-element-row [data-new="${sel}"]`).value.trim();
+    const getN = sel => parseFloat(t.querySelector(`#new-element-row [data-new="${sel}"]`).value);
+    const key = get("key").replace(/[^A-Za-z0-9]/g,"").slice(0,3);
+    const name = get("name");
+    const group = get("group");
+    if (!key || !name) { toast("Symbol und Name benötigt"); return; }
+    if (state.settings.elements.some(e => e.key === key)) { alert(`Symbol "${key}" existiert bereits.`); return; }
+    const ideal   = isNaN(getN("ideal"))   ? 0 : getN("ideal");
+    const min     = isNaN(getN("min"))     ? 0 : getN("min");
+    const max     = isNaN(getN("max"))     ? 0 : getN("max");
+    const initial = isNaN(getN("initial")) ? 0 : getN("initial");
+    state.settings.elements.push({ key, name, group });
+    state.settings.ideal[key]   = ideal;
+    state.settings.min[key]     = min;
+    state.settings.max[key]     = max;
+    state.settings.initial[key] = initial;
+    rebuildElementBindings();
+    saveState();
+    buildLimitsTable();
+    rebuildMeasureGrids();
+    toast(`${name} (${key}) angelegt`);
+  });
+}
+
+function bindSettingsScalar(id, field, transform=v=>v) {
+  const el = document.getElementById(id);
+  el.value = (field==="capPct" || field==="deadbandPct") ? state.settings[field]*100 : state.settings[field];
+  el.addEventListener("input", () => {
+    let v = parseFloat(el.value);
+    if (isNaN(v)) v = 0;
+    state.settings[field] = transform(v);
+    saveState();
+    updateMixSummary();
+  });
+}
+
+function updateMixSummary() {
+  const el = document.getElementById("mixSummary");
+  if (!el) return;
+  const { dailyMl, totalDays, totalMl } = mixDerived();
+  el.innerHTML = `<strong>${fmt(dailyMl,2)} ml/Tag</strong> · ${totalDays} Tage · ergibt <strong>${fmt(totalMl,1)} ml</strong> pro Lösung`;
+}
+
+function renderSettings() {
+  buildLimitsTable();
+  bindSettingsScalar("dailyMl",         "dailyMl");
+  bindSettingsScalar("icpIntervalDays", "icpIntervalDays");
+  bindSettingsScalar("safetyDays",      "safetyDays");
+  bindSettingsScalar("capPct",   "capPct", v => v/100);
+  bindSettingsScalar("smoothN",  "smoothN");
+  bindSettingsScalar("deadbandPct", "deadbandPct", v => v/100);
+  updateMixSummary();
+  const cm = document.getElementById("chartMonths");
+  cm.value = String(state.settings.chartMonths ?? 0);
+  cm.addEventListener("change", () => {
+    state.settings.chartMonths = parseInt(cm.value, 10) || 0;
+    saveState();
+  });
+
+}
+
+document.getElementById("resetSettings").addEventListener("click", () => {
+  if (!confirm("Einstellungen auf Excel-Defaults zurücksetzen?")) return;
+  state.settings = structuredClone(DEFAULTS);
+  rebuildElementBindings();
+  saveState();
+  renderSettings();
+  rebuildMeasureGrids();
+  toast("Einstellungen zurückgesetzt");
+});
+
+// ── Measurement input UI ─────────────────────────────────────
+function buildMeasureGrid(containerId, list) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = "";
+  list.forEach(e => {
+    const div = document.createElement("div");
+    div.className = "element-item";
+    div.innerHTML = `
+      <div class="element-label">${e.name} <span class="sym">${e.key}</span></div>
+      <div class="element-input-row">
+        <input type="number" step="any" placeholder="Messwert" data-mkey="${e.key}">
+      </div>
+      <div class="ideal-hint">${fmt(state.settings.min[e.key])} <span style="opacity:0.6;">·</span> <strong>${fmt(state.settings.ideal[e.key])}</strong> <span style="opacity:0.6;">·</span> ${fmt(state.settings.max[e.key])}</div>`;
+    c.appendChild(div);
+  });
+}
+
+function readMeasurement() {
+  const m = {};
+  document.querySelectorAll("[data-mkey]").forEach(input => {
+    const v = parseFloat(input.value);
+    m[input.dataset.mkey] = isNaN(v) ? null : v;
+  });
+  return m;
+}
+
+function clearMeasurementInputs() {
+  document.querySelectorAll("[data-mkey]").forEach(i => i.value = "");
+}
+
+// ── Calculation engine ──────────────────────────────────────
+function getPreviousDose() {
+  const ms = state.measurements;
+  const initial = { ...state.settings.initial };
+  if (ms.length === 0) return { source:"initial", dose: initial };
+  const sorted = [...ms].sort((a,b) => a.date.localeCompare(b.date));
+  const last = sorted[sorted.length-1];
+  // Merge: für Elemente ohne Eintrag in last.dose (z. B. nachträglich angelegt)
+  // → fällt automatisch auf die Anfangsdosis zurück.
+  const merged = { ...initial };
+  for (const k in last.dose) {
+    if (last.dose[k] != null && !isNaN(last.dose[k])) merged[k] = last.dose[k];
+  }
+  return { source:"history", dose: merged, date: last.date };
+}
+
+// Hat dieses spezifische Element bereits historische Daten?
+function elementHasHistory(key) {
+  return state.measurements.some(m =>
+    (m.measured && m.measured[key] != null && !isNaN(m.measured[key])) ||
+    (m.dose     && m.dose[key]     != null && !isNaN(m.dose[key]))
+  );
+}
+
+function computeDose(prev, ideal, measured, capPct, isFirst) {
+  if (measured > 0) {
+    const raw = ideal / measured * prev;
+    if (isFirst) return { value: raw, capped: false };
+    const lo = prev * (1 - capPct);
+    const hi = prev * (1 + capPct);
+    if (raw < lo) return { value: lo, capped: true };
+    if (raw > hi) return { value: hi, capped: true };
+    return { value: raw, capped: false };
+  } else {
+    if (isFirst) return { value: prev, capped: false };
+    return { value: prev * (1 + capPct), capped: true };
+  }
+}
+
+// Returns sorted ascending series of {date,t,value} for one element,
+// optionally including a not-yet-saved "live" measurement.
+function getElementSeries(key, liveValue, liveDate) {
+  const arr = state.measurements
+    .filter(m => m.measured[key] != null && !isNaN(m.measured[key]))
+    .map(m => ({ date: m.date, t: Date.parse(m.date), value: m.measured[key] }));
+  if (liveValue != null && !isNaN(liveValue) && liveDate) {
+    arr.push({ date: liveDate, t: Date.parse(liveDate), value: liveValue });
+  }
+  arr.sort((a,b) => a.t - b.t);
+  return arr;
+}
+
+// Pair each measurement with the dose that produced it.
+// The live (not-yet-saved) measurement is paired with the current "previous" dose.
+function getElementPairs(key, liveValue, liveDate, prevDose) {
+  const arr = state.measurements
+    .filter(m => m.measured[key] != null && !isNaN(m.measured[key])
+              && m.dose[key]     != null && !isNaN(m.dose[key])     && m.dose[key] > 0
+              && m.measured[key] > 0)
+    .map(m => ({ date: m.date, t: Date.parse(m.date), mess: m.measured[key], dose: m.dose[key] }));
+  if (liveValue != null && !isNaN(liveValue) && liveValue > 0 && liveDate && prevDose > 0) {
+    arr.push({ date: liveDate, t: Date.parse(liveDate), mess: liveValue, dose: prevDose });
+  }
+  arr.sort((a,b) => a.t - b.t);
+  return arr;
+}
+
+// Weighted average of response = mess/dose over last N pairs.
+function smoothedResponse(pairs, N) {
+  const arr = pairs.slice(-Math.max(1, N));
+  if (arr.length === 0) return null;
+  let sum = 0, wsum = 0;
+  arr.forEach((p,i) => { const w = i + 1; sum += (p.mess / p.dose) * w; wsum += w; });
+  return sum / wsum;  // Einheit: Messwert pro ml/Tag
+}
+
+function calculateAll(measured, measureDate) {
+  const prev = getPreviousDose();
+  const globalIsFirst = state.measurements.length === 0;
+  const cap = state.settings.capPct;
+  const N = Math.max(1, state.settings.smoothN || 3);
+  const out = { perElement: {}, prevSource: prev.source, prevDate: prev.date, isFirst: globalIsFirst };
+
+  ALL_ELEMENTS.forEach(e => {
+    // Per-Element: kein Eintrag in der Historie → wie Erst-Messung behandeln,
+    // Anfangsdosis als "Vorher" verwenden, kein Cap.
+    const isFirst = !elementHasHistory(e.key);
+    const p = isFirst
+      ? (state.settings.initial[e.key] ?? 0)
+      : (prev.dose[e.key] ?? state.settings.initial[e.key] ?? 0);
+    const id = state.settings.ideal[e.key] ?? 0;
+    const m = measured[e.key];
+
+    // Keine Messung → keine Neuberechnung. Vorige Dosis bleibt stehen.
+    if (m == null || isNaN(m)) {
+      out.perElement[e.key] = {
+        value: p, capped: false, unchanged: true,
+        prev: p, ideal: id, measured: null,
+        smoothed: null, seriesPoints: 0,
+        isFirst
+      };
+      return;
+    }
+
+    // Totband: Mess innerhalb [low,high] → keine Korrektur (Anti-Rausch).
+    const db = deadbandBounds(e.key);
+    if (db && m >= db.low && m <= db.high) {
+      out.perElement[e.key] = {
+        value: p, capped: false, unchanged: true, inDeadband: true,
+        prev: p, ideal: id, measured: m,
+        smoothed: null, seriesPoints: 0,
+        deadband: db,
+        isFirst
+      };
+      return;
+    }
+
+    const pairs = getElementPairs(e.key, m, measureDate, p);
+    const response = smoothedResponse(pairs, N);
+
+    // Implizierter "rauschbereinigter Messwert bei aktueller Dosis" — nur zur Anzeige
+    const smoothedAtPrev = (response != null && p > 0) ? response * p : null;
+
+    let raw;
+    if (response != null && response > 0) {
+      raw = id / response;                 // Ideal-Dosis aus geglättetem Verhältnis
+    } else if (m > 0 && p > 0) {
+      raw = id / m * p;                    // Fallback: einfache Original-Excel-Logik
+    } else {
+      raw = p;                             // nichts berechenbar → unverändert
+    }
+
+    // Cap immer aktiv (auch bei Erst-Messung) — Bezug ist die Anfangsdosis bzw. die letzte Dosis.
+    const lo = p * (1 - cap), hi = p * (1 + cap);
+    let value, capped = false;
+    if (raw < lo) { value = lo; capped = true; }
+    else if (raw > hi) { value = hi; capped = true; }
+    else { value = raw; }
+
+    const lastPairs = pairs.slice(-N);
+    out.perElement[e.key] = {
+      value, capped, unchanged: false,
+      prev: p, ideal: id, measured: m,
+      smoothed: smoothedAtPrev,
+      seriesPoints: pairs.length,
+      // Diagnostik-Daten für das Detail-Popup
+      pairs: lastPairs, response, raw,
+      capLo: lo,
+      capHi: hi,
+      windowN: N,
+      isFirst
+    };
+  });
+  return out;
+}
+
+// ── Result rendering ────────────────────────────────────────
+function renderResults(measured, calc) {
+  const root = document.getElementById("results");
+  const { dailyMl, totalDays, totalMl } = mixDerived();
+  // Dosis-Werte sind ml-Konzentrat *pro Mischung* (nicht ml/Tag).
+  const sumCat = ELEMENTS.cat.reduce((s,e) => s + (calc.perElement[e.key].value||0), 0);
+  const sumAn  = ELEMENTS.an.reduce((s,e) => s + (calc.perElement[e.key].value||0), 0);
+  const roCat  = totalMl - sumCat;
+  const roAn   = totalMl - sumAn;
+
+  const renderRow = (e) => {
+    const r = calc.perElement[e.key];
+    const delta = r.prev > 0 ? (r.value - r.prev)/r.prev*100 : 0;
+    const arrow = r.inDeadband
+                ? `<span style="color:#1a73a7;" title="Messwert im Totband – Dosis unverändert">⊜ Totband</span>`
+                : r.unchanged
+                ? `<span style="color:var(--text-light);" title="kein Messwert eingegeben – Dosis unverändert">unverändert</span>`
+                : delta > 0.5 ? `<span class="delta-up">▲ ${fmt(delta,1)}%</span>`
+                : delta < -0.5 ? `<span class="delta-down">▼ ${fmt(Math.abs(delta),1)}%</span>`
+                : `<span style="color:var(--text-light);">±0%</span>`;
+    const flag = r.capped ? `<span class="delta-flag" title="Cap aktiv">⚑</span>` : "";
+    const smoothedCell = r.smoothed != null && r.seriesPoints > 1
+      ? `${fmt(r.smoothed,2)}`
+      : `<span style="color:var(--text-light);">–</span>`;
+    const rowStyle = r.unchanged ? ` style="opacity:0.55;"` : "";
+    return `<tr${rowStyle}>
+      <td class="result-elname" data-result-elkey="${e.key}" style="cursor:help;">${e.name} <span style="color:var(--text-light); font-weight:400;">(${e.key})</span></td>
+      <td>${fmt(r.ideal)}</td>
+      <td>${r.measured==null ? "–" : fmt(r.measured)}</td>
+      <td>${smoothedCell}</td>
+      <td>${fmt(r.prev,3)}</td>
+      <td><span class="mix-edit" contenteditable="true" data-mix="${e.key}" inputmode="decimal">${fmt(r.value,3)}</span><button class="mix-undo" data-undo="${e.key}" title="Manuelle Eingabe rückgängig" hidden>↺</button> ${flag}</td>
+      <td>${arrow}</td>
+      <td><span class="help-dot" data-calc-detail="${e.key}" title="Berechnung anzeigen">?</span></td>
+    </tr>`;
+  };
+  const tableHead = `<thead><tr>
+    <th>Element</th><th>Ideal</th><th title="aktuell eingegebene Messung">Mess</th>
+    <th title="rauschbereinigter Messwert bei aktueller Dosis (gewichteter Schnitt der Mess/Dosis-Verhältnisse × aktuelle Dosis)">Ø</th>
+    <th title="Konzentrat in der vorigen Mischung">Vorher (ml)</th>
+    <th title="Konzentrat für die nächste ${totalDays}-Tage-Mischung">Neue Menge (ml)</th>
+    <th>Δ</th>
+    <th></th>
+  </tr></thead>`;
+
+  const prevInfo = calc.isFirst
+    ? `<em>Erste Messung – Anfangsdosierung wird als Bezug für den Cap (±${fmt(state.settings.capPct*100,0)} %) verwendet.</em>`
+    : `Basis: Dosierung vom ${fmtDate(calc.prevDate)} · Cap ±${fmt(state.settings.capPct*100,0)} % · Glättung über die letzten ${state.settings.smoothN} <em>Messung-Dosis-Paare</em> · Totband ${Math.round(state.settings.deadbandPct*100)} %. Werte in der Spalte <strong>Neue Menge</strong> sind editierbar.`;
+
+  root.innerHTML = `
+    <h3>Ergebnis</h3>
+    <p class="info-line">${prevInfo}</p>
+
+    <p class="info-line">Mischung pro Lösung: <strong>${fmt(totalMl,1)} ml</strong>
+      (${fmt(dailyMl,2)} ml/Tag × ${totalDays} Tage)</p>
+
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="lbl">Kationen Konzentrat Σ</div>
+        <div class="val" id="sumCatVal">${fmt(sumCat,2)} ml</div>
+      </div>
+      <div class="summary-box">
+        <div class="lbl">+ Osmosewasser</div>
+        <div class="val" id="roCatVal">${fmt(roCat,1)} ml</div>
+      </div>
+      <div class="summary-box">
+        <div class="lbl">= Gesamt Kationen</div>
+        <div class="val">${fmt(totalMl,1)} ml</div>
+      </div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="lbl">Anionen Konzentrat Σ</div>
+        <div class="val" id="sumAnVal">${fmt(sumAn,2)} ml</div>
+      </div>
+      <div class="summary-box">
+        <div class="lbl">+ Osmosewasser</div>
+        <div class="val" id="roAnVal">${fmt(roAn,1)} ml</div>
+      </div>
+      <div class="summary-box">
+        <div class="lbl">= Gesamt Anionen</div>
+        <div class="val">${fmt(totalMl,1)} ml</div>
+      </div>
+    </div>
+
+    <h3>Kationisch</h3>
+    <table class="dose-table">
+      ${tableHead}
+      <tbody>${ELEMENTS.cat.map(renderRow).join("")}</tbody>
+    </table>
+
+    <h3>Anionisch</h3>
+    <table class="dose-table">
+      ${tableHead}
+      <tbody>${ELEMENTS.an.map(renderRow).join("")}</tbody>
+    </table>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveBtn">💾 In Historie speichern</button>
+      <button class="btn btn-ghost" id="discardBtn">Verwerfen</button>
+    </div>
+  `;
+  root.style.display = "block";
+
+  // Hover-Chart über Element-Namen in der Ergebnis-Tabelle
+  const resultDate = document.getElementById("measureDate").value || todayStr();
+  root.querySelectorAll(".result-elname").forEach(td => {
+    const k = td.dataset.resultElkey;
+    td.addEventListener("mouseenter", () => showElementChart(td, k, {
+      plannedDose: calc.perElement[k].value,
+      plannedDate: resultDate,
+      liveMeasurement: measured[k],
+      liveDose: calc.perElement[k].prev,
+      showSmoothed: true,
+      windowN: state.settings.smoothN || 3
+    }));
+    td.addEventListener("mouseleave", hideElementChart);
+  });
+
+  // Hover-Berechnungs-Detail über das ?-Symbol
+  root.querySelectorAll(".help-dot[data-calc-detail]").forEach(dot => {
+    const k = dot.dataset.calcDetail;
+    dot.addEventListener("mouseenter", () => showCalcDetail(dot, k, calc.perElement[k]));
+    dot.addEventListener("mouseleave", hideElementChart);
+  });
+
+  // Save auto-computed values for undo & set initial warn classes
+  ALL_ELEMENTS.forEach(e => { calc.perElement[e.key]._auto = calc.perElement[e.key].value; });
+  function refreshSums() {
+    const { totalMl } = mixDerived();
+    const sC = ELEMENTS.cat.reduce((s,e) => s + (calc.perElement[e.key].value||0), 0);
+    const sA = ELEMENTS.an.reduce((s,e) => s + (calc.perElement[e.key].value||0), 0);
+    const rC = totalMl - sC, rA = totalMl - sA;
+    document.getElementById("sumCatVal").textContent = fmt(sC,2) + " ml";
+    document.getElementById("roCatVal").textContent  = fmt(rC,1) + " ml";
+    document.getElementById("sumAnVal").textContent  = fmt(sA,2) + " ml";
+    document.getElementById("roAnVal").textContent   = fmt(rA,1) + " ml";
+  }
+  refreshSums();
+
+  root.querySelectorAll(".mix-edit").forEach(span => {
+    const key = span.dataset.mix;
+    const undoBtn = root.querySelector(`.mix-undo[data-undo="${key}"]`);
+    const commit = () => {
+      const txt = span.textContent.replace(",", ".").trim();
+      const v = parseFloat(txt);
+      if (isNaN(v) || v < 0) return;
+      calc.perElement[key].value = v;
+      const isEdited = Math.abs(v - calc.perElement[key]._auto) > 1e-9;
+      span.classList.toggle("edited", isEdited);
+      undoBtn.hidden = !isEdited;
+      refreshSums();
+    };
+    span.addEventListener("input", commit);
+    span.addEventListener("blur", () => { span.textContent = fmt(calc.perElement[key].value, 3); });
+    span.addEventListener("keydown", ev => {
+      if (ev.key === "Enter") { ev.preventDefault(); span.blur(); }
+    });
+    undoBtn.addEventListener("click", () => {
+      calc.perElement[key].value = calc.perElement[key]._auto;
+      span.textContent = fmt(calc.perElement[key]._auto, 3);
+      span.classList.remove("edited");
+      undoBtn.hidden = true;
+      refreshSums();
+    });
+  });
+
+  document.getElementById("saveBtn").onclick = () => {
+    const dose = {};
+    ALL_ELEMENTS.forEach(e => dose[e.key] = calc.perElement[e.key].value);
+    const date = document.getElementById("measureDate").value || todayStr();
+    state.measurements.push({
+      id: uid(), date,
+      measured: { ...measured },
+      dose
+    });
+    saveState();
+    renderHistory();
+    root.style.display = "none";
+    clearMeasurementInputs();
+    toast("In Historie gespeichert");
+  };
+  document.getElementById("discardBtn").onclick = () => {
+    root.style.display = "none";
+  };
+}
+
+// ── Calculate button ────────────────────────────────────────
+document.getElementById("calcBtn").addEventListener("click", () => {
+  const measured = readMeasurement();
+  const anyVal = ALL_ELEMENTS.some(e => measured[e.key] != null);
+  if (!anyVal) {
+    toast("Bitte mindestens einen Messwert eingeben.");
+    return;
+  }
+  const date = document.getElementById("measureDate").value || todayStr();
+  const calc = calculateAll(measured, date);
+  renderResults(measured, calc);
+});
+
+// ── Element history chart (hover) ───────────────────────────
+// extras (optional): { plannedDose, plannedDate, showSmoothed }
+function buildElementChart(key, name, extras) {
+  extras = extras || {};
+  const months = state.settings.chartMonths || 0;
+  const cutoff = months > 0 ? Date.now() - months * 30.44 * 86400 * 1000 : -Infinity;
+  let series = [...state.measurements]
+    .filter(m => (m.measured[key] != null || m.dose[key] != null) && Date.parse(m.date) >= cutoff)
+    .sort((a,b) => a.date.localeCompare(b.date));
+  // Live (noch nicht gespeicherte) Messung mit aufnehmen, damit das Chart das zeigt,
+  // was tatsächlich in die Berechnung einfließt.
+  if (extras.liveMeasurement != null && !isNaN(extras.liveMeasurement) && extras.plannedDate) {
+    const liveDose = extras.liveDose != null && !isNaN(extras.liveDose) ? extras.liveDose : null;
+    series.push({
+      date: extras.plannedDate,
+      measured: { [key]: extras.liveMeasurement },
+      dose:     { [key]: liveDose }
+    });
+  }
+  if (extras.windowN && extras.windowN > 0) {
+    series = series.slice(-extras.windowN);
+  }
+  if (series.length === 0) return `<div class="ct-title">${name} (${key})</div><div style="font-size:0.75rem;color:var(--text-light);">keine Daten</div>`;
+
+  const W = 460, H = 260, ML = 44, MR = 44, MT = 12, MB = 36;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  const measVals = series.map(m => m.measured[key]).filter(v => v != null);
+  const doseVals = series.map(m => m.dose[key]).filter(v => v != null && !isNaN(v));
+  const ideal    = state.settings.ideal[key];
+
+  const ts = series.map(m => Date.parse(m.date));
+  const tMin = Math.min(...ts);
+  const tMaxData = Math.max(...ts);
+  const hasPlanned = extras.plannedDose != null && !isNaN(extras.plannedDose);
+  const plannedT = hasPlanned ? Date.parse(extras.plannedDate || todayStr()) : tMaxData;
+  const tMax = Math.max(tMaxData, plannedT);
+  const tSpan = tMax - tMin || 1;
+
+  const minVal  = state.settings.min ? state.settings.min[key] : null;
+  const maxVal  = state.settings.max ? state.settings.max[key] : null;
+  const measMax = Math.max(ideal ?? 0, maxVal ?? 0, ...measVals, 0.0001) * 1.1;
+  const doseMax = Math.max(...doseVals, hasPlanned ? extras.plannedDose : 0, 0.0001) * 1.1;
+  const xAt = i => series.length === 1 ? ML + PW/2 : ML + ((ts[i]-tMin)/tSpan) * PW;
+  const yMeas = v => MT + PH - (v / measMax) * PH;
+  const yDose = v => MT + PH - (v / doseMax) * PH;
+
+  const measPts = series.map((m,i) => m.measured[key] != null ? `${xAt(i)},${yMeas(m.measured[key])}` : null).filter(Boolean).join(" ");
+  const dosePts = series.map((m,i) => m.dose[key] != null && !isNaN(m.dose[key]) ? `${xAt(i)},${yDose(m.dose[key])}` : null).filter(Boolean).join(" ");
+
+  const measDots = series.map((m,i) => m.measured[key] != null ? `<circle cx="${xAt(i).toFixed(1)}" cy="${yMeas(m.measured[key]).toFixed(1)}" r="2.5" fill="#1a73a7"/>` : "").join("");
+  const doseDots = series.map((m,i) => m.dose[key] != null && !isNaN(m.dose[key]) ? `<circle cx="${xAt(i).toFixed(1)}" cy="${yDose(m.dose[key]).toFixed(1)}" r="2.5" fill="#e8732a"/>` : "").join("");
+
+  const idealLine = (ideal != null && ideal > 0) ? `<line x1="${ML}" y1="${yMeas(ideal).toFixed(1)}" x2="${ML+PW}" y2="${yMeas(ideal).toFixed(1)}" stroke="#2e9e5a" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>` : "";
+
+  // Min/Max-Bereich als grünes transparentes Band
+  let rangeBand = "";
+  if (minVal != null && maxVal != null && maxVal > minVal) {
+    const yTop = yMeas(maxVal);
+    const yBot = yMeas(Math.max(0, minVal));
+    rangeBand = `<rect x="${ML}" y="${yTop.toFixed(1)}" width="${PW}" height="${(yBot - yTop).toFixed(1)}" fill="#2e9e5a" opacity="0.13"/>`;
+  }
+
+  // Totband-Grenzen als blaue gestrichelte Linien
+  let deadbandLines = "";
+  const db = deadbandBounds(key);
+  if (db && db.low > 0 && db.high > db.low) {
+    deadbandLines = `
+      <line x1="${ML}" y1="${yMeas(db.low).toFixed(1)}"  x2="${ML+PW}" y2="${yMeas(db.low).toFixed(1)}"  stroke="#1a73a7" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/>
+      <line x1="${ML}" y1="${yMeas(db.high).toFixed(1)}" x2="${ML+PW}" y2="${yMeas(db.high).toFixed(1)}" stroke="#1a73a7" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/>
+    `;
+  }
+
+  // Smoothed (dashed) curves – weighted moving average over last N values up to each point
+  let smoothedLines = "";
+  let plannedMarker = "";
+  if (extras.showSmoothed) {
+    const N = Math.max(1, state.settings.smoothN || 3);
+    const wma = (vals, idx) => {
+      const arr = [];
+      for (let j = Math.max(0, idx - N + 1); j <= idx; j++) if (vals[j] != null && !isNaN(vals[j])) arr.push(vals[j]);
+      if (!arr.length) return null;
+      let sum = 0, wsum = 0;
+      arr.forEach((v, i) => { const w = i + 1; sum += v * w; wsum += w; });
+      return sum / wsum;
+    };
+    const measArr = series.map(m => m.measured[key]);
+    const doseArr = series.map(m => m.dose[key]);
+    const measSm = series.map((_, i) => wma(measArr, i));
+    const doseSm = series.map((_, i) => wma(doseArr, i));
+    const measSmPts = measSm.map((v, i) => v != null ? `${xAt(i).toFixed(1)},${yMeas(v).toFixed(1)}` : null).filter(Boolean).join(" ");
+    const doseSmPts = doseSm.map((v, i) => v != null ? `${xAt(i).toFixed(1)},${yDose(v).toFixed(1)}` : null).filter(Boolean).join(" ");
+    smoothedLines = `
+      ${measSmPts ? `<polyline points="${measSmPts}" fill="none" stroke="#1a73a7" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7"/>` : ""}
+      ${doseSmPts ? `<polyline points="${doseSmPts}" fill="none" stroke="#e8732a" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7"/>` : ""}
+    `;
+  }
+  if (hasPlanned) {
+    const xP = ML + ((plannedT - tMin) / tSpan) * PW;
+    const yP = yDose(extras.plannedDose);
+    plannedMarker = `
+      <circle cx="${xP.toFixed(1)}" cy="${yP.toFixed(1)}" r="6" fill="none" stroke="#e8732a" stroke-width="1.5" opacity="0.5"/>
+      <circle cx="${xP.toFixed(1)}" cy="${yP.toFixed(1)}" r="3.5" fill="#e8732a" stroke="#fff" stroke-width="1"/>
+    `;
+  }
+
+  const fmtTs = ms => { const d = new Date(ms); return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getFullYear()).slice(2)}`; };
+  const firstDate = fmtTs(tMin);
+  const lastDataDate = fmtTs(tMaxData);
+  const xLabel = series.length === 1
+    ? `<text x="${(ML+PW/2).toFixed(0)}" y="${H-MB+14}" font-size="9" text-anchor="middle" fill="#5a6a7a">${firstDate}</text>`
+    : `<text x="${ML}" y="${H-MB+14}" font-size="9" fill="#5a6a7a">${firstDate}</text>
+       <text x="${ML+PW}" y="${H-MB+14}" font-size="9" text-anchor="end" fill="#5a6a7a">${lastDataDate}</text>`;
+
+  const yTicksMeas = [0, measMax/2, measMax].map(v =>
+    `<text x="${ML-4}" y="${(yMeas(v)+3).toFixed(1)}" font-size="9" text-anchor="end" fill="#1a73a7">${fmt(v,measMax<2?2:1)}</text>`
+  ).join("");
+  const yTicksDose = [0, doseMax/2, doseMax].map(v =>
+    `<text x="${ML+PW+4}" y="${(yDose(v)+3).toFixed(1)}" font-size="9" fill="#e8732a">${fmt(v,doseMax<2?2:1)}</text>`
+  ).join("");
+
+  const lastM = series[series.length-1];
+  const lastInfo = `${lastM.date.slice(2).replace(/-/g,"/")}: Mess ${lastM.measured[key]==null?"–":fmt(lastM.measured[key])} · Dosis ${lastM.dose[key]==null?"–":fmt(lastM.dose[key],3)} ml`;
+
+  return `
+    <div class="ct-title">${name} (${key}) <span style="font-weight:400; color:var(--text-light); font-size:0.75rem;">Ideal ${fmt(ideal)}</span></div>
+    <svg width="${W}" height="${H}" style="display:block;">
+      <rect x="${ML}" y="${MT}" width="${PW}" height="${PH}" fill="#f5f7fa" stroke="#e0e6ec"/>
+      ${rangeBand}
+      ${deadbandLines}
+      ${idealLine}
+      ${measPts ? `<polyline points="${measPts}" fill="none" stroke="#1a73a7" stroke-width="1.5"/>` : ""}
+      ${dosePts ? `<polyline points="${dosePts}" fill="none" stroke="#e8732a" stroke-width="1.5"/>` : ""}
+      ${smoothedLines}
+      ${measDots}
+      ${doseDots}
+      ${plannedMarker}
+      ${yTicksMeas}
+      ${yTicksDose}
+      ${xLabel}
+    </svg>
+    <div class="ct-legend">
+      <span><span class="ct-swatch" style="background:#1a73a7"></span>Messwert</span>
+      <span><span class="ct-swatch" style="background:#e8732a"></span>Dosis (ml/Mischung)</span>
+      <span><span class="ct-swatch" style="background:#2e9e5a"></span>Ideal</span>
+      ${minVal != null && maxVal != null && maxVal > minVal ? `<span><span class="ct-swatch" style="background:#2e9e5a; opacity:0.25;"></span>Min–Max</span>` : ""}
+      ${db && db.high > db.low ? `<span><span class="ct-swatch" style="background:repeating-linear-gradient(90deg,#1a73a7 0 4px,transparent 4px 7px);"></span>Totband</span>` : ""}
+      ${extras.showSmoothed ? `<span><span class="ct-swatch" style="background:repeating-linear-gradient(90deg,#888 0 4px,transparent 4px 7px);"></span>geglättet</span>` : ""}
+      ${hasPlanned ? `<span><span class="ct-swatch" style="background:#e8732a; border-radius:50%;"></span>geplante Dosis</span>` : ""}
+    </div>
+    <div style="font-size:0.7rem; color:var(--text-light); text-align:center; margin-top:0.2rem;">${lastInfo}</div>
+  `;
+}
+
+function showElementChart(anchorEl, key, extras) {
+  const tip = document.getElementById("chartTooltip");
+  const el = ALL_ELEMENTS.find(x => x.key === key);
+  if (!el) return;
+  tip.innerHTML = buildElementChart(key, el.name, extras);
+  tip.classList.add("show");
+  const r = anchorEl.getBoundingClientRect();
+  const container = anchorEl.closest(".card") || document.getElementById("historyContainer");
+  const hr = container.getBoundingClientRect();
+  const tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+  const minLeft = hr.left + window.scrollX + 4;
+  const maxLeft = hr.right + window.scrollX - tipW - 4;
+  let left = r.left + window.scrollX + r.width/2 - tipW/2;
+  if (left > maxLeft) left = maxLeft;
+  if (left < minLeft) left = minLeft;
+  let top = r.bottom + window.scrollY + 6;
+  if (top + tipH > window.scrollY + window.innerHeight - 8) top = r.top + window.scrollY - tipH - 6;
+  tip.style.left = left + "px";
+  tip.style.top  = top  + "px";
+}
+function hideElementChart() {
+  document.getElementById("chartTooltip").classList.remove("show");
+}
+
+function buildCalcDetail(key, r) {
+  const el = ALL_ELEMENTS.find(x => x.key === key);
+  const name = el ? el.name : key;
+  if (r.inDeadband) {
+    return `<div class="calc-detail">
+      <h4>${name} (${key})</h4>
+      <p>Messwert <strong>${fmt(r.measured)}</strong> liegt im Totband
+         <strong>${fmt(r.deadband.low,3)} – ${fmt(r.deadband.high,3)}</strong>
+         (${Math.round(state.settings.deadbandPct*100)} % zwischen Optimal ${fmt(r.ideal)} und Min/Max).</p>
+      <p>→ Keine Korrektur. Vorige Dosis bleibt: <strong>${fmt(r.prev,3)} ml</strong>.</p>
+    </div>`;
+  }
+  if (r.unchanged) {
+    return `<div class="calc-detail">
+      <h4>${name} (${key})</h4>
+      <p>Kein Messwert eingegeben → keine Neuberechnung. Vorige Dosis bleibt: <strong>${fmt(r.prev,3)} ml</strong>.</p>
+    </div>`;
+  }
+  const pairs = r.pairs || [];
+  const N = r.windowN || pairs.length;
+  let pairsTable = "";
+  if (pairs.length) {
+    const wsum = pairs.reduce((s, _, i) => s + (i+1), 0);
+    pairsTable = `
+      <div style="color:var(--text-light); font-size:0.7rem; margin-top:0.4rem;">Letzte ${pairs.length} Messung-Dosis-Paare (Fenster N=${N}):</div>
+      <table>
+        <thead><tr><th>Datum</th><th>Mess</th><th>Dosis</th><th>Mess/Dosis</th><th>Gewicht</th></tr></thead>
+        <tbody>${pairs.map((p, i) => `<tr>
+          <td>${(p.date||"").slice(2).replace(/-/g,"/")}</td>
+          <td>${fmt(p.mess,3)}</td>
+          <td>${fmt(p.dose,3)}</td>
+          <td>${fmt(p.mess / p.dose, 4)}</td>
+          <td>${i+1} / ${wsum}</td>
+        </tr>`).join("")}</tbody>
+      </table>`;
+  }
+
+  let derivation = "";
+  if (r.response != null && r.response > 0) {
+    derivation = `
+      <div class="formula">Ø(Mess/Dosis) = Σ(wᵢ · mᵢ/dᵢ) / Σwᵢ = <strong>${fmt(r.response,4)}</strong></div>
+      <div class="formula">Roh-Dosis = Ideal / Ø = ${fmt(r.ideal,3)} / ${fmt(r.response,4)} = <strong>${fmt(r.raw,3)} ml</strong></div>`;
+  } else {
+    derivation = `
+      <div style="color:var(--text-light); font-size:0.72rem;">Verhältnis-Methode nicht möglich (zu wenig Daten oder Dosis = 0). Fallback:</div>
+      <div class="formula">Roh-Dosis = Ideal / Mess × Vorher = ${fmt(r.ideal,3)} / ${fmt(r.measured,3)} × ${fmt(r.prev,3)} = <strong>${fmt(r.raw,3)} ml</strong></div>`;
+  }
+
+  const cappedTop = r.raw > r.capHi;
+  const cappedBot = r.raw < r.capLo;
+  const refLabel  = r.isFirst ? "Anfangsdosis" : "Vorher";
+  let capLine = `<div class="formula">Cap-Grenzen: <strong>${fmt(r.capLo,3)} – ${fmt(r.capHi,3)} ml</strong> (${refLabel} ± ${Math.round(state.settings.capPct*100)} %)</div>`;
+  if (cappedTop)      capLine += `<div class="cap-note">⚑ Roh-Dosis über oberer Grenze → auf ${fmt(r.capHi,3)} ml gekappt.</div>`;
+  else if (cappedBot) capLine += `<div class="cap-note">⚑ Roh-Dosis unter unterer Grenze → auf ${fmt(r.capLo,3)} ml gekappt.</div>`;
+  else                capLine += `<div style="color:var(--text-light); font-size:0.72rem;">Roh-Dosis innerhalb der Grenzen → kein Cap.</div>`;
+
+  return `<div class="calc-detail">
+    <h4>${name} (${key}) – Berechnung</h4>
+    <div style="font-size:0.72rem; color:var(--text-light);">Ideal ${fmt(r.ideal)} · Aktuelle Mess ${fmt(r.measured)} · Vorher ${fmt(r.prev,3)} ml</div>
+    ${pairsTable}
+    ${derivation}
+    ${capLine}
+    <div class="result-line">→ Neue Menge: ${fmt(r.value,3)} ml</div>
+  </div>`;
+}
+
+function showCalcDetail(anchorEl, key, r) {
+  const tip = document.getElementById("chartTooltip");
+  tip.innerHTML = buildCalcDetail(key, r);
+  tip.classList.add("show");
+  const rct = anchorEl.getBoundingClientRect();
+  const container = anchorEl.closest(".card") || document.body;
+  const cr = container.getBoundingClientRect();
+  const tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+  const minLeft = cr.left + window.scrollX + 4;
+  const maxLeft = cr.right + window.scrollX - tipW - 4;
+  let left = rct.right + window.scrollX - tipW;
+  if (left > maxLeft) left = maxLeft;
+  if (left < minLeft) left = minLeft;
+  let top = rct.bottom + window.scrollY + 6;
+  if (top + tipH > window.scrollY + window.innerHeight - 8) top = rct.top + window.scrollY - tipH - 6;
+  tip.style.left = left + "px";
+  tip.style.top  = top  + "px";
+}
+
+// ── History rendering ───────────────────────────────────────
+function renderHistory() {
+  const c = document.getElementById("historyContainer");
+  const cnt = document.getElementById("historyCount");
+  const ms = [...state.measurements].sort((a,b) => b.date.localeCompare(a.date));
+  cnt.textContent = ms.length ? `${ms.length} Eintrag${ms.length===1?'':'e'}` : "";
+  if (ms.length === 0) {
+    c.innerHTML = `<div class="empty">Noch keine Messung gespeichert.</div>`;
+    return;
+  }
+
+  const head = `<thead><tr>
+    <th>Datum</th>
+    ${ALL_ELEMENTS.map(e => `<th data-elkey="${e.key}" title="${e.name} (${e.key}) – Verlauf zeigen">${e.name}</th>`).join("")}
+    <th></th>
+  </tr></thead>`;
+
+  const rows = ms.map((m,i) => {
+    const measuredCells = ALL_ELEMENTS.map(e => `<td>${m.measured[e.key]==null?"–":fmt(m.measured[e.key])}</td>`).join("");
+    const detailRow = `<tr class="history-detail-row" id="detail-${m.id}" style="display:none;"><td colspan="${ALL_ELEMENTS.length+2}" class="history-detail">
+      <div class="history-detail-grid">
+        <div>
+          <strong>Messwerte</strong>
+          <table class="dose-table" style="margin-top:0.4rem;">
+            <thead><tr><th>El.</th><th>Ideal</th><th>Mess</th></tr></thead>
+            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(state.settings.ideal[e.key])}</td><td>${m.measured[e.key]==null?"–":fmt(m.measured[e.key])}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+        <div>
+          <strong>Berechnete Dosis (ml pro Mischung)</strong>
+          <table class="dose-table" style="margin-top:0.4rem;">
+            <thead><tr><th>El.</th><th>ml</th></tr></thead>
+            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(m.dose[e.key],3)}</td></tr>`).join("")}</tbody>
+          </table>
+          <p class="ideal-hint" style="margin-top:0.4rem;">
+            Σ Kationen: ${fmt(ELEMENTS.cat.reduce((s,e)=>s+(m.dose[e.key]||0),0),2)} ml ·
+            Σ Anionen: ${fmt(ELEMENTS.an.reduce((s,e)=>s+(m.dose[e.key]||0),0),2)} ml
+          </p>
+        </div>
+      </div>
+    </td></tr>`;
+    return `<tr class="history-row" data-id="${m.id}">
+      <td><strong>${fmtDate(m.date)}</strong></td>
+      ${measuredCells}
+      <td><div class="row-actions">
+        <button class="icon-btn expand" data-id="${m.id}" title="Details">▾</button>
+        <button class="icon-btn del" data-id="${m.id}" title="Löschen">✕</button>
+      </div></td>
+    </tr>${detailRow}`;
+  }).join("");
+
+  c.innerHTML = `<div style="overflow-x:auto;"><table class="history-table">${head}<tbody>${rows}</tbody></table></div>`;
+
+  c.querySelectorAll(".icon-btn.expand").forEach(b => b.addEventListener("click", () => {
+    const det = document.getElementById("detail-"+b.dataset.id);
+    const row = c.querySelector(`tr.history-row[data-id="${b.dataset.id}"]`);
+    if (det.style.display === "none") {
+      det.style.display = "table-row";
+      row.classList.add("expanded");
+      b.textContent = "▴";
+    } else {
+      det.style.display = "none";
+      row.classList.remove("expanded");
+      b.textContent = "▾";
+    }
+  }));
+  c.querySelectorAll("th[data-elkey]").forEach(th => {
+    th.addEventListener("mouseenter", () => showElementChart(th, th.dataset.elkey));
+    th.addEventListener("mouseleave", hideElementChart);
+  });
+  c.querySelectorAll(".icon-btn.del").forEach(b => b.addEventListener("click", () => {
+    const m = state.measurements.find(x => x.id === b.dataset.id);
+    if (!m) return;
+    if (!confirm(`Messung vom ${fmtDate(m.date)} wirklich löschen?`)) return;
+    state.measurements = state.measurements.filter(x => x.id !== b.dataset.id);
+    saveState();
+    renderHistory();
+    toast("Messung gelöscht");
+  }));
+}
+
+// ── Export / Import / Clear ─────────────────────────────────
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ version:1, ...state }, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `spurenrechner-${todayStr()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast("Einstellungen + Historie heruntergeladen");
+});
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if (!data || typeof data !== "object") throw new Error("Ungültige Datei");
+    const mode = confirm(
+      "OK = Vollständig ersetzen (Einstellungen + Historie überschreiben).\n" +
+      "Abbrechen = Zusammenführen (Einstellungen aus Datei übernehmen, neue Messungen anhängen, vorhandene behalten)."
+    ) ? "replace" : "merge";
+    const importedSettings = data.settings ? {
+      ...DEFAULTS, ...data.settings,
+      elements: Array.isArray(data.settings.elements) && data.settings.elements.length ? data.settings.elements : DEFAULTS.elements,
+      ideal:   { ...DEFAULTS.ideal,   ...(data.settings.ideal   || {}) },
+      min:     { ...DEFAULTS.min,     ...(data.settings.min     || {}) },
+      max:     { ...DEFAULTS.max,     ...(data.settings.max     || {}) },
+      initial: { ...DEFAULTS.initial, ...(data.settings.initial || {}) },
+    } : null;
+    if (mode === "replace") {
+      state = {
+        settings: importedSettings || structuredClone(DEFAULTS),
+        measurements: Array.isArray(data.measurements) ? data.measurements.map(m => ({ ...m, id: m.id || uid() })) : []
+      };
+    } else {
+      if (importedSettings) state.settings = importedSettings;
+      const existingIds = new Set(state.measurements.map(m => m.id));
+      const incoming = Array.isArray(data.measurements) ? data.measurements : [];
+      incoming.forEach(m => {
+        const id = m.id || uid();
+        if (!existingIds.has(id)) state.measurements.push({ ...m, id });
+      });
+    }
+    rebuildElementBindings();
+    saveState();
+    renderSettings();
+    rebuildMeasureGrids();
+    renderHistory();
+    toast(mode === "replace" ? "Einstellungen + Historie ersetzt" : "Einstellungen übernommen, Messungen ergänzt");
+  } catch (err) {
+    alert("Import fehlgeschlagen: "+err.message);
+  } finally {
+    e.target.value = "";
+  }
+});
+
+document.getElementById("clearAllBtn").addEventListener("click", () => {
+  if (!confirm("Wirklich alle Messungen löschen? (Einstellungen bleiben erhalten)")) return;
+  state.measurements = [];
+  saveState();
+  renderHistory();
+  toast("Historie geleert");
+});
+
+// ── Tabs ────────────────────────────────────────────────────
+document.querySelectorAll(".tab-btn[data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === target));
+  });
+});
+
+
+// ── Init ────────────────────────────────────────────────────
+function rebuildMeasureGrids() {
+  buildMeasureGrid("measureCatGrid", ELEMENTS.cat);
+  buildMeasureGrid("measureAnGrid",  ELEMENTS.an);
+}
+function init() {
+  rebuildElementBindings();
+  document.getElementById("measureDate").value = todayStr();
+  renderSettings();
+  rebuildMeasureGrids();
+  renderHistory();
+}
+init();
+</script>
+</body>
+</html>
