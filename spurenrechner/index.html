@@ -20,6 +20,9 @@
   header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; }
   header h1 { font-size:1.6rem; font-weight:700; }
   header p { opacity:0.85; font-size:0.9rem; margin-top:0.25rem; }
+  .back-btn { position:absolute; top:1rem; left:1rem; width:36px; height:36px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5px; background:rgba(255,255,255,0.15); border:none; border-radius:8px; cursor:pointer; padding:0; text-decoration:none; transition:background 0.15s; z-index:2; }
+  .back-btn:hover { background:rgba(255,255,255,0.28); }
+  .back-btn span { display:block; width:18px; height:2px; background:#fff; border-radius:2px; }
   main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
   .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
   .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
@@ -166,6 +169,7 @@
 </head>
 <body>
 <header>
+  <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
   <h1>OSCI Motion Spurenelemente</h1>
   <p>ICP-Messung erfassen · Dosierung berechnen · Historie führen</p>
 </header>
