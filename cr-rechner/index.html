@@ -235,6 +235,14 @@
         <div class="settings-list" id="settings-grid"></div>
         <h3 style="margin-top:1.5rem;margin-bottom:0.75rem">C&R Lösungen <span style="font-weight:400;font-size:0.8rem;color:var(--text-light)">— Konzentrationen pro 100L Meerwasser</span></h3>
         <div class="settings-list" id="sol-grid"></div>
+
+        <h3 style="margin-top:1.5rem;margin-bottom:0.75rem">Einstellungen sichern</h3>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <button class="btn-export" id="exportBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">⬇️ Export JSON</button>
+          <button class="btn-export" id="importBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">⬆️ Import JSON</button>
+          <input type="file" id="importFile" accept="application/json" style="display:none;">
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.6rem;">Sichert alle Einstellungen (Volumen, PSU, Element-Bereiche, C&amp;R Lösungen, ICP-Messwerte) als JSON-Datei. Beim Import werden alle aktuellen Werte überschrieben.</p>
       </div>
 
     </div>
@@ -1707,27 +1715,45 @@ vorherigen aufbaut.</div>
 
     function saveState() {
       try {
-        const state = {
-          volume: document.getElementById('volume').value,
-          psuMess: document.getElementById('psu-mess').value,
-          psuZiel: document.getElementById('psu-ziel').value,
-          optTolerance: document.getElementById('opt-tolerance').value,
-          maxWcPct: document.getElementById('max-wc-pct').value,
-          maxdEnabled: document.getElementById('maxd-enabled').checked,
-          icp: {},
-          settings: {}
-        };
-        EL.forEach(e => {
-          state.icp[e.key] = document.getElementById('in-' + e.key).value;
-          state.settings[e.key] = {
-            min: document.getElementById('set-min-' + e.key).value,
-            opt: document.getElementById('set-opt-' + e.key).value,
-            max: document.getElementById('set-max-' + e.key).value,
-            maxd: document.getElementById('set-maxd-' + e.key).value
-          };
-        });
+        const state = collectState();
         localStorage.setItem(SAVE_KEY, JSON.stringify(state));
       } catch (e) { /* silent */ }
+    }
+
+    function collectState() {
+      const state = {
+        version: 1,
+        volume: document.getElementById('volume').value,
+        psuMess: document.getElementById('psu-mess').value,
+        psuZiel: document.getElementById('psu-ziel').value,
+        optTolerance: document.getElementById('opt-tolerance').value,
+        maxWcPct: document.getElementById('max-wc-pct').value,
+        maxdEnabled: document.getElementById('maxd-enabled').checked,
+        icp: {},
+        settings: {},
+        sol: []
+      };
+      EL.forEach(e => {
+        state.icp[e.key] = document.getElementById('in-' + e.key).value;
+        state.settings[e.key] = {
+          min: document.getElementById('set-min-' + e.key).value,
+          opt: document.getElementById('set-opt-' + e.key).value,
+          max: document.getElementById('set-max-' + e.key).value,
+          maxd: document.getElementById('set-maxd-' + e.key).value
+        };
+      });
+      SOL.forEach((s, i) => {
+        const ref = document.getElementById('sol-ref-' + i);
+        const cat = document.getElementById('sol-cat-' + i);
+        const an = document.getElementById('sol-an-' + i);
+        state.sol.push({
+          name: s.name,
+          mlRef: ref ? ref.value : s.mlRef,
+          catInc: cat ? cat.value : s.catInc,
+          anInc: an ? an.value : s.anInc
+        });
+      });
+      return state;
     }
 
     function loadState() {
@@ -1760,11 +1786,111 @@ vorherigen aufbaut.</div>
             updateSetting(e.key);
           });
         }
+        if (Array.isArray(s.sol)) {
+          s.sol.forEach((sv, i) => {
+            if (i >= SOL.length) return;
+            const ref = document.getElementById('sol-ref-' + i);
+            const cat = document.getElementById('sol-cat-' + i);
+            const an = document.getElementById('sol-an-' + i);
+            if (ref && sv.mlRef != null) ref.value = sv.mlRef;
+            if (cat && sv.catInc != null) cat.value = sv.catInc;
+            if (an && sv.anInc != null) an.value = sv.anInc;
+            updateSol(i);
+          });
+        }
 
         // PSU-Anzeige und Farben aktualisieren
         updatePsuDisplay();
       } catch (e) { /* silent */ }
     }
+
+    // ===== EXPORT / IMPORT =====
+    function todayStr() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      try {
+        const state = collectState();
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cr-rechner-${todayStr()}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Export fehlgeschlagen: ' + err.message);
+      }
+    });
+
+    document.getElementById('importBtn').addEventListener('click', () => {
+      document.getElementById('importFile').click();
+    });
+
+    document.getElementById('importFile').addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const text = await f.text();
+        const data = JSON.parse(text);
+        if (!data || typeof data !== 'object') throw new Error('Ungültige Datei');
+        if (!confirm('Aktuelle Einstellungen werden mit den Werten aus der Datei überschrieben. Fortfahren?')) {
+          e.target.value = '';
+          return;
+        }
+        // Werte direkt in die Inputs schreiben, dann persistieren
+        if (data.volume != null)       document.getElementById('volume').value = data.volume;
+        if (data.psuMess != null)      document.getElementById('psu-mess').value = data.psuMess;
+        if (data.psuZiel != null)      document.getElementById('psu-ziel').value = data.psuZiel;
+        if (data.optTolerance != null) document.getElementById('opt-tolerance').value = data.optTolerance;
+        if (data.maxWcPct != null)     document.getElementById('max-wc-pct').value = data.maxWcPct;
+        if (data.maxdEnabled != null)  document.getElementById('maxd-enabled').checked = !!data.maxdEnabled;
+        onMaxDeltaToggle();
+
+        if (data.icp) {
+          EL.forEach(el => {
+            if (data.icp[el.key] != null) {
+              const inp = document.getElementById('in-' + el.key);
+              if (inp) inp.value = data.icp[el.key];
+            }
+          });
+        }
+        if (data.settings) {
+          EL.forEach(el => {
+            const ss = data.settings[el.key];
+            if (!ss) return;
+            if (ss.min != null)  document.getElementById('set-min-' + el.key).value = ss.min;
+            if (ss.opt != null)  document.getElementById('set-opt-' + el.key).value = ss.opt;
+            if (ss.max != null)  document.getElementById('set-max-' + el.key).value = ss.max;
+            if (ss.maxd != null) document.getElementById('set-maxd-' + el.key).value = ss.maxd;
+            updateSetting(el.key);
+          });
+        }
+        if (Array.isArray(data.sol)) {
+          data.sol.forEach((sv, i) => {
+            if (i >= SOL.length) return;
+            const ref = document.getElementById('sol-ref-' + i);
+            const cat = document.getElementById('sol-cat-' + i);
+            const an = document.getElementById('sol-an-' + i);
+            if (ref && sv.mlRef != null)  ref.value = sv.mlRef;
+            if (cat && sv.catInc != null) cat.value = sv.catInc;
+            if (an && sv.anInc != null)   an.value = sv.anInc;
+            updateSol(i);
+          });
+        }
+
+        EL.forEach(el => col(el.key));
+        updatePsuDisplay();
+        saveState();
+        alert('Import erfolgreich. Einstellungen wurden übernommen.');
+      } catch (err) {
+        alert('Import fehlgeschlagen: ' + err.message);
+      } finally {
+        e.target.value = '';
+      }
+    });
 
     // Alle Inputs überwachen → Auto-Save
     document.querySelectorAll('input[type="number"]').forEach(inp => {
