@@ -181,10 +181,17 @@
 
         <div class="param-grid" style="margin-top:0.5rem;border-top:1px solid #e0e4ea;padding-top:0.75rem">
           <div class="param-cell">
-            <label for="psu-mess">Gemessene PSU:</label>
+            <label>Berechnete PSU:</label>
             <div style="display:flex;align-items:center;gap:0.4rem">
-              <input type="number" id="psu-mess" value="34.5" min="20" max="45" step="0.01" oninput="updatePsuDisplay()">
+              <div id="psu-mess-display" style="padding:0.4rem 0.6rem;background:#f0f4f8;border:1px solid #d0d8e0;border-radius:6px;font-weight:600;font-variant-numeric:tabular-nums;min-width:60px;text-align:center">34,50</div>
               <span class="unit">PSU</span>
+              <span style="position:relative;display:inline-block">
+                <button class="info-btn" onclick="event.stopPropagation();document.getElementById('psu-info').classList.toggle('open')" title="Info zur berechneten PSU">i</button>
+                <div id="psu-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
+                  <button class="info-close" onclick="document.getElementById('psu-info').classList.remove('open')">&times;</button>
+                  Wird automatisch aus der Summe deiner ICP-Messwerte berechnet. Kann von einem Refraktometer-Wert abweichen, weil ICP nur die spezifischen Elemente erfasst, die das Labor analysiert hat.
+                </div>
+              </span>
             </div>
           </div>
           <div class="param-cell">
@@ -350,7 +357,16 @@ vorherigen aufbaut.</div>
       });
       saveState();
     }
-    function getMessPsu() { return parseFloat(document.getElementById('psu-mess')?.value) || REF_PSU; }
+    function getCurrentIcpValues() {
+      const v = {};
+      EL.forEach(e => {
+        const inp = document.getElementById('in-' + e.key);
+        const val = inp ? parseFloat(inp.value) : NaN;
+        v[e.key] = isNaN(val) ? e.opt : val;
+      });
+      return v;
+    }
+    function getMessPsu() { return estimatePsu(getCurrentIcpValues()); }
     function getZielPsu() { return parseFloat(document.getElementById('psu-ziel')?.value) || REF_PSU; }
     function displayFactor() { return getMessPsu() / REF_PSU; }
     function solverFactor() { return getZielPsu() / REF_PSU; }
@@ -424,11 +440,10 @@ vorherigen aufbaut.</div>
       const d = document.createElement('div');
       d.className = 'element-item'; d.id = 'item-'+e.key;
       d.innerHTML = `<div class="element-label">${e.name} <span class="sym">(${e.key})</span></div>
-        <div class="element-input-row"><input type="number" id="in-${e.key}" value="${e.ex}" step="any" oninput="col('${e.key}')"><span class="unit">${e.unit}</span></div>
+        <div class="element-input-row"><input type="number" id="in-${e.key}" value="${e.ex}" step="any" oninput="onIcpInput('${e.key}')"><span class="unit">${e.unit}</span></div>
         <div class="element-range" id="range-${e.key}">Min: ${e.min} | Optimal: ${e.opt} | Max: ${e.max}</div>`;
       grid.appendChild(d);
     });
-    EL.forEach(e => col(e.key));
 
     function col(k) {
       const e = EL[eIdx[k]], v = parseFloat(document.getElementById('in-'+k).value), it = document.getElementById('item-'+k);
@@ -440,11 +455,20 @@ vorherigen aufbaut.</div>
       else { const m = (mx-mn)*0.15; it.classList.add(v >= mn-m && v <= mx+m ? 'input-warn' : 'input-bad'); }
     }
 
+    // Wird bei jeder ICP-Eingabe aufgerufen: aktualisiert Farbe des Feldes,
+    // berechnet PSU neu und passt Bereiche/Farben aller Felder an
+    function onIcpInput(k) {
+      updatePsuDisplay();
+    }
+
     // PSU-skalierte Bereiche anzeigen und Farben aktualisieren
     function updatePsuDisplay() {
       const f = displayFactor();
       const psu = getMessPsu();
       const showPsu = Math.abs(psu - REF_PSU) > 0.001;
+      // Berechneten PSU-Wert anzeigen
+      const psuDisp = document.getElementById('psu-mess-display');
+      if (psuDisp) psuDisp.textContent = psu.toFixed(2).replace('.', ',');
       EL.forEach(e => {
         const el = document.getElementById('range-'+e.key);
         if (el) {
@@ -1160,8 +1184,9 @@ vorherigen aufbaut.</div>
 
       const V = parseFloat(document.getElementById('volume').value);
       const zielPsu = getZielPsu();
-      const messPsu = getMessPsu();
-      const psuChanged = Math.abs(messPsu - zielPsu) > 0.001;
+      const psuVor = estimatePsu(original);
+      const psuNach = estimatePsu(finalAfter);
+      const psuChanged = Math.abs(psuVor - zielPsu) > 0.05;
       const nDefizit = steps.filter(s => s.R === 0).length;
       const nWC = steps.filter(s => s.R > 0).length;
       const modeLabel = nWC === 0 ? 'Defizit-Ausgleich' : 'Optimaler Wasserwechsel';
@@ -1169,7 +1194,7 @@ vorherigen aufbaut.</div>
       html += `<div class="card summary-card"><h2>${modeLabel}</h2>`;
       if (psuChanged) {
         html += `<div style="background:#e8f4fb;border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:0.75rem;font-size:0.85rem;color:var(--blue-dark)">
-          🧂 PSU-Korrektur: <strong>${messPsu.toFixed(2)} → ${zielPsu.toFixed(2)} PSU</strong> — Zielwerte und Rezept entsprechend skaliert.
+          🧂 Salinität: <strong>${psuVor.toFixed(2)} PSU</strong> (aus ICP) → Ziel <strong>${zielPsu.toFixed(2)} PSU</strong> → erreicht <strong>${psuNach.toFixed(2)} PSU</strong>
         </div>`;
       }
       // Zusammenfassung der Phasen
@@ -1221,20 +1246,22 @@ vorherigen aufbaut.</div>
           const distAfter = Math.abs(st.after[e.key] - e.opt);
           return distAfter < distBefore - 0.01;
         }).length;
+        const psuBefore = estimatePsu(st.before).toFixed(2);
         const psuAfter = estimatePsu(st.after).toFixed(2);
+        const psuTransition = `${psuBefore} → ${psuAfter}`;
 
         if (isDefizitStep) {
           html += `<div class="step-info">
               <div class="step-box"><div class="val">${st.totalMl.toFixed(1)} ml</div><div class="lbl">C&R Lösungen gesamt</div></div>
               <div class="step-box"><div class="val">${improved}/${sEL.length}</div><div class="lbl">Elemente verbessert</div></div>
-              <div class="step-box"><div class="val">${psuAfter}</div><div class="lbl">PSU nachher</div></div>
+              <div class="step-box"><div class="val" style="font-size:1rem">${psuTransition}</div><div class="lbl">PSU vorher → nachher</div></div>
             </div>`;
         } else {
           html += `<div class="step-info" style="grid-template-columns:1fr 1fr 1fr 1fr">
               <div class="step-box"><div class="val">${st.R.toFixed(1)} L</div><div class="lbl">Wasser entnehmen</div></div>
               <div class="step-box"><div class="val">${st.totalMl.toFixed(1)} ml</div><div class="lbl">C&R Lösungen</div></div>
               <div class="step-box"><div class="val">${improved}/${sEL.length}</div><div class="lbl">Elemente verbessert</div></div>
-              <div class="step-box"><div class="val">${psuAfter}</div><div class="lbl">PSU nachher</div></div>
+              <div class="step-box"><div class="val" style="font-size:1rem">${psuTransition}</div><div class="lbl">PSU vorher → nachher</div></div>
             </div>`;
         }
 
@@ -1723,7 +1750,6 @@ vorherigen aufbaut.</div>
       const state = {
         version: 1,
         volume: document.getElementById('volume').value,
-        psuMess: document.getElementById('psu-mess').value,
         psuZiel: document.getElementById('psu-ziel').value,
         optTolerance: document.getElementById('opt-tolerance').value,
         maxWcPct: document.getElementById('max-wc-pct').value,
@@ -1762,7 +1788,7 @@ vorherigen aufbaut.</div>
         const s = JSON.parse(raw);
 
         if (s.volume) document.getElementById('volume').value = s.volume;
-        if (s.psuMess) document.getElementById('psu-mess').value = s.psuMess;
+        // psuMess (alt) wird ignoriert — PSU wird jetzt berechnet
         if (s.psuZiel) document.getElementById('psu-ziel').value = s.psuZiel;
         if (s.optTolerance) document.getElementById('opt-tolerance').value = s.optTolerance;
         if (s.maxWcPct) document.getElementById('max-wc-pct').value = s.maxWcPct;
@@ -1841,7 +1867,7 @@ vorherigen aufbaut.</div>
         }
         // Werte direkt in die Inputs schreiben, dann persistieren
         if (data.volume != null)       document.getElementById('volume').value = data.volume;
-        if (data.psuMess != null)      document.getElementById('psu-mess').value = data.psuMess;
+        // psuMess wird ignoriert (jetzt berechnet)
         if (data.psuZiel != null)      document.getElementById('psu-ziel').value = data.psuZiel;
         if (data.optTolerance != null) document.getElementById('opt-tolerance').value = data.optTolerance;
         if (data.maxWcPct != null)     document.getElementById('max-wc-pct').value = data.maxWcPct;
@@ -1899,6 +1925,8 @@ vorherigen aufbaut.</div>
 
     // State beim Laden wiederherstellen
     loadState();
+    // Nach allem: PSU-Anzeige + Bereiche + Farben initial setzen
+    updatePsuDisplay();
   </script>
 </body>
 </html>
