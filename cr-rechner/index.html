@@ -1085,17 +1085,9 @@ vorherigen aufbaut.</div>
         if (steps.length === 0) break;
         if (steps[0].totalMl < 0.01) break;
 
-        // Prüfen ob ein Wert sich verschlechtert (weiter von min/max entfernt)
-        const wouldWorsen = sEL.some(e => {
-          const before = curVals[e.key];
-          const after = steps[0].after[e.key];
-          // Abstand zu erlaubtem Bereich: 0 wenn innerhalb, sonst positiv
-          const distBefore = before < e.min ? e.min - before : (before > e.max ? before - e.max : 0);
-          const distAfter = after < e.min ? e.min - after : (after > e.max ? after - e.max : 0);
-          // Verschlechtert = war innerhalb und geht raus, oder war draußen und geht weiter weg
-          return distAfter > distBefore + 0.1;
-        });
-        if (wouldWorsen) break;
+        // Wir vertrauen dem gewichteten Solver — keine externe Wächter-Logik.
+        // Elemente, die nach der Dosierung außerhalb [min,max] landen, werden
+        // im Ergebnis mit ⚠️ markiert (siehe render).
 
         // Fortschritt prüfen: wird es insgesamt besser?
         const costBefore = cost(curVals, sEL);
@@ -1325,11 +1317,14 @@ vorherigen aufbaut.</div>
       const endWarnings = [];
       sEL.forEach(e => {
         const av = finalAfter[e.key];
-        if (av < e.min) endWarnings.push(`${e.name}: ${fmt(av)} (unter Min ${fmt(e.min)})`);
-        if (av > e.max) endWarnings.push(`${e.name}: ${fmt(av)} (über Max ${fmt(e.max)})`);
+        if (av < e.min) endWarnings.push(`<strong>${e.name}</strong> (${e.key}): ${fmt(av)} ${e.unit} — unter Min (${fmt(e.min)})`);
+        if (av > e.max) endWarnings.push(`<strong>${e.name}</strong> (${e.key}): ${fmt(av)} ${e.unit} — über Max (${fmt(e.max)})`);
       });
       if (endWarnings.length > 0) {
-        html += `<div class="hint"><strong>Hinweis:</strong> Einige Werte liegen nach allen Ausgleichen noch außerhalb des Bereichs:<br>${endWarnings.join('<br>')}</div>`;
+        const intro = defizitMode
+          ? `⚠️ <strong>Diese Elemente liegen nach der Dosierung außerhalb des Bereichs.</strong> Beim Ausgleich nur über Dosierung (ohne Wasserwechsel) lässt sich das nicht immer vermeiden, weil jede Lösung zwei Ionen einbringt. Falls die Überschreitung kritisch ist, einen Wasserwechsel einplanen.`
+          : `<strong>Hinweis:</strong> Einige Werte liegen nach allen Ausgleichen noch außerhalb des Bereichs:`;
+        html += `<div class="hint">${intro}<br>${endWarnings.join('<br>')}</div>`;
       }
 
       out.innerHTML = html;
@@ -1450,8 +1445,12 @@ vorherigen aufbaut.</div>
         const px = v => springL + ((v - lo) / span) * (springR - springL);
         const xMin = px(e.min), xMax = px(e.max), xOpt = px(e.opt);
 
-        // Label
+        // Label (mit ⚠️-Markierung wenn Nachher-Wert außerhalb [min,max])
+        const outOfRange = av < e.min - 0.001 || av > e.max + 0.001;
         svg += `<text x="33" y="${y+4}" text-anchor="end" font-size="11" font-weight="700" fill="${EL_COLORS[e.key]}">${e.key}</text>`;
+        if (outOfRange) {
+          svg += `<text x="40" y="${y+4}" text-anchor="start" font-size="11">⚠️</text>`;
+        }
         // Track + grüner Bereich
         svg += `<rect x="${springL}" y="${y-5}" width="${springR-springL}" height="10" rx="5" fill="#e8ecf0"/>`;
         svg += `<rect x="${xMin}" y="${y-5}" width="${xMax-xMin}" height="10" rx="5" fill="${EL_COLORS[e.key] || '#d4edda'}" opacity="0.2"/>`;
