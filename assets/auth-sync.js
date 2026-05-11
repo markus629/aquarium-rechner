@@ -30,6 +30,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
+// ---------- Bekannte localStorage-Keys aller Rechner ----------
+// Beim Logout werden ALLE dieser Keys geleert, egal von welcher Seite ausgeloggt wird.
+// Neuer Rechner? Hier seinen Storage-Key ergänzen.
+const KNOWN_LOCALSTORAGE_KEYS = [
+  "cr-aqua-rechner-v1",  // C&R Rechner
+  "spurenrechner.v1"     // Spurenelemente Rechner
+];
+
 // ---------- Firebase init (singleton über Module-Cache) ----------
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -363,17 +371,13 @@ export async function initAuthSync(opts) {
       buildUserMenu(btn, currentUser,
         async () => { await saveCloud(); toast("Synchronisiert.", "success"); },
         async () => {
-          // Lokal-Cache leeren, damit nächster User saubere Defaults sieht
-          if (localStorageKey) {
-            try { localStorage.removeItem(localStorageKey); } catch (_) {}
+          // ALLE bekannten Rechner-Caches leeren (auch wenn Logout von Übersicht aus)
+          for (const k of KNOWN_LOCALSTORAGE_KEYS) {
+            try { localStorage.removeItem(k); } catch (_) {}
           }
           await signOut(auth);
           // Seite neu laden, damit UI in den Default-Zustand zurückgesetzt wird
-          if (localStorageKey) {
-            location.reload();
-          } else {
-            toast("Abgemeldet.", "");
-          }
+          location.reload();
         }
       , currentUser.emailVerified);
       return;
