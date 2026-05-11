@@ -34,6 +34,17 @@
   header {
     text-align: center;
     margin-bottom: 2.5rem;
+    position: relative;
+    padding-top: 0.5rem;
+  }
+  /* Login-Button wird absolute im Header platziert */
+  header .as-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+  @media (max-width: 600px) {
+    header .as-btn { top: -0.4rem; }
   }
   h1 {
     font-size: 2.2rem;
@@ -117,5 +128,19 @@
       <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Optionaler Login speichert deine Werte verschlüsselt bei Google Firebase (Server EU). Ohne Login bleiben alle Daten ausschließlich in deinem Browser.</span>
     </footer>
   </div>
+
+  <!-- Firebase Login (nur Auth, kein Sync — die Rechner syncen selbst) -->
+  <script type="module">
+    import { initAuthSync } from "./assets/auth-sync.js";
+    await initAuthSync({
+      calculatorId: "_overview",
+      calculatorName: "Aquarium Rechner",
+      getLocalState: () => ({}),
+      applyState: () => {},
+      hostElementSelector: "header",
+      theme: "light",
+      loginOnly: true
+    });
+  </script>
 </body>
 </html>

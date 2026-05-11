@@ -1652,7 +1652,8 @@ init();
       calculatorName: "Spurenelemente Rechner",
       getLocalState: () => api.collectState(),
       applyState: (s) => api.applyState(s),
-      hostElementSelector: "header"
+      hostElementSelector: "header",
+      hideWhenLoggedOut: true
     });
     let timer = null;
     window.__spurenCloudSync = () => {

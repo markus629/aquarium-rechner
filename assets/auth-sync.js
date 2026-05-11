@@ -44,6 +44,10 @@ function ensureStyles() {
     .as-btn { position:absolute; top:1rem; right:1rem; min-width:36px; height:36px; padding:0 0.6rem; display:flex; align-items:center; gap:0.4rem; background:rgba(255,255,255,0.15); border:none; border-radius:8px; cursor:pointer; color:#fff; font-size:0.85rem; font-weight:600; font-family:inherit; transition:background 0.15s; z-index:2; }
     .as-btn:hover { background:rgba(255,255,255,0.28); }
     .as-btn svg { width:16px; height:16px; }
+    .as-btn.theme-light { background:#3498db; color:#fff; }
+    .as-btn.theme-light:hover { background:#2980b9; }
+    .as-btn.theme-light .as-avatar { background:#fff; color:#3498db; }
+    .as-btn.is-hidden { display:none; }
     .as-avatar { width:24px; height:24px; border-radius:50%; background:#fff; color:#2c3e50; display:inline-flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; }
     .as-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem; animation:as-fade 0.15s ease; }
     @keyframes as-fade { from{opacity:0} to{opacity:1} }
@@ -254,7 +258,10 @@ export async function initAuthSync(opts) {
     calculatorName,
     getLocalState,
     applyState,
-    hostElementSelector = "header"
+    hostElementSelector = "header",
+    theme = "dark",          // "dark" | "light" — passend zum Header-Hintergrund
+    hideWhenLoggedOut = false,// Bei true: Button nur sichtbar wenn eingeloggt
+    loginOnly = false         // Bei true: Nur Login-UI, kein Cloud-Sync (z.B. Übersicht)
   } = opts;
 
   ensureStyles();
@@ -263,9 +270,10 @@ export async function initAuthSync(opts) {
 
   // Login-Button im Header
   const btn = document.createElement("button");
-  btn.className = "as-btn";
+  btn.className = "as-btn" + (theme === "light" ? " theme-light" : "");
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span class="as-btn-label">Anmelden</span>`;
   btn.title = "Cloud-Sync";
+  if (hideWhenLoggedOut) btn.classList.add("is-hidden");
   host.appendChild(btn);
 
   let currentUser = null;
@@ -309,6 +317,10 @@ export async function initAuthSync(opts) {
     if (sentVerification) {
       toast("Konto erstellt — Verifikations-Mail gesendet.", "success");
     }
+    if (loginOnly) {
+      toast(isNew ? "Konto erstellt." : "Angemeldet als " + (user.displayName || user.email), "success");
+      return;
+    }
     // Cloud-Daten holen
     const cloudState = await loadCloud();
     if (cloudState) {
@@ -333,9 +345,12 @@ export async function initAuthSync(opts) {
       const initials = (currentUser.displayName || currentUser.email || "?").trim()[0].toUpperCase();
       btn.innerHTML = `<span class="as-avatar">${initials}</span><span class="as-btn-label" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${currentUser.displayName || currentUser.email.split("@")[0]}</span>`;
       btn.title = currentUser.email;
+      btn.classList.remove("is-hidden");
     } else {
       btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span class="as-btn-label">Anmelden</span>`;
       btn.title = "Cloud-Sync";
+      if (hideWhenLoggedOut) btn.classList.add("is-hidden");
+      else btn.classList.remove("is-hidden");
     }
   }
 
@@ -354,15 +369,24 @@ export async function initAuthSync(opts) {
     }
   };
 
-  // Auth-State beobachten (z.B. nach Reload)
+  // Auth-State beobachten (z.B. nach Reload oder Login auf anderer Seite)
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       if (!currentUser) {
         currentUser = user;
         updateBtn();
-        const cloudState = await loadCloud();
-        if (cloudState) {
-          applyState(cloudState);
+        if (!loginOnly) {
+          const cloudState = await loadCloud();
+          if (cloudState) {
+            // Cloud-Daten vorhanden → anwenden (Cloud ist Quelle der Wahrheit)
+            applyState(cloudState);
+          } else {
+            // Cloud leer → lokale Daten hochladen (erstmaliger Login auf dieser Seite)
+            const local = getLocalState();
+            if (local && Object.keys(local).length > 0) {
+              await saveCloud();
+            }
+          }
         }
       }
     } else {
