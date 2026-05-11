@@ -229,7 +229,9 @@ function buildUserMenu(btn, user, onSync, onLogout, isVerified) {
     ${!isVerified && user.providerData[0]?.providerId === "password" ? `<div class="as-menu-item" data-act="verify">📧 Verifikations-Mail erneut senden</div>` : ""}
     <div class="as-menu-item" data-act="logout" style="color:#c0392b">🚪 Abmelden</div>
   `;
-  btn.style.position = "relative";
+  // Button ist schon position:absolute → wirkt automatisch als Bezugsrahmen
+  // für die absolute Position des Menüs. Keinen position-Override setzen,
+  // sonst springt der Button im Layout.
   btn.appendChild(menu);
   menu.querySelectorAll(".as-menu-item").forEach(item => {
     item.onclick = async (e) => {
