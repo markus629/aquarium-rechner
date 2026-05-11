@@ -1954,7 +1954,8 @@ vorherigen aufbaut.</div>
         getLocalState: () => api.collectState(),
         applyState: (s) => api.applyState(s),
         hostElementSelector: "header",
-        hideWhenLoggedOut: true
+        hideWhenLoggedOut: true,
+        localStorageKey: "cr-aqua-rechner-v1"
       });
       // Debounced Cloud-Sync: bei vielen schnellen Eingaben nur 1× alle 800 ms
       let timer = null;

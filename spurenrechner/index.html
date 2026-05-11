@@ -1653,7 +1653,8 @@ init();
       getLocalState: () => api.collectState(),
       applyState: (s) => api.applyState(s),
       hostElementSelector: "header",
-      hideWhenLoggedOut: true
+      hideWhenLoggedOut: true,
+      localStorageKey: "spurenrechner.v1"
     });
     let timer = null;
     window.__spurenCloudSync = () => {

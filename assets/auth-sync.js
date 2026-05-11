@@ -263,7 +263,8 @@ export async function initAuthSync(opts) {
     hostElementSelector = "header",
     theme = "dark",          // "dark" | "light" — passend zum Header-Hintergrund
     hideWhenLoggedOut = false,// Bei true: Button nur sichtbar wenn eingeloggt
-    loginOnly = false         // Bei true: Nur Login-UI, kein Cloud-Sync (z.B. Übersicht)
+    loginOnly = false,        // Bei true: Nur Login-UI, kein Cloud-Sync (z.B. Übersicht)
+    localStorageKey = null    // Wenn gesetzt: beim Logout dieser Key wird geleert + reload
   } = opts;
 
   ensureStyles();
@@ -361,7 +362,19 @@ export async function initAuthSync(opts) {
     if (currentUser) {
       buildUserMenu(btn, currentUser,
         async () => { await saveCloud(); toast("Synchronisiert.", "success"); },
-        async () => { await signOut(auth); toast("Abgemeldet.", ""); }
+        async () => {
+          // Lokal-Cache leeren, damit nächster User saubere Defaults sieht
+          if (localStorageKey) {
+            try { localStorage.removeItem(localStorageKey); } catch (_) {}
+          }
+          await signOut(auth);
+          // Seite neu laden, damit UI in den Default-Zustand zurückgesetzt wird
+          if (localStorageKey) {
+            location.reload();
+          } else {
+            toast("Abgemeldet.", "");
+          }
+        }
       , currentUser.emailVerified);
       return;
     }
