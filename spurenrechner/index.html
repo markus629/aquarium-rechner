@@ -285,7 +285,10 @@
 
 </main>
 
-<footer>Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.</footer>
+<footer>
+  Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
+  <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Mit Login werden deine Daten verschlüsselt bei Google Firebase (Server EU) gespeichert. Ohne Login bleibt alles ausschließlich in deinem Browser.</span>
+</footer>
 
 <div class="chart-tooltip" id="chartTooltip"></div>
 <div class="toast" id="toast"></div>
@@ -449,7 +452,34 @@ function loadState() {
 }
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ version:1, ...state }));
+  if (window.__spurenCloudSync) window.__spurenCloudSync();
 }
+
+function collectStateForSync() {
+  return { version: 1, ...state };
+}
+
+function applyStateFromSync(data) {
+  if (!data || typeof data !== "object") return;
+  const ps = data.settings || {};
+  state = {
+    settings: { ...DEFAULTS, ...ps,
+      elements: Array.isArray(ps.elements) && ps.elements.length ? ps.elements : DEFAULTS.elements,
+      ideal:   { ...DEFAULTS.ideal,   ...(ps.ideal   || {}) },
+      min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
+      max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
+      initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
+    },
+    measurements: Array.isArray(data.measurements) ? data.measurements : []
+  };
+  rebuildElementBindings();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version:1, ...state }));
+  renderSettings();
+  rebuildMeasureGrids();
+  renderHistory();
+}
+
+window.__spurenRechner = { collectState: collectStateForSync, applyState: applyStateFromSync };
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function fmt(v, dp=2) {
@@ -1610,6 +1640,27 @@ function init() {
   renderHistory();
 }
 init();
+</script>
+
+<!-- Firebase Auth + Cloud-Sync (optional, nur bei Login aktiv) -->
+<script type="module">
+  import { initAuthSync } from "../assets/auth-sync.js";
+  const api = window.__spurenRechner;
+  if (api) {
+    const sync = await initAuthSync({
+      calculatorId: "spurenrechner",
+      calculatorName: "Spurenelemente Rechner",
+      getLocalState: () => api.collectState(),
+      applyState: (s) => api.applyState(s),
+      hostElementSelector: "header"
+    });
+    let timer = null;
+    window.__spurenCloudSync = () => {
+      if (!sync.isLoggedIn()) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => sync.save(), 800);
+    };
+  }
 </script>
 </body>
 </html>

@@ -299,7 +299,10 @@ vorherigen aufbaut.</div>
     <p style="margin-top:0.6rem;font-size:0.8rem;color:#6b5900">⚠️ Konzentrierte Lösungen <strong>nicht</strong> direkt ins Becken geben — lokale Spitzen können SPS-Korallen schädigen.</p>
   </div>
 
-  <footer>Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.</footer>
+  <footer>
+    Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
+    <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Mit Login werden deine Daten verschlüsselt bei Google Firebase (Server EU) gespeichert. Ohne Login bleibt alles ausschließlich in deinem Browser.</span>
+  </footer>
 
   <script>
     // ===== DATEN =====
@@ -1743,6 +1746,8 @@ vorherigen aufbaut.</div>
       try {
         const state = collectState();
         localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+        // Bei Login: debounced in die Cloud
+        if (window.__crCloudSync) window.__crCloudSync();
       } catch (e) { /* silent */ }
     }
 
@@ -1785,49 +1790,58 @@ vorherigen aufbaut.</div>
       try {
         const raw = localStorage.getItem(SAVE_KEY);
         if (!raw) return;
-        const s = JSON.parse(raw);
-
-        if (s.volume) document.getElementById('volume').value = s.volume;
-        // psuMess (alt) wird ignoriert — PSU wird jetzt berechnet
-        if (s.psuZiel) document.getElementById('psu-ziel').value = s.psuZiel;
-        if (s.optTolerance) document.getElementById('opt-tolerance').value = s.optTolerance;
-        if (s.maxWcPct) document.getElementById('max-wc-pct').value = s.maxWcPct;
-        if (s.maxdEnabled != null) document.getElementById('maxd-enabled').checked = s.maxdEnabled;
-        onMaxDeltaToggle();
-
-        if (s.icp) {
-          EL.forEach(e => {
-            if (s.icp[e.key] != null) document.getElementById('in-' + e.key).value = s.icp[e.key];
-          });
-        }
-        if (s.settings) {
-          EL.forEach(e => {
-            const ss = s.settings[e.key];
-            if (!ss) return;
-            if (ss.min != null) document.getElementById('set-min-' + e.key).value = ss.min;
-            if (ss.opt != null) document.getElementById('set-opt-' + e.key).value = ss.opt;
-            if (ss.max != null) document.getElementById('set-max-' + e.key).value = ss.max;
-            if (ss.maxd != null) document.getElementById('set-maxd-' + e.key).value = ss.maxd;
-            updateSetting(e.key);
-          });
-        }
-        if (Array.isArray(s.sol)) {
-          s.sol.forEach((sv, i) => {
-            if (i >= SOL.length) return;
-            const ref = document.getElementById('sol-ref-' + i);
-            const cat = document.getElementById('sol-cat-' + i);
-            const an = document.getElementById('sol-an-' + i);
-            if (ref && sv.mlRef != null) ref.value = sv.mlRef;
-            if (cat && sv.catInc != null) cat.value = sv.catInc;
-            if (an && sv.anInc != null) an.value = sv.anInc;
-            updateSol(i);
-          });
-        }
-
-        // PSU-Anzeige und Farben aktualisieren
-        updatePsuDisplay();
+        applyState(JSON.parse(raw));
       } catch (e) { /* silent */ }
     }
+
+    function applyState(s) {
+      if (!s || typeof s !== 'object') return;
+      if (s.volume) document.getElementById('volume').value = s.volume;
+      // psuMess (alt) wird ignoriert — PSU wird jetzt berechnet
+      if (s.psuZiel) document.getElementById('psu-ziel').value = s.psuZiel;
+      if (s.optTolerance) document.getElementById('opt-tolerance').value = s.optTolerance;
+      if (s.maxWcPct) document.getElementById('max-wc-pct').value = s.maxWcPct;
+      if (s.maxdEnabled != null) document.getElementById('maxd-enabled').checked = s.maxdEnabled;
+      onMaxDeltaToggle();
+
+      if (s.icp) {
+        EL.forEach(e => {
+          if (s.icp[e.key] != null) document.getElementById('in-' + e.key).value = s.icp[e.key];
+        });
+      }
+      if (s.settings) {
+        EL.forEach(e => {
+          const ss = s.settings[e.key];
+          if (!ss) return;
+          if (ss.min != null) document.getElementById('set-min-' + e.key).value = ss.min;
+          if (ss.opt != null) document.getElementById('set-opt-' + e.key).value = ss.opt;
+          if (ss.max != null) document.getElementById('set-max-' + e.key).value = ss.max;
+          if (ss.maxd != null) document.getElementById('set-maxd-' + e.key).value = ss.maxd;
+          updateSetting(e.key);
+        });
+      }
+      if (Array.isArray(s.sol)) {
+        s.sol.forEach((sv, i) => {
+          if (i >= SOL.length) return;
+          const ref = document.getElementById('sol-ref-' + i);
+          const cat = document.getElementById('sol-cat-' + i);
+          const an = document.getElementById('sol-an-' + i);
+          if (ref && sv.mlRef != null) ref.value = sv.mlRef;
+          if (cat && sv.catInc != null) cat.value = sv.catInc;
+          if (an && sv.anInc != null) an.value = sv.anInc;
+          updateSol(i);
+        });
+      }
+
+      // Lokal persistieren, falls aus Cloud kam
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(collectState())); } catch (_) {}
+
+      // PSU-Anzeige und Farben aktualisieren
+      updatePsuDisplay();
+    }
+
+    // Für Auth-Sync verfügbar machen
+    window.__crRechner = { collectState, applyState };
 
     // ===== EXPORT / IMPORT =====
     function todayStr() {
@@ -1927,6 +1941,28 @@ vorherigen aufbaut.</div>
     loadState();
     // Nach allem: PSU-Anzeige + Bereiche + Farben initial setzen
     updatePsuDisplay();
+  </script>
+
+  <!-- Firebase Auth + Cloud-Sync (optional, nur bei Login aktiv) -->
+  <script type="module">
+    import { initAuthSync } from "../assets/auth-sync.js";
+    const api = window.__crRechner;
+    if (api) {
+      const sync = await initAuthSync({
+        calculatorId: "cr-rechner",
+        calculatorName: "C&R Aquarium Rechner",
+        getLocalState: () => api.collectState(),
+        applyState: (s) => api.applyState(s),
+        hostElementSelector: "header"
+      });
+      // Debounced Cloud-Sync: bei vielen schnellen Eingaben nur 1× alle 800 ms
+      let timer = null;
+      window.__crCloudSync = () => {
+        if (!sync.isLoggedIn()) return;
+        clearTimeout(timer);
+        timer = setTimeout(() => sync.save(), 800);
+      };
+    }
   </script>
 </body>
 </html>

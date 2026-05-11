@@ -4,9 +4,9 @@ Zwei Hilfswerkzeuge für Meerwasser-Aquaristik, gehostet als statische Webseite.
 
 ## Live
 
-- **Übersicht**: https://markus629.github.io/aquarium-rechner/
-- **C&R Aquarium Rechner**: https://markus629.github.io/aquarium-rechner/cr-rechner/
-- **Spurenelemente Rechner**: https://markus629.github.io/aquarium-rechner/spurenrechner/
+- **Übersicht**: https://aquarium-rechner.web.app/
+- **C&R Aquarium Rechner**: https://aquarium-rechner.web.app/cr-rechner/
+- **Spurenelemente Rechner**: https://aquarium-rechner.web.app/spurenrechner/
 
 ## Inhalt
 
@@ -16,9 +16,13 @@ Berechnet optimale Wasserwechsel mit C&R Lösungen, um ICP-Messwerte schrittweis
 ### Spurenelemente Rechner
 Plant Tagesdosen einzelner Spurenelemente basierend auf ICP-Messwerten und Verbrauchshistorie. Alle Daten werden ausschließlich lokal im Browser (localStorage) gespeichert.
 
-## Hosting
+## Hosting & Daten
 
-Statische HTML-Seiten — keine Server, keine Datenbanken. Alles läuft im Browser. Daten verlassen niemals deinen Computer.
+Statische HTML-Seiten via Firebase Hosting. Alles läuft im Browser.
+
+**Ohne Login**: Daten werden ausschließlich lokal im Browser gespeichert (localStorage). Nichts wird übertragen.
+
+**Mit Login** (optional, E-Mail/Passwort oder Google): Daten werden zusätzlich verschlüsselt bei Google Firebase / Firestore (Region europe-west) abgelegt, damit du sie auf jedem Gerät verfügbar hast. Jeder Nutzer kann nur seine eigenen Daten lesen/schreiben (Firestore Security Rules). Kein Tracking, keine Weitergabe.
 
 ## Lizenz
 
