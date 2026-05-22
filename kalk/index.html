@@ -90,6 +90,27 @@
   .inline-form .form-row { margin-bottom:0; flex:1 1 140px; }
   .inline-form button { padding:0.6rem 1.2rem; height:fit-content; }
 
+  /* Dashboard Stats */
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; }
+  .stat-box { background:var(--bg); border-radius:10px; padding:1rem; text-align:center; }
+  .stat-label { font-size:0.75rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+  .stat-value { font-size:1.8rem; font-weight:700; color:var(--blue-dark); margin:0.4rem 0 0.2rem; font-variant-numeric:tabular-nums; }
+  .stat-meta { font-size:0.72rem; color:var(--text-light); }
+
+  /* Plan Summary */
+  .plan-summary { background:var(--blue-light); border-radius:8px; padding:0.8rem 1rem; margin-bottom:0.8rem; font-size:0.88rem; }
+  .plan-summary strong { color:var(--blue-dark); }
+  .plan-summary.warn { background:#fff4e6; border-left:3px solid var(--orange); }
+
+  /* Container/Pumpen */
+  .container-item { border:1px solid var(--border); border-radius:10px; padding:1rem; margin-bottom:0.8rem; }
+  .container-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; }
+  .container-head .name { font-weight:700; font-size:1rem; }
+  .container-bar { background:var(--bg); border-radius:4px; height:8px; overflow:hidden; margin:0.3rem 0; }
+  .container-bar-fill { background:linear-gradient(90deg,var(--green),var(--blue)); height:100%; transition:width 0.3s; }
+  .container-bar-fill.low { background:linear-gradient(90deg,var(--orange),var(--red)); }
+  .container-meta { font-size:0.78rem; color:var(--text-light); margin-bottom:0.6rem; }
+
   /* Tabs — gleicher Look wie Spurenrechner */
   .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow-x:auto; overflow-y:hidden; }
   .tab-btn { flex:1 0 auto; min-width:max-content; padding:0.85rem 1rem; border:none; background:var(--card); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; font-family:inherit; white-space:nowrap; }
@@ -162,11 +183,35 @@
 
     <div id="tab-dashboard" class="tab-content active">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">📊</div>
-          <h3>Dashboard</h3>
-          <p>Live-Übersicht: aktueller KH/Ca-Stand, nächste Dosierung, Pumpen-Status, ESP-Verbindung.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">Inhalt folgt in der nächsten Iteration.</p>
+        <h2>Aktueller Stand</h2>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-label">KH</div>
+            <div class="stat-value" id="dash-kh">—</div>
+            <div class="stat-meta" id="dash-kh-meta">keine Messung</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Calcium</div>
+            <div class="stat-value" id="dash-ca">—</div>
+            <div class="stat-meta" id="dash-ca-meta">keine Messung</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">pH (letzter)</div>
+            <div class="stat-value" id="dash-ph">—</div>
+            <div class="stat-meta" id="dash-ph-meta">keine Messung</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">ESP-Status</div>
+            <div class="stat-value" id="dash-esp" style="font-size:1.1rem">offline</div>
+            <div class="stat-meta">noch nicht verbunden</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Nächste Dosierungen</h2>
+        <div id="dash-next-doses">
+          <div class="center-state"><p>Keine Messung — erst KH/Ca im Tab „Kalkhaushalt" eintragen.</p></div>
         </div>
       </div>
     </div>
@@ -221,42 +266,108 @@
     </div>
     <div id="tab-dosage" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">📈</div>
-          <h3>Dosierplan</h3>
-          <p>24h-Vorhersage mit Tag/Nacht-Aufteilung, Ausgleichsdosierungen, Erhaltungs-Dosierung.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        <h2>KH-Dosierplan</h2>
+        <div id="kh-plan-summary" class="plan-summary">
+          <div class="center-state"><p>Erst KH-Messwert im Tab „Kalkhaushalt" eintragen.</p></div>
         </div>
+        <table class="data-table" id="kh-plan-table" style="display:none">
+          <thead><tr><th>Zeit</th><th class="num">KH-Lösung (ml)</th><th class="num">Prognose °dKH</th><th>Typ</th></tr></thead>
+          <tbody id="kh-plan-tbody"></tbody>
+        </table>
       </div>
+
+      <div class="card">
+        <h2>Ca-/Mg-Dosierplan</h2>
+        <div id="ca-plan-summary" class="plan-summary">
+          <div class="center-state"><p>Erst Ca-Messwert im Tab „Kalkhaushalt" eintragen.</p></div>
+        </div>
+        <table class="data-table" id="ca-plan-table" style="display:none">
+          <thead><tr><th>Zeit</th><th class="num">Ca (ml)</th><th class="num">Mg (ml)</th><th class="num">Prognose mg/L</th><th>Typ</th></tr></thead>
+          <tbody id="ca-plan-tbody"></tbody>
+        </table>
+      </div>
+
+      <p style="font-size:0.78rem;color:var(--text-light);text-align:center">
+        Pläne werden neu berechnet, wenn du Messungen erfasst oder Einstellungen änderst.<br>
+        Tag/Nacht-Aufteilung der KH-Dosierung erfolgt zur Laufzeit am ESP anhand pH-Wert / Uhrzeit.
+      </p>
     </div>
     <div id="tab-manual" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">💧</div>
-          <h3>Manuelle Dosierung</h3>
-          <p>Pumpe direkt ansteuern: Pumpe wählen, ml eingeben → ESP führt aus.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        <h2>Manuelle Dosierung</h2>
+        <p style="color:var(--text-light);margin-bottom:1rem">
+          Hier kannst du eine Pumpe direkt ansteuern. Wirkt nur wenn der ESP verbunden ist.
+        </p>
+        <div class="info-banner" id="manual-no-esp">
+          ⚠️ <strong>Noch kein ESP verbunden.</strong> Die Anbindung folgt in Phase 2/3 der Migration.
+          Du kannst hier zwar Dosierungen <em>eintragen</em> (Verlauf wird gespeichert), aber kein Motor läuft.
         </div>
+
+        <div class="form-grid" style="max-width:600px">
+          <div class="form-row">
+            <label>Pumpe</label>
+            <select id="manual-pump" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
+              <option value="0">Calcium</option>
+              <option value="1">Magnesium</option>
+              <option value="2">KH-Tag</option>
+              <option value="3">KH-Nacht</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Menge (ml)</label>
+            <input type="number" id="manual-ml" step="0.1" min="0.1" max="500" placeholder="z. B. 5">
+          </div>
+          <div class="form-row" style="display:flex;align-items:flex-end">
+            <button class="btn btn-primary" id="manual-dose" style="width:100%">Dosierung protokollieren</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Letzte Dosierungen</h2>
+        <table class="data-table">
+          <thead><tr><th>Zeit</th><th>Pumpe</th><th class="num">ml</th><th>Art</th></tr></thead>
+          <tbody id="dosings-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
+        </table>
       </div>
     </div>
     <div id="tab-container" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">🪣</div>
-          <h3>Kanister-Verwaltung</h3>
-          <p>Füllstand der vier Lösungs-Behälter (Ca, Mg, KH-Tag, KH-Nacht), Nachfüll-Bestätigung.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
-        </div>
+        <h2>Kanister &amp; Pumpen</h2>
+        <p style="color:var(--text-light);margin-bottom:1rem">
+          Kapazität, aktueller Füllstand und Kalibrierung jeder Pumpe / jedes Kanisters.
+        </p>
+        <div id="containers-list"></div>
       </div>
     </div>
     <div id="tab-ph" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">📉</div>
-          <h3>pH-Sensor</h3>
-          <p>pH-Verlauf, Kalibrierung gegen pH-4 und pH-7 Puffer, Schwellwert für KH-Tag/Nacht-Schaltung.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        <h2>pH-Sensor</h2>
+        <p style="color:var(--text-light);margin-bottom:1rem">
+          pH-Werte kommen automatisch vom ESP (alle 30 s). Manuelle Eingabe ist auch möglich (z. B. von externem Messgerät).
+        </p>
+
+        <div class="info-banner">
+          <strong>Hinweis:</strong> Sensor-Kalibrierung (pH-4 / pH-7-Puffer) und Live-Werte vom Sensor werden in Phase 2/3
+          mit der ESP-Anbindung freigeschaltet. Für jetzt kannst du manuell pH-Werte eintragen, um den Verlauf zu beobachten.
         </div>
+
+        <h3 style="margin-top:1rem">Manuell eintragen</h3>
+        <div class="inline-form">
+          <div class="form-row">
+            <label>pH-Wert</label>
+            <input type="number" id="ph-value" step="0.01" min="5" max="9" placeholder="z. B. 8.15">
+          </div>
+          <button class="btn btn-primary" id="ph-save">Speichern</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>pH-Verlauf</h2>
+        <table class="data-table">
+          <thead><tr><th>Zeit</th><th class="num">pH</th><th class="act">Löschen</th></tr></thead>
+          <tbody id="ph-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+        </table>
       </div>
     </div>
     <div id="tab-settings" class="tab-content">
@@ -371,8 +482,11 @@
   import { initAuthSync } from "/assets/auth-sync.js";
   import {
     getAuthInstance, getSettings, saveSettings,
-    addMeasurement, listMeasurements, deleteMeasurement
+    addMeasurement, listMeasurements, deleteMeasurement,
+    addDosing, listDosings,
+    getPumps, savePump
   } from "/kalk/firestore-store.js";
+  import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
@@ -548,7 +662,7 @@
       if (!isNaN(ca) && ca > 0) await addMeasurement({ type: "ca", value: ca, timestamp: ts, source: "manual" });
       document.getElementById("kalk-kh").value = "";
       document.getElementById("kalk-ca").value = "";
-      await refreshMeasurements();
+      await refreshAll();
     } catch (e) {
       alert("Fehler beim Speichern: " + e.message);
     } finally {
@@ -556,12 +670,324 @@
     }
   };
 
+  // ---------- pH-Sensor Tab ----------
+  document.getElementById("ph-save").onclick = async () => {
+    const v = parseFloat(document.getElementById("ph-value").value);
+    if (isNaN(v) || v < 5 || v > 9) { alert("Bitte pH zwischen 5 und 9 eingeben."); return; }
+    try {
+      await addMeasurement({ type: "ph", value: v, timestamp: Math.floor(Date.now() / 1000), source: "manual" });
+      document.getElementById("ph-value").value = "";
+      await refreshPh();
+      await refreshDashboard();
+    } catch (e) { alert("Fehler: " + e.message); }
+  };
+
+  async function refreshPh() {
+    try {
+      const items = await listMeasurements("ph", 100);
+      const tbody = document.getElementById("ph-tbody");
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td class="empty" colspan="3">Keine pH-Messungen erfasst</td></tr>`;
+      } else {
+        tbody.innerHTML = items.map(m => `
+          <tr>
+            <td>${fmtDateTime(m.timestamp)}</td>
+            <td class="num">${Number(m.value).toFixed(2)}</td>
+            <td class="act"><button class="row-del" data-del-ph="${m.id}" title="Löschen">✕</button></td>
+          </tr>`).join("");
+        tbody.querySelectorAll("[data-del-ph]").forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm("pH-Messung löschen?")) return;
+            await deleteMeasurement(btn.dataset.delPh);
+            await refreshPh();
+            await refreshDashboard();
+          };
+        });
+      }
+    } catch (e) { console.warn("pH laden:", e); }
+  }
+
+  // ---------- Manuelle Dosierung Tab ----------
+  const PUMP_NAMES = ["Calcium", "Magnesium", "KH-Tag", "KH-Nacht"];
+  document.getElementById("manual-dose").onclick = async () => {
+    const pump = parseInt(document.getElementById("manual-pump").value, 10);
+    const ml = parseFloat(document.getElementById("manual-ml").value);
+    if (isNaN(ml) || ml <= 0) { alert("Bitte gültige ml-Menge eingeben."); return; }
+    try {
+      await addDosing({ pump, ml, isAutomatic: false, dosageType: "manual" });
+      document.getElementById("manual-ml").value = "";
+      await refreshDosings();
+    } catch (e) { alert("Fehler: " + e.message); }
+  };
+
+  async function refreshDosings() {
+    try {
+      const items = await listDosings(50);
+      const tbody = document.getElementById("dosings-tbody");
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td class="empty" colspan="4">Noch keine Dosierungen</td></tr>`;
+      } else {
+        tbody.innerHTML = items.map(d => `
+          <tr>
+            <td>${fmtDateTime(d.timestamp)}</td>
+            <td>${PUMP_NAMES[d.pump] || `Pumpe ${d.pump}`}</td>
+            <td class="num">${Number(d.ml).toFixed(2)}</td>
+            <td>${d.isAutomatic ? "Auto" : "Manuell"}</td>
+          </tr>`).join("");
+      }
+    } catch (e) { console.warn("Dosierungen laden:", e); }
+  }
+
+  // ---------- Kanister / Pumpen Tab ----------
+  async function refreshContainers() {
+    try {
+      const pumps = await getPumps();
+      const settings = await getSettings();
+      const caps = settings.containerCapacity || [5000, 5000, 5000, 5000];
+      const levels = settings.containerLevel || [...caps];
+      const container = document.getElementById("containers-list");
+      container.innerHTML = pumps.map((p, i) => {
+        const cap = caps[i] || 5000;
+        const lvl = levels[i] != null ? levels[i] : cap;
+        const pct = Math.max(0, Math.min(100, (lvl / cap) * 100));
+        const lowClass = pct < 20 ? "low" : "";
+        const lastCal = p.lastCalibrationDate
+          ? new Date(p.lastCalibrationDate * 1000).toLocaleDateString("de-DE")
+          : "noch nicht kalibriert";
+        return `
+          <div class="container-item" data-pump="${i}">
+            <div class="container-head">
+              <div>
+                <div class="name">${p.name || PUMP_NAMES[i]}</div>
+                <div class="container-meta">Letzte Kalibrierung: ${lastCal}</div>
+              </div>
+              <button class="btn btn-ghost" data-refill="${i}">Voll auffüllen</button>
+            </div>
+            <div class="container-bar"><div class="container-bar-fill ${lowClass}" style="width:${pct}%"></div></div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label>Kapazität (ml)</label>
+                <input type="number" data-cap="${i}" value="${cap}" step="100" min="100" max="20000">
+              </div>
+              <div class="form-row">
+                <label>Aktueller Füllstand (ml)</label>
+                <input type="number" data-level="${i}" value="${lvl}" step="10" min="0">
+              </div>
+              <div class="form-row">
+                <label>Pumpen-Kalibrierung (ml pro Motor-Schritt)</label>
+                <input type="number" data-mlperstep="${i}" value="${p.mlPerStep || 0}" step="0.0001" min="0">
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+
+      // Refill-Buttons
+      container.querySelectorAll("[data-refill]").forEach(btn => {
+        btn.onclick = async () => {
+          const i = parseInt(btn.dataset.refill, 10);
+          const newCaps = [...caps];
+          const newLevels = [...levels];
+          newLevels[i] = newCaps[i];
+          await saveSettings({ containerLevel: newLevels });
+          await refreshContainers();
+        };
+      });
+      // Input-Felder: cap, level, mlPerStep
+      container.querySelectorAll("[data-cap]").forEach(inp => {
+        inp.addEventListener("change", async () => {
+          const i = parseInt(inp.dataset.cap, 10);
+          const newCaps = [...caps];
+          newCaps[i] = parseFloat(inp.value) || 5000;
+          await saveSettings({ containerCapacity: newCaps });
+          await refreshContainers();
+        });
+      });
+      container.querySelectorAll("[data-level]").forEach(inp => {
+        inp.addEventListener("change", async () => {
+          const i = parseInt(inp.dataset.level, 10);
+          const newLevels = [...levels];
+          newLevels[i] = parseFloat(inp.value) || 0;
+          await saveSettings({ containerLevel: newLevels });
+          await refreshContainers();
+        });
+      });
+      container.querySelectorAll("[data-mlperstep]").forEach(inp => {
+        inp.addEventListener("change", async () => {
+          const i = parseInt(inp.dataset.mlperstep, 10);
+          await savePump(i, { mlPerStep: parseFloat(inp.value) || 0 });
+        });
+      });
+    } catch (e) { console.warn("Container laden:", e); }
+  }
+
+  // ---------- Dosierplan Tab ----------
+  async function refreshPlan() {
+    try {
+      const settings = await getSettings();
+      const khItems = await listMeasurements("kh", 50);
+      const caItems = await listMeasurements("ca", 50);
+      const dosings = await listDosings(500);
+      const now = Math.floor(Date.now() / 1000);
+
+      // KH-Plan
+      if (khItems.length > 0) {
+        const currentKH = khItems[0].value;
+        const dailyKH = estimateDailyConsumption({
+          measurements: khItems, dosings, type: "kh",
+          perMlFactor: khPerML(settings.aquariumVolume || 450),
+          historyCount: settings.historyCount || 5
+        }) || settings.initialKHConsumption || 160;
+
+        const plan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, now });
+        renderKHPlan(plan, currentKH, dailyKH);
+      } else {
+        document.getElementById("kh-plan-table").style.display = "none";
+        document.getElementById("kh-plan-summary").innerHTML = `<div class="center-state"><p>Erst KH-Messwert eintragen.</p></div>`;
+      }
+
+      // Ca-Plan
+      if (caItems.length > 0) {
+        const currentCa = caItems[0].value;
+        const dailyCa = estimateDailyConsumption({
+          measurements: caItems, dosings, type: "ca",
+          perMlFactor: caPerML(settings.aquariumVolume || 450),
+          historyCount: settings.historyCount || 5
+        }) || settings.initialCalciumConsumption || 60;
+
+        const plan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, now });
+        renderCaPlan(plan, currentCa, dailyCa);
+      } else {
+        document.getElementById("ca-plan-table").style.display = "none";
+        document.getElementById("ca-plan-summary").innerHTML = `<div class="center-state"><p>Erst Ca-Messwert eintragen.</p></div>`;
+      }
+    } catch (e) { console.warn("Plan rechnen:", e); }
+  }
+
+  function renderKHPlan(plan, currentKH, dailyCons) {
+    const summary = document.getElementById("kh-plan-summary");
+    const tableEl = document.getElementById("kh-plan-table");
+    const tbody = document.getElementById("kh-plan-tbody");
+    const isInc = plan.isIncrease;
+    const goal = isInc != null ? (isInc ? "Erhöhung" : "Senkung") : "Erhaltung";
+    summary.className = "plan-summary" + (plan.warning ? " warn" : "");
+    summary.innerHTML = `
+      <div>Aktuell: <strong>${currentKH.toFixed(2)} °dKH</strong> &middot;
+      Ziel: <strong>${(plan.entries[0]?.projectedValue ?? "—")}</strong> &middot;
+      Verbrauch: <strong>${dailyCons.toFixed(1)} ml/Tag</strong> &middot;
+      ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
+      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
+      ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
+    `;
+    tableEl.style.display = "table";
+    tbody.innerHTML = plan.entries.map(e => `
+      <tr>
+        <td>${e.date === 0 ? "<em>Erhaltung (laufend)</em>" : fmtDateTime(e.date)}</td>
+        <td class="num">${e.dosageML.toFixed(2)}</td>
+        <td class="num">${e.projectedValue.toFixed(2)}</td>
+        <td>${e.isMaintenanceDose ? "Erhaltung" : "Anpassung"}</td>
+      </tr>`).join("");
+  }
+
+  function renderCaPlan(plan, currentCa, dailyCons) {
+    const summary = document.getElementById("ca-plan-summary");
+    const tableEl = document.getElementById("ca-plan-table");
+    const tbody = document.getElementById("ca-plan-tbody");
+    const isInc = plan.isIncrease;
+    const goal = isInc != null ? (isInc ? "Erhöhung" : "Senkung") : "Erhaltung";
+    summary.className = "plan-summary" + (plan.warning ? " warn" : "");
+    summary.innerHTML = `
+      <div>Aktuell: <strong>${currentCa.toFixed(0)} mg/L</strong> &middot;
+      Verbrauch: <strong>${dailyCons.toFixed(1)} ml/Tag</strong> &middot;
+      ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
+      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
+      ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
+    `;
+    tableEl.style.display = "table";
+    tbody.innerHTML = plan.entries.map(e => `
+      <tr>
+        <td>${e.date === 0 ? "<em>Erhaltung (laufend)</em>" : fmtDateTime(e.date)}</td>
+        <td class="num">${e.caDosageML.toFixed(2)}</td>
+        <td class="num">${e.mgDosageML.toFixed(2)}</td>
+        <td class="num">${e.projectedValue.toFixed(0)}</td>
+        <td>${e.isMaintenanceDose ? "Erhaltung" : "Anpassung"}</td>
+      </tr>`).join("");
+  }
+
+  // ---------- Dashboard ----------
+  async function refreshDashboard() {
+    try {
+      const [kh, ca, ph] = await Promise.all([
+        listMeasurements("kh", 1),
+        listMeasurements("ca", 1),
+        listMeasurements("ph", 1)
+      ]);
+      const setStat = (idVal, idMeta, items, unit, fract) => {
+        const v = document.getElementById(idVal);
+        const m = document.getElementById(idMeta);
+        if (!items.length) { v.textContent = "—"; m.textContent = "keine Messung"; return; }
+        v.textContent = Number(items[0].value).toFixed(fract) + " " + unit;
+        m.textContent = fmtDateTime(items[0].timestamp);
+      };
+      setStat("dash-kh", "dash-kh-meta", kh, "°dKH", 1);
+      setStat("dash-ca", "dash-ca-meta", ca, "mg/L", 0);
+      setStat("dash-ph", "dash-ph-meta", ph, "", 2);
+
+      // Nächste Dosierungen aus aktuellem Plan
+      const settings = await getSettings();
+      const next = document.getElementById("dash-next-doses");
+      const lines = [];
+      if (kh.length) {
+        const plan = calculateKHPlan({
+          settings, currentKH: kh[0].value,
+          dailyConsumption: settings.initialKHConsumption || 160,
+          now: Math.floor(Date.now() / 1000)
+        });
+        const first = plan.entries.find(e => e.date !== 0);
+        if (first) lines.push(`<li>KH-Dosis <strong>${first.dosageML.toFixed(2)} ml</strong> am ${fmtDateTime(first.date)}</li>`);
+        else lines.push(`<li>KH: Nur Erhaltungsdosierung (${plan.maintenance.toFixed(2)} ml alle 2 h)</li>`);
+      }
+      if (ca.length) {
+        const plan = calculateCaPlan({
+          settings, currentCa: ca[0].value,
+          dailyConsumption: settings.initialCalciumConsumption || 60,
+          now: Math.floor(Date.now() / 1000)
+        });
+        const first = plan.entries.find(e => e.date !== 0);
+        if (first) lines.push(`<li>Ca-Dosis <strong>${first.caDosageML.toFixed(2)} ml</strong> + Mg <strong>${first.mgDosageML.toFixed(2)} ml</strong> am ${fmtDateTime(first.date)}</li>`);
+        else lines.push(`<li>Ca: Nur Erhaltungsdosierung (${plan.maintenance.toFixed(2)} ml alle 2 h)</li>`);
+      }
+      if (lines.length) next.innerHTML = `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`;
+      else next.innerHTML = `<div class="center-state"><p>Keine Messung — erst KH/Ca im Tab „Kalkhaushalt" eintragen.</p></div>`;
+    } catch (e) { console.warn("Dashboard refresh:", e); }
+  }
+
+  // ---------- Zentraler Refresh ----------
+  async function refreshAll() {
+    await Promise.all([
+      refreshMeasurements(),
+      refreshPh(),
+      refreshDosings(),
+      refreshContainers(),
+      refreshPlan(),
+      refreshDashboard()
+    ]);
+  }
+
+  // Auch Settings-Änderung soll Plan/Dashboard neu rechnen
+  document.querySelectorAll("[data-setting]").forEach(inp => {
+    inp.addEventListener("change", async () => {
+      // persistSetting läuft via change-Listener weiter oben.
+      // Wir warten kurz und triggern dann Plan-Refresh:
+      setTimeout(() => { refreshPlan(); refreshDashboard(); }, 300);
+    });
+  });
+
   // Auth-Status beobachten — der EINZIGE State-Treiber
   getAuthInstance().onAuthStateChanged(async (user) => {
     if (user) {
       showView("view-main");
       await loadSettingsIntoForm();
-      await refreshMeasurements();
+      await refreshAll();
     } else {
       settingsLoaded = false;
       showView("view-login");
