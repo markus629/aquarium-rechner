@@ -204,6 +204,9 @@
 </footer>
 
 <script type="module">
+  import { initAuthSync } from "/assets/auth-sync.js";
+  import { getAuthInstance } from "/kalk/firestore-store.js";
+
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
     showView("view-error");
@@ -235,10 +238,6 @@
     };
   });
 
-  // ---------- Imports ----------
-  const { initAuthSync } = await import("/assets/auth-sync.js");
-  const store = await import("/kalk/firestore-store.js");
-
   // Auth-Sync UI mounten (Login-Button im Header, loginOnly)
   initAuthSync({
     calculatorId: "kalk",
@@ -248,16 +247,11 @@
     hostElementSelector: "header",
     theme: "dark",
     loginOnly: true
-  }).catch(e => console.warn("auth-sync init failed", e));
+  });
 
   // Auth-Status beobachten — der EINZIGE State-Treiber
-  const auth = store.getAuthInstance();
-  auth.onAuthStateChanged((user) => {
-    if (user) {
-      showView("view-main");
-    } else {
-      showView("view-login");
-    }
+  getAuthInstance().onAuthStateChanged((user) => {
+    showView(user ? "view-main" : "view-login");
   });
 </script>
 </body>
