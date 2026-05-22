@@ -10,7 +10,7 @@ import {
   query, orderBy, limit, where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { firebaseConfig } from "../assets/firebase-config.js";
+import { firebaseConfig } from "/assets/firebase-config.js";
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);

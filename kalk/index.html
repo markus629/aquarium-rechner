@@ -238,8 +238,8 @@
   });
 
   // ---------- Imports ----------
-  const { initAuthSync } = await import("../assets/auth-sync.js");
-  const store = await import("./firestore-store.js");
+  const { initAuthSync } = await import("/assets/auth-sync.js");
+  const store = await import("/kalk/firestore-store.js");
 
   // Auth-Sync UI mounten (Login-Button im Header, loginOnly)
   initAuthSync({
