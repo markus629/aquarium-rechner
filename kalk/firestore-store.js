@@ -1,21 +1,17 @@
 // =============================================================
-// Firestore-Wrapper für die Dosierpumpe
-// =============================================================
-// Stellt eine schmale API für CRUD auf Devices + Subcollections bereit.
-// Wird vom Dosier-UI verwendet, sobald ein User eingeloggt ist.
+// Firestore-Wrapper für Kalkmanagement (1 User = 1 Aquarium)
 // =============================================================
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, collection, doc,
-  getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+  getDoc, getDocs, setDoc, addDoc, deleteDoc,
   query, orderBy, limit, where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { firebaseConfig } from "../assets/firebase-config.js";
 
-// Firebase Singleton (idempotent — auth-sync hat es ggf. schon initialisiert)
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -26,93 +22,78 @@ function requireUid() {
   return u.uid;
 }
 
-function devicePath(deviceId) {
-  return `users/${requireUid()}/devices/${deviceId}`;
+function aquaPath(docId) {
+  return `users/${requireUid()}/aquarium/${docId}`;
 }
 
-// ---------- Devices ----------
-export async function listDevices() {
-  const uid = requireUid();
-  const snap = await getDocs(collection(db, `users/${uid}/devices`));
-  const devices = [];
-  snap.forEach(d => devices.push({ id: d.id, ...d.data() }));
-  // info-Dokumente nach Name sortieren
-  devices.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-  return devices;
+// ---------- Aquarium-Setup ----------
+export async function hasAquarium() {
+  const snap = await getDoc(doc(db, aquaPath("info")));
+  return snap.exists();
 }
 
-export async function createDevice({ name, aquariumVolume }) {
+export async function createAquarium({ name, aquariumVolume }) {
   const uid = requireUid();
-  const devRef = await addDoc(collection(db, `users/${uid}/devices`), {
+  await setDoc(doc(db, `users/${uid}/aquarium/info`), {
     name: name || "Aquarium",
-    aquariumVolume: aquariumVolume || 450,
     createdAt: serverTimestamp(),
     online: false,
     firmware: null,
     lastSeen: null
   });
-  // Default-Settings als Sub-Doc anlegen
-  await setDoc(doc(db, `users/${uid}/devices/${devRef.id}/config/settings`), defaultSettings(aquariumVolume));
-  // Vier Default-Pumpen anlegen (Ca, Mg, KH-Tag, KH-Nacht)
+  await setDoc(doc(db, `users/${uid}/aquarium/settings`), defaultSettings(aquariumVolume));
   for (let i = 0; i < 4; i++) {
-    await setDoc(doc(db, `users/${uid}/devices/${devRef.id}/config/pump-${i}`), defaultPump(i));
+    await setDoc(doc(db, `users/${uid}/aquarium/pump-${i}`), defaultPump(i));
   }
-  return devRef.id;
 }
 
-export async function deleteDevice(deviceId) {
-  // Firestore hat keine rekursive Löschung — wir entfernen nur das Top-Doc.
-  // Subcollections bleiben verwaist und können später per Cloud Function gepurged werden.
-  // Für den Anfang reicht das.
-  await deleteDoc(doc(db, devicePath(deviceId)));
-}
-
-export async function getDevice(deviceId) {
-  const snap = await getDoc(doc(db, devicePath(deviceId)));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() };
-}
-
-export async function updateDevice(deviceId, patch) {
-  await updateDoc(doc(db, devicePath(deviceId)), patch);
-}
-
-// ---------- Settings / Pumpen ----------
-export async function getSettings(deviceId) {
-  const snap = await getDoc(doc(db, `${devicePath(deviceId)}/config/settings`));
+export async function getAquariumInfo() {
+  const snap = await getDoc(doc(db, aquaPath("info")));
   return snap.exists() ? snap.data() : null;
 }
 
-export async function saveSettings(deviceId, settings) {
-  await setDoc(doc(db, `${devicePath(deviceId)}/config/settings`), settings, { merge: true });
+export async function updateAquariumInfo(patch) {
+  await setDoc(doc(db, aquaPath("info")), patch, { merge: true });
 }
 
-export async function getPumps(deviceId) {
+// ---------- Einstellungen ----------
+export async function getSettings() {
+  const snap = await getDoc(doc(db, aquaPath("settings")));
+  return snap.exists() ? snap.data() : null;
+}
+
+export async function saveSettings(settings) {
+  await setDoc(doc(db, aquaPath("settings")), settings, { merge: true });
+}
+
+// ---------- Pumpen ----------
+export async function getPumps() {
   const pumps = [];
   for (let i = 0; i < 4; i++) {
-    const snap = await getDoc(doc(db, `${devicePath(deviceId)}/config/pump-${i}`));
+    const snap = await getDoc(doc(db, aquaPath(`pump-${i}`)));
     pumps.push(snap.exists() ? { index: i, ...snap.data() } : { index: i, ...defaultPump(i) });
   }
   return pumps;
 }
 
-export async function savePump(deviceId, pumpIndex, pumpData) {
-  await setDoc(doc(db, `${devicePath(deviceId)}/config/pump-${pumpIndex}`), pumpData, { merge: true });
+export async function savePump(pumpIndex, pumpData) {
+  await setDoc(doc(db, aquaPath(`pump-${pumpIndex}`)), pumpData, { merge: true });
 }
 
 // ---------- Messungen ----------
-// type: "kh" | "ca" | "ph" | "auto-kh"
-export async function addMeasurement(deviceId, { type, value, timestamp, source }) {
-  await addDoc(collection(db, `${devicePath(deviceId)}/measurements`), {
+export async function addMeasurement({ type, value, timestamp, source }) {
+  const uid = requireUid();
+  await addDoc(collection(db, `users/${uid}/aquarium/measurements/items`), {
     type, value, timestamp: timestamp || Math.floor(Date.now() / 1000),
     source: source || "manual",
     createdAt: serverTimestamp()
   });
 }
 
-export async function listMeasurements(deviceId, type, maxItems = 200) {
+export async function listMeasurements(type, maxItems = 200) {
+  const uid = requireUid();
   const q = query(
-    collection(db, `${devicePath(deviceId)}/measurements`),
+    collection(db, `users/${uid}/aquarium/measurements/items`),
     where("type", "==", type),
     orderBy("timestamp", "desc"),
     limit(maxItems)
@@ -123,22 +104,25 @@ export async function listMeasurements(deviceId, type, maxItems = 200) {
   return out;
 }
 
-export async function deleteMeasurement(deviceId, measurementId) {
-  await deleteDoc(doc(db, `${devicePath(deviceId)}/measurements/${measurementId}`));
+export async function deleteMeasurement(measurementId) {
+  const uid = requireUid();
+  await deleteDoc(doc(db, `users/${uid}/aquarium/measurements/items/${measurementId}`));
 }
 
-// ---------- Dosierungen (Historie der Ausführungen) ----------
-export async function addDosing(deviceId, { pump, ml, timestamp, isAutomatic, factor, dosageType, success }) {
-  await addDoc(collection(db, `${devicePath(deviceId)}/dosings`), {
+// ---------- Dosierungen ----------
+export async function addDosing({ pump, ml, timestamp, isAutomatic, factor, dosageType, success }) {
+  const uid = requireUid();
+  await addDoc(collection(db, `users/${uid}/aquarium/dosings/items`), {
     pump, ml, timestamp: timestamp || Math.floor(Date.now() / 1000),
     isAutomatic: !!isAutomatic, factor: factor || 1, dosageType, success: success !== false,
     createdAt: serverTimestamp()
   });
 }
 
-export async function listDosings(deviceId, maxItems = 200) {
+export async function listDosings(maxItems = 200) {
+  const uid = requireUid();
   const q = query(
-    collection(db, `${devicePath(deviceId)}/dosings`),
+    collection(db, `users/${uid}/aquarium/dosings/items`),
     orderBy("timestamp", "desc"),
     limit(maxItems)
   );
@@ -149,13 +133,13 @@ export async function listDosings(deviceId, maxItems = 200) {
 }
 
 // ---------- Pläne ----------
-export async function getCurrentPlan(deviceId) {
-  const snap = await getDoc(doc(db, `${devicePath(deviceId)}/plans/current`));
+export async function getCurrentPlan() {
+  const snap = await getDoc(doc(db, aquaPath("plan-current")));
   return snap.exists() ? snap.data() : null;
 }
 
-export async function savePlan(deviceId, plan) {
-  await setDoc(doc(db, `${devicePath(deviceId)}/plans/current`), {
+export async function savePlan(plan) {
+  await setDoc(doc(db, aquaPath("plan-current")), {
     ...plan,
     generatedAt: serverTimestamp()
   });
@@ -198,7 +182,6 @@ function defaultPump(index) {
   };
 }
 
-// Auth-Status für UI-Helper
 export function getAuthInstance() {
   return auth;
 }
