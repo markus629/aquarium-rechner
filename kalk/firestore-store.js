@@ -26,40 +26,11 @@ function aquaPath(docId) {
   return `users/${requireUid()}/aquarium/${docId}`;
 }
 
-// ---------- Aquarium-Setup ----------
-export async function hasAquarium() {
-  const snap = await getDoc(doc(db, aquaPath("info")));
-  return snap.exists();
-}
-
-export async function createAquarium({ name, aquariumVolume }) {
-  const uid = requireUid();
-  await setDoc(doc(db, `users/${uid}/aquarium/info`), {
-    name: name || "Aquarium",
-    createdAt: serverTimestamp(),
-    online: false,
-    firmware: null,
-    lastSeen: null
-  });
-  await setDoc(doc(db, `users/${uid}/aquarium/settings`), defaultSettings(aquariumVolume));
-  for (let i = 0; i < 4; i++) {
-    await setDoc(doc(db, `users/${uid}/aquarium/pump-${i}`), defaultPump(i));
-  }
-}
-
-export async function getAquariumInfo() {
-  const snap = await getDoc(doc(db, aquaPath("info")));
-  return snap.exists() ? snap.data() : null;
-}
-
-export async function updateAquariumInfo(patch) {
-  await setDoc(doc(db, aquaPath("info")), patch, { merge: true });
-}
-
 // ---------- Einstellungen ----------
+// Liefert gespeicherte Settings ODER Defaults (ohne automatisch zu speichern)
 export async function getSettings() {
   const snap = await getDoc(doc(db, aquaPath("settings")));
-  return snap.exists() ? snap.data() : null;
+  return snap.exists() ? snap.data() : defaultSettings();
 }
 
 export async function saveSettings(settings) {

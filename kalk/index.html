@@ -109,33 +109,14 @@
     </div>
   </div>
 
-  <!-- Eingeloggt, kein Aquarium → Setup -->
-  <div id="view-setup" class="card" style="display:none">
-    <h2>👋 Willkommen!</h2>
-    <div class="center-state">
-      <p>Lege jetzt dein Aquarium an, um Messwerte zu erfassen und Dosierpläne zu berechnen.</p>
-    </div>
-    <div style="max-width:400px;margin:0 auto">
-      <div class="form-row">
-        <label>Name deines Aquariums</label>
-        <input type="text" id="setup-name" placeholder="Riff-Aquarium">
-      </div>
-      <div class="form-row">
-        <label>Volumen (Liter)</label>
-        <input type="number" id="setup-volume" value="450" min="1" step="1">
-      </div>
-      <button class="btn btn-primary" id="setup-save" style="width:100%">Anlegen</button>
-    </div>
-  </div>
-
-  <!-- Haupt-Ansicht: Aquarium existiert -->
+  <!-- Haupt-Ansicht: nach Login -->
   <div id="view-main" style="display:none">
     <div class="info-banner">
-      ⚠️ <strong>Beta-Version.</strong> Phase 1: Setup steht. Mess-Eingabe, Plan-Berechnung und Pumpen-Konfiguration folgen in den nächsten Updates.
+      ⚠️ <strong>Beta-Version.</strong> Phase 1: Basis-Struktur steht. Mess-Eingabe, Plan-Berechnung und Pumpen-Konfiguration folgen in den nächsten Updates.
     </div>
     <div class="card">
       <h2>
-        <span id="aquarium-name">—</span>
+        <span>Kalkmanagement</span>
       </h2>
       <div class="tabs" id="main-tabs">
         <button class="tab-btn active" data-tab="tab-overview">Übersicht</button>
@@ -215,7 +196,7 @@
   window.addEventListener("unhandledrejection", (e) => showError("Promise-Fehler: " + (e.reason?.message || e.reason)));
 
   function showView(id) {
-    ["view-loading", "view-login", "view-setup", "view-main", "view-error"].forEach(s => {
+    ["view-loading", "view-login", "view-main", "view-error"].forEach(s => {
       const el = document.getElementById(s);
       if (el) el.style.display = s === id ? "block" : "none";
     });
@@ -254,43 +235,13 @@
 
   // Auth-Status beobachten — der EINZIGE State-Treiber
   const auth = store.getAuthInstance();
-  auth.onAuthStateChanged(async (user) => {
-    try {
-      if (!user) {
-        showView("view-login");
-        return;
-      }
-      // Eingeloggt — Aquarium existiert?
-      const exists = await store.hasAquarium();
-      if (!exists) {
-        showView("view-setup");
-        return;
-      }
-      // Hauptansicht
-      const info = await store.getAquariumInfo();
-      document.getElementById("aquarium-name").textContent = info?.name || "Aquarium";
+  auth.onAuthStateChanged((user) => {
+    if (user) {
       showView("view-main");
-    } catch (e) {
-      console.error(e);
-      showError("Fehler beim Laden: " + e.message);
+    } else {
+      showView("view-login");
     }
   });
-
-  // Setup-Form
-  document.getElementById("setup-save").onclick = async () => {
-    const name = document.getElementById("setup-name").value.trim();
-    const volume = parseFloat(document.getElementById("setup-volume").value) || 450;
-    if (!name) { toast("Bitte einen Namen eingeben.", "error"); return; }
-    try {
-      await store.createAquarium({ name, aquariumVolume: volume });
-      toast("Aquarium angelegt.", "success");
-      const info = await store.getAquariumInfo();
-      document.getElementById("aquarium-name").textContent = info?.name || "Aquarium";
-      showView("view-main");
-    } catch (e) {
-      toast("Fehler: " + e.message, "error");
-    }
-  };
 </script>
 </body>
 </html>
