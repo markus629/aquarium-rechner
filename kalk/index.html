@@ -55,10 +55,11 @@
   .form-row input { padding:0.6rem 0.7rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; }
   .form-row input:focus { outline:none; border-color:var(--blue); }
 
-  /* Tabs */
-  .tabs { display:flex; gap:0.3rem; margin-bottom:1rem; border-bottom:2px solid var(--border); overflow-x:auto; }
-  .tab-btn { padding:0.6rem 1rem; background:none; border:none; cursor:pointer; font-weight:600; color:var(--text-light); border-bottom:2px solid transparent; margin-bottom:-2px; font-family:inherit; white-space:nowrap; }
+  /* Tabs — gleicher Look wie Spurenrechner */
+  .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow-x:auto; overflow-y:hidden; }
+  .tab-btn { flex:1 0 auto; min-width:max-content; padding:0.85rem 1rem; border:none; background:var(--card); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; font-family:inherit; white-space:nowrap; }
   .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .tab-btn:hover:not(.active) { background:var(--bg); }
   .tab-content { display:none; }
   .tab-content.active { display:block; }
 
@@ -114,64 +115,82 @@
     <div class="info-banner">
       ⚠️ <strong>Beta-Version.</strong> Phase 1: Basis-Struktur steht. Mess-Eingabe, Plan-Berechnung und Pumpen-Konfiguration folgen in den nächsten Updates.
     </div>
-    <div class="card">
-      <h2>
-        <span>Kalkmanagement</span>
-      </h2>
-      <div class="tabs" id="main-tabs">
-        <button class="tab-btn active" data-tab="tab-overview">Übersicht</button>
-        <button class="tab-btn" data-tab="tab-measurements">Messungen</button>
-        <button class="tab-btn" data-tab="tab-plan">Plan</button>
-        <button class="tab-btn" data-tab="tab-history">Verlauf</button>
-        <button class="tab-btn" data-tab="tab-pumps">Pumpen</button>
-        <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
-      </div>
+    <div class="tabs" id="main-tabs">
+      <button class="tab-btn active" data-tab="tab-dashboard">📊 Dashboard</button>
+      <button class="tab-btn" data-tab="tab-kalk">🧪 Kalkhaushalt</button>
+      <button class="tab-btn" data-tab="tab-dosage">📈 Dosierung</button>
+      <button class="tab-btn" data-tab="tab-manual">💧 Manuell</button>
+      <button class="tab-btn" data-tab="tab-container">🪣 Kanister</button>
+      <button class="tab-btn" data-tab="tab-ph">📉 pH-Sensor</button>
+      <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+    </div>
 
-      <div id="tab-overview" class="tab-content active">
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="card">
         <div class="center-state">
           <div class="icon">📊</div>
-          <h3>Übersicht</h3>
-          <p>Hier kommen Live-Status, aktueller Plan und letzte Dosierungen.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">Implementierung folgt in der nächsten Iteration.</p>
+          <h3>Dashboard</h3>
+          <p>Live-Übersicht: aktueller KH/Ca-Stand, nächste Dosierung, Pumpen-Status, ESP-Verbindung.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">Inhalt folgt in der nächsten Iteration.</p>
         </div>
       </div>
-      <div id="tab-measurements" class="tab-content">
+    </div>
+    <div id="tab-kalk" class="tab-content">
+      <div class="card">
         <div class="center-state">
           <div class="icon">🧪</div>
-          <h3>Messungen</h3>
-          <p>Manuelle KH/Ca/pH-Werte eingeben, Verlauf anzeigen.</p>
+          <h3>Kalkhaushalt</h3>
+          <p>Manuelle KH/Ca-Messungen eingeben, Verbrauchsraten ermitteln, Verlauf als Diagramm.</p>
           <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
         </div>
       </div>
-      <div id="tab-plan" class="tab-content">
+    </div>
+    <div id="tab-dosage" class="tab-content">
+      <div class="card">
         <div class="center-state">
           <div class="icon">📈</div>
           <h3>Dosierplan</h3>
-          <p>24h-Vorhersage mit Tag/Nacht-Aufteilung.</p>
+          <p>24h-Vorhersage mit Tag/Nacht-Aufteilung, Ausgleichsdosierungen, Erhaltungs-Dosierung.</p>
           <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
         </div>
       </div>
-      <div id="tab-history" class="tab-content">
+    </div>
+    <div id="tab-manual" class="tab-content">
+      <div class="card">
         <div class="center-state">
-          <div class="icon">📋</div>
-          <h3>Dosierverlauf</h3>
-          <p>Welche Pumpe wann wieviel dosiert hat.</p>
+          <div class="icon">💧</div>
+          <h3>Manuelle Dosierung</h3>
+          <p>Pumpe direkt ansteuern: Pumpe wählen, ml eingeben → ESP führt aus.</p>
           <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
         </div>
       </div>
-      <div id="tab-pumps" class="tab-content">
+    </div>
+    <div id="tab-container" class="tab-content">
+      <div class="card">
+        <div class="center-state">
+          <div class="icon">🪣</div>
+          <h3>Kanister-Verwaltung</h3>
+          <p>Füllstand der vier Lösungs-Behälter (Ca, Mg, KH-Tag, KH-Nacht), Nachfüll-Bestätigung.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+    </div>
+    <div id="tab-ph" class="tab-content">
+      <div class="card">
+        <div class="center-state">
+          <div class="icon">📉</div>
+          <h3>pH-Sensor</h3>
+          <p>pH-Verlauf, Kalibrierung gegen pH-4 und pH-7 Puffer, Schwellwert für KH-Tag/Nacht-Schaltung.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+    </div>
+    <div id="tab-settings" class="tab-content">
+      <div class="card">
         <div class="center-state">
           <div class="icon">⚙️</div>
-          <h3>Pumpen-Kalibrierung</h3>
-          <p>ml pro Schritt, Anti-Drip, Container-Levels.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
-        </div>
-      </div>
-      <div id="tab-settings" class="tab-content">
-        <div class="center-state">
-          <div class="icon">🔧</div>
-          <h3>Aquarium-Einstellungen</h3>
-          <p>Volumen, Targets, Tag/Nacht-Zeiten, Verbrauchsraten.</p>
+          <h3>Einstellungen</h3>
+          <p>Aquariumvolumen, KH/Ca-Targets, max. tägliche Änderung, KH-Tag/Nacht-Zeiten, Anti-Drip, Pumpen-Kalibrierung.</p>
           <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
         </div>
       </div>
@@ -187,10 +206,8 @@
 <script type="module">
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
-    document.querySelectorAll("main > .card").forEach(c => c.style.display = "none");
-    const v = document.getElementById("view-error");
+    showView("view-error");
     document.getElementById("error-message").textContent = msg;
-    v.style.display = "block";
   }
   window.addEventListener("error", (e) => showError("JS-Fehler: " + (e.message || e.error)));
   window.addEventListener("unhandledrejection", (e) => showError("Promise-Fehler: " + (e.reason?.message || e.reason)));
