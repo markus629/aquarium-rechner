@@ -175,10 +175,6 @@
         <h2>Neue Messung eintragen</h2>
         <div class="inline-form">
           <div class="form-row">
-            <label>Datum</label>
-            <input type="date" id="kalk-date">
-          </div>
-          <div class="form-row">
             <label>KH (°dKH)</label>
             <input type="number" id="kalk-kh" step="0.1" min="0" max="20" placeholder="z. B. 7.8">
           </div>
@@ -189,7 +185,7 @@
           <button class="btn btn-primary" id="kalk-save">Speichern</button>
         </div>
         <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.7rem">
-          Mindestens einen Wert eingeben. Felder können einzeln befüllt werden — leere Felder werden ignoriert.
+          Eingetragene Werte gelten ab <strong>jetzt</strong>. Mindestens einer der Werte muss befüllt sein.
         </p>
       </div>
 
@@ -477,25 +473,11 @@
   });
 
   // ---------- Kalkhaushalt: Messungen erfassen & verlauf ----------
-  function fmtDate(ts) {
+  function fmtDateTime(ts) {
     if (!ts) return "—";
     const d = new Date(ts * 1000);
-    return d.toLocaleDateString("de-DE", { year: "numeric", month: "2-digit", day: "2-digit" });
+    return d.toLocaleString("de-DE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
-  function todayISO() {
-    const d = new Date();
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  }
-  function isoToTs(iso) {
-    // ISO YYYY-MM-DD → Unix-Sekunden um 12:00 lokaler Zeit (Mittag, neutraler Tag)
-    if (!iso) return Math.floor(Date.now() / 1000);
-    const [y, m, d] = iso.split("-").map(Number);
-    return Math.floor(new Date(y, m - 1, d, 12, 0, 0).getTime() / 1000);
-  }
-
-  // Datum-Eingabe initial mit heute füllen
-  const kalkDateEl = document.getElementById("kalk-date");
-  if (kalkDateEl) kalkDateEl.value = todayISO();
 
   // Collapsibles
   document.querySelectorAll(".collapsible-head").forEach(h => {
@@ -514,7 +496,7 @@
     }
     tbody.innerHTML = items.map(m => `
       <tr>
-        <td>${fmtDate(m.timestamp)}</td>
+        <td>${fmtDateTime(m.timestamp)}</td>
         <td class="num">${Number(m.value).toFixed(fractionDigits)}</td>
         <td class="act">
           <button class="row-del" data-del-id="${m.id}" data-del-type="${type}" title="Löschen">✕</button>
@@ -552,14 +534,13 @@
   }
 
   document.getElementById("kalk-save").onclick = async () => {
-    const dateIso = document.getElementById("kalk-date").value;
     const kh = parseFloat(document.getElementById("kalk-kh").value);
     const ca = parseFloat(document.getElementById("kalk-ca").value);
     if (isNaN(kh) && isNaN(ca)) {
       alert("Bitte mindestens einen Wert (KH oder Ca) eingeben.");
       return;
     }
-    const ts = isoToTs(dateIso);
+    const ts = Math.floor(Date.now() / 1000); // jetzt
     const btn = document.getElementById("kalk-save");
     btn.disabled = true;
     try {
