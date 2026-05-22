@@ -324,6 +324,15 @@
       </div>
 
       <div class="card">
+        <h2>Pumpen-Kalibrierung</h2>
+        <p style="color:var(--text-light);margin-bottom:1rem">
+          <strong>ml pro Motor-Schritt</strong> ist der Wert, der angibt wieviel Flüssigkeit ein Motor-Schritt fördert.
+          Wird hier eingetragen — kann später aus einem Kalibrier-Lauf am ESP übernommen werden.
+        </p>
+        <div id="pump-calibration-list"></div>
+      </div>
+
+      <div class="card">
         <h2>Letzte Dosierungen</h2>
         <table class="data-table">
           <thead><tr><th>Zeit</th><th>Pumpe</th><th class="num">ml</th><th>Art</th></tr></thead>
@@ -720,6 +729,30 @@
     } catch (e) { alert("Fehler: " + e.message); }
   };
 
+  async function refreshPumpCalibration() {
+    try {
+      const pumps = await getPumps();
+      const wrap = document.getElementById("pump-calibration-list");
+      wrap.innerHTML = `<div class="form-grid">` + pumps.map((p, i) => {
+        const lastCal = p.lastCalibrationDate
+          ? new Date(p.lastCalibrationDate * 1000).toLocaleDateString("de-DE")
+          : "noch nicht kalibriert";
+        return `
+          <div class="form-row">
+            <label>${p.name || PUMP_NAMES[i]} — ml pro Motor-Schritt <span class="hint">${lastCal}</span></label>
+            <input type="number" data-mlperstep="${i}" value="${p.mlPerStep || 0}" step="0.0001" min="0">
+          </div>`;
+      }).join("") + `</div>`;
+      wrap.querySelectorAll("[data-mlperstep]").forEach(inp => {
+        inp.addEventListener("change", async () => {
+          const i = parseInt(inp.dataset.mlperstep, 10);
+          await savePump(i, { mlPerStep: parseFloat(inp.value) || 0, lastCalibrationDate: Math.floor(Date.now() / 1000) });
+          await refreshPumpCalibration();
+        });
+      });
+    } catch (e) { console.warn("Pumpen-Kalibrierung:", e); }
+  }
+
   async function refreshDosings() {
     try {
       const items = await listDosings(50);
@@ -773,10 +806,6 @@
                 <label>Aktueller Füllstand (ml)</label>
                 <input type="number" data-level="${i}" value="${lvl}" step="10" min="0">
               </div>
-              <div class="form-row">
-                <label>Pumpen-Kalibrierung (ml pro Motor-Schritt)</label>
-                <input type="number" data-mlperstep="${i}" value="${p.mlPerStep || 0}" step="0.0001" min="0">
-              </div>
             </div>
           </div>`;
       }).join("");
@@ -809,12 +838,6 @@
           newLevels[i] = parseFloat(inp.value) || 0;
           await saveSettings({ containerLevel: newLevels });
           await refreshContainers();
-        });
-      });
-      container.querySelectorAll("[data-mlperstep]").forEach(inp => {
-        inp.addEventListener("change", async () => {
-          const i = parseInt(inp.dataset.mlperstep, 10);
-          await savePump(i, { mlPerStep: parseFloat(inp.value) || 0 });
         });
       });
     } catch (e) { console.warn("Container laden:", e); }
@@ -967,6 +990,7 @@
       refreshMeasurements(),
       refreshPh(),
       refreshDosings(),
+      refreshPumpCalibration(),
       refreshContainers(),
       refreshPlan(),
       refreshDashboard()
