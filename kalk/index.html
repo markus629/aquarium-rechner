@@ -64,6 +64,32 @@
   .save-status { font-size:0.78rem; color:var(--green); opacity:0; transition:opacity 0.2s; margin-left:0.5rem; }
   .save-status.show { opacity:1; }
 
+  /* Tabellen-Look */
+  .data-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+  .data-table th { text-align:left; padding:0.5rem 0.7rem; background:var(--bg); color:var(--text-light); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid var(--border); }
+  .data-table th.num, .data-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .data-table th.act, .data-table td.act { text-align:center; width:60px; }
+  .data-table td { padding:0.5rem 0.7rem; border-bottom:1px solid #f0f4f8; }
+  .data-table tr:hover td { background:#fafbfc; }
+  .data-table .empty { text-align:center; color:var(--text-light); padding:1.5rem !important; font-style:italic; }
+  .row-del { background:none; border:none; color:var(--red); cursor:pointer; font-size:1rem; padding:0.2rem 0.4rem; border-radius:4px; opacity:0.5; }
+  .row-del:hover { background:#fadbd8; opacity:1; }
+
+  /* Collapsible */
+  .collapsible { border:1px solid var(--border); border-radius:8px; margin-bottom:0.8rem; overflow:hidden; }
+  .collapsible-head { padding:0.7rem 1rem; background:var(--bg); cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.92rem; }
+  .collapsible-head:hover { background:#e4e9ef; }
+  .collapsible-head .arrow { font-size:0.8rem; transition:transform 0.2s; }
+  .collapsible.open .arrow { transform:rotate(90deg); }
+  .collapsible-body { display:none; }
+  .collapsible.open .collapsible-body { display:block; }
+  .collapsible-body .data-table th, .collapsible-body .data-table td:first-child { padding-left:1rem; }
+
+  /* Input-Formular Kalkhaushalt */
+  .inline-form { display:flex; gap:0.7rem; flex-wrap:wrap; align-items:flex-end; }
+  .inline-form .form-row { margin-bottom:0; flex:1 1 140px; }
+  .inline-form button { padding:0.6rem 1.2rem; height:fit-content; }
+
   /* Tabs — gleicher Look wie Spurenrechner */
   .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow-x:auto; overflow-y:hidden; }
   .tab-btn { flex:1 0 auto; min-width:max-content; padding:0.85rem 1rem; border:none; background:var(--card); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; font-family:inherit; white-space:nowrap; }
@@ -146,11 +172,54 @@
     </div>
     <div id="tab-kalk" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">🧪</div>
-          <h3>Kalkhaushalt</h3>
-          <p>Manuelle KH/Ca-Messungen eingeben, Verbrauchsraten ermitteln, Verlauf als Diagramm.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        <h2>Neue Messung eintragen</h2>
+        <div class="inline-form">
+          <div class="form-row">
+            <label>Datum</label>
+            <input type="date" id="kalk-date">
+          </div>
+          <div class="form-row">
+            <label>KH (°dKH)</label>
+            <input type="number" id="kalk-kh" step="0.1" min="0" max="20" placeholder="z. B. 7.8">
+          </div>
+          <div class="form-row">
+            <label>Calcium (mg/L)</label>
+            <input type="number" id="kalk-ca" step="1" min="0" max="1000" placeholder="z. B. 420">
+          </div>
+          <button class="btn btn-primary" id="kalk-save">Speichern</button>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.7rem">
+          Mindestens einen Wert eingeben. Felder können einzeln befüllt werden — leere Felder werden ignoriert.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Verlauf</h2>
+
+        <div class="collapsible open" id="coll-kh">
+          <div class="collapsible-head" data-coll="coll-kh">
+            <span>KH-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="kalk-kh-count">0</span>)</span></span>
+            <span class="arrow">▶</span>
+          </div>
+          <div class="collapsible-body">
+            <table class="data-table">
+              <thead><tr><th>Datum</th><th class="num">°dKH</th><th class="act">Löschen</th></tr></thead>
+              <tbody id="kalk-kh-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="collapsible open" id="coll-ca">
+          <div class="collapsible-head" data-coll="coll-ca">
+            <span>Calcium-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="kalk-ca-count">0</span>)</span></span>
+            <span class="arrow">▶</span>
+          </div>
+          <div class="collapsible-body">
+            <table class="data-table">
+              <thead><tr><th>Datum</th><th class="num">mg/L</th><th class="act">Löschen</th></tr></thead>
+              <tbody id="kalk-ca-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -304,7 +373,10 @@
 
 <script type="module">
   import { initAuthSync } from "/assets/auth-sync.js";
-  import { getAuthInstance, getSettings, saveSettings } from "/kalk/firestore-store.js";
+  import {
+    getAuthInstance, getSettings, saveSettings,
+    addMeasurement, listMeasurements, deleteMeasurement
+  } from "/kalk/firestore-store.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
@@ -404,11 +476,111 @@
     });
   });
 
+  // ---------- Kalkhaushalt: Messungen erfassen & verlauf ----------
+  function fmtDate(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString("de-DE", { year: "numeric", month: "2-digit", day: "2-digit" });
+  }
+  function todayISO() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function isoToTs(iso) {
+    // ISO YYYY-MM-DD → Unix-Sekunden um 12:00 lokaler Zeit (Mittag, neutraler Tag)
+    if (!iso) return Math.floor(Date.now() / 1000);
+    const [y, m, d] = iso.split("-").map(Number);
+    return Math.floor(new Date(y, m - 1, d, 12, 0, 0).getTime() / 1000);
+  }
+
+  // Datum-Eingabe initial mit heute füllen
+  const kalkDateEl = document.getElementById("kalk-date");
+  if (kalkDateEl) kalkDateEl.value = todayISO();
+
+  // Collapsibles
+  document.querySelectorAll(".collapsible-head").forEach(h => {
+    h.onclick = () => {
+      const c = document.getElementById(h.dataset.coll);
+      if (c) c.classList.toggle("open");
+    };
+  });
+
+  function renderMeasurementTable(tbodyId, items, fractionDigits, type) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td class="empty" colspan="3">Keine Messungen erfasst</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(m => `
+      <tr>
+        <td>${fmtDate(m.timestamp)}</td>
+        <td class="num">${Number(m.value).toFixed(fractionDigits)}</td>
+        <td class="act">
+          <button class="row-del" data-del-id="${m.id}" data-del-type="${type}" title="Löschen">✕</button>
+        </td>
+      </tr>
+    `).join("");
+    tbody.querySelectorAll("[data-del-id]").forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm("Diese Messung wirklich löschen?")) return;
+        try {
+          await deleteMeasurement(btn.dataset.delId);
+          await refreshMeasurements(btn.dataset.delType);
+        } catch (e) {
+          alert("Fehler: " + e.message);
+        }
+      };
+    });
+  }
+
+  async function refreshMeasurements(typeFilter) {
+    try {
+      if (!typeFilter || typeFilter === "kh") {
+        const kh = await listMeasurements("kh", 200);
+        renderMeasurementTable("kalk-kh-tbody", kh, 1, "kh");
+        document.getElementById("kalk-kh-count").textContent = kh.length;
+      }
+      if (!typeFilter || typeFilter === "ca") {
+        const ca = await listMeasurements("ca", 200);
+        renderMeasurementTable("kalk-ca-tbody", ca, 0, "ca");
+        document.getElementById("kalk-ca-count").textContent = ca.length;
+      }
+    } catch (e) {
+      console.warn("Messungen laden:", e);
+    }
+  }
+
+  document.getElementById("kalk-save").onclick = async () => {
+    const dateIso = document.getElementById("kalk-date").value;
+    const kh = parseFloat(document.getElementById("kalk-kh").value);
+    const ca = parseFloat(document.getElementById("kalk-ca").value);
+    if (isNaN(kh) && isNaN(ca)) {
+      alert("Bitte mindestens einen Wert (KH oder Ca) eingeben.");
+      return;
+    }
+    const ts = isoToTs(dateIso);
+    const btn = document.getElementById("kalk-save");
+    btn.disabled = true;
+    try {
+      if (!isNaN(kh) && kh > 0) await addMeasurement({ type: "kh", value: kh, timestamp: ts, source: "manual" });
+      if (!isNaN(ca) && ca > 0) await addMeasurement({ type: "ca", value: ca, timestamp: ts, source: "manual" });
+      document.getElementById("kalk-kh").value = "";
+      document.getElementById("kalk-ca").value = "";
+      await refreshMeasurements();
+    } catch (e) {
+      alert("Fehler beim Speichern: " + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
   // Auth-Status beobachten — der EINZIGE State-Treiber
   getAuthInstance().onAuthStateChanged(async (user) => {
     if (user) {
       showView("view-main");
       await loadSettingsIntoForm();
+      await refreshMeasurements();
     } else {
       settingsLoaded = false;
       showView("view-login");
