@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dosierpumpe — Aquarium Rechner</title>
+<style>
+  :root {
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --text-light: #7a8896;
+    --border: #e1e8ed;
+    --blue: #3498db;
+    --blue-dark: #2980b9;
+    --blue-light: #e8f4fb;
+    --green: #27ae60;
+    --orange: #e8732a;
+    --red: #c0392b;
+    --shadow: 0 2px 8px rgba(0,0,0,0.05);
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  input[type="number"] { -moz-appearance:textfield; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+
+  header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; }
+  header h1 { font-size:1.6rem; font-weight:700; }
+  header p { opacity:0.85; font-size:0.9rem; margin-top:0.25rem; }
+  footer { text-align:center; padding:1.5rem; font-size:0.8rem; color:var(--text-light); }
+  .back-btn { position:absolute; top:1rem; left:1rem; width:36px; height:36px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5px; background:rgba(255,255,255,0.15); border:none; border-radius:8px; cursor:pointer; padding:0; text-decoration:none; transition:background 0.15s; z-index:2; }
+  .back-btn:hover { background:rgba(255,255,255,0.28); }
+  .back-btn span { display:block; width:18px; height:2px; background:#fff; border-radius:2px; }
+
+  main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
+  .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
+  .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
+  .card h3 { font-size:0.95rem; color:var(--text-light); margin:1rem 0 0.5rem; text-transform:uppercase; letter-spacing:0.05em; }
+
+  .empty-state { text-align:center; padding:2rem 1rem; color:var(--text-light); }
+  .empty-state .icon { font-size:3rem; margin-bottom:0.5rem; }
+  .empty-state h3 { color:var(--text); margin-bottom:0.5rem; text-transform:none; letter-spacing:0; font-size:1.1rem; }
+
+  .btn { padding:0.6rem 1.2rem; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; font-family:inherit; transition:transform 0.15s, box-shadow 0.15s; }
+  .btn-primary { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; box-shadow:0 4px 12px rgba(52,152,219,0.3); }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(52,152,219,0.4); }
+  .btn-ghost { background:#fff; border:2px solid var(--border); color:var(--text); }
+  .btn-ghost:hover { border-color:var(--blue); color:var(--blue-dark); }
+  .btn-danger { background:#fff; border:2px solid #fadbd8; color:var(--red); }
+  .btn-danger:hover { background:#fadbd8; }
+
+  .login-prompt { text-align:center; padding:3rem 1rem; color:var(--text-light); }
+  .login-prompt .icon { font-size:3rem; margin-bottom:0.5rem; }
+  .login-prompt h3 { color:var(--text); margin-bottom:0.5rem; }
+  .login-prompt p { max-width:380px; margin:0 auto 1rem; line-height:1.5; }
+
+  /* Device-Liste */
+  .device-list { display:flex; flex-direction:column; gap:0.75rem; }
+  .device-item { display:flex; align-items:center; gap:1rem; padding:1rem; border:1.5px solid var(--border); border-radius:10px; cursor:pointer; transition:border-color 0.15s, transform 0.15s; }
+  .device-item:hover { border-color:var(--blue); transform:translateY(-1px); }
+  .device-item.online .status-dot { background:var(--green); }
+  .device-status { display:flex; flex-direction:column; align-items:center; gap:0.3rem; }
+  .status-dot { width:10px; height:10px; border-radius:50%; background:#aabbcc; }
+  .status-label { font-size:0.7rem; color:var(--text-light); }
+  .device-info { flex:1; }
+  .device-info .name { font-weight:700; font-size:1.05rem; }
+  .device-info .meta { font-size:0.82rem; color:var(--text-light); }
+  .device-actions { display:flex; gap:0.4rem; }
+  .icon-btn { width:32px; height:32px; border:1px solid var(--border); background:#fff; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.95rem; }
+  .icon-btn:hover { border-color:var(--blue); }
+  .icon-btn.danger:hover { border-color:var(--red); color:var(--red); }
+
+  /* Modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem; }
+  .modal { background:#fff; border-radius:14px; padding:1.5rem; max-width:420px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.2); position:relative; }
+  .modal h3 { margin-bottom:1rem; color:var(--text); }
+  .modal label { display:block; font-size:0.78rem; font-weight:600; color:#5a6776; margin:0.7rem 0 0.3rem; }
+  .modal input[type=text], .modal input[type=number] { width:100%; padding:0.55rem 0.7rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; box-sizing:border-box; }
+  .modal input:focus { outline:none; border-color:var(--blue); }
+  .modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1.2rem; }
+  .modal-close { position:absolute; top:0.6rem; right:0.6rem; width:30px; height:30px; border:none; background:none; cursor:pointer; font-size:1.4rem; color:var(--text-light); border-radius:50%; }
+  .modal-close:hover { background:#f0f4f8; }
+
+  /* Tabs (für die Device-Detail-Ansicht — später) */
+  .tabs { display:flex; gap:0.3rem; margin-bottom:1rem; border-bottom:2px solid var(--border); overflow-x:auto; }
+  .tab-btn { padding:0.6rem 1rem; background:none; border:none; cursor:pointer; font-weight:600; color:var(--text-light); border-bottom:2px solid transparent; margin-bottom:-2px; font-family:inherit; white-space:nowrap; }
+  .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Toast */
+  .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#2c3e50; color:#fff; padding:0.7rem 1.2rem; border-radius:8px; font-size:0.9rem; z-index:1001; }
+  .toast.error { background:var(--red); }
+  .toast.success { background:var(--green); }
+
+  /* Hinweis-Banner */
+  .info-banner { background:var(--blue-light); border-left:4px solid var(--blue); padding:0.8rem 1rem; border-radius:6px; font-size:0.88rem; color:var(--blue-dark); margin-bottom:1rem; }
+  .info-banner strong { color:var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
+  <h1>💧 Dosierpumpe</h1>
+  <p>Ca, Mg und KH (Tag/Nacht) automatisch dosieren</p>
+</header>
+
+<main>
+  <!-- Login-Hinweis: zeigt sich wenn User nicht eingeloggt -->
+  <div id="login-required" class="card" style="display:none">
+    <div class="login-prompt">
+      <div class="icon">🔐</div>
+      <h3>Anmeldung erforderlich</h3>
+      <p>Die Dosierpumpe braucht ein Konto, damit deine Daten zwischen Geräten und dem ESP synchron bleiben.</p>
+      <p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p>
+    </div>
+  </div>
+
+  <!-- Beta-Hinweis -->
+  <div id="beta-banner" class="info-banner" style="display:none">
+    ⚠️ <strong>Beta-Version.</strong> Phase 1: Web-UI + Berechnungs-Logik. Die ESP-Anbindung (Phase 2 + 3) folgt in den nächsten Updates. Aktuell dient diese Seite primär zum Erfassen und Visualisieren — die Pumpen werden noch von der ESP-Original-UI gesteuert.
+  </div>
+
+  <!-- Device-Übersicht (wenn eingeloggt + keine Device-Detail-Ansicht offen) -->
+  <div id="device-list-view" style="display:none">
+    <div class="card">
+      <h2>
+        <span>Meine Aquarien</span>
+        <button class="btn btn-primary" id="add-device-btn">+ Aquarium anlegen</button>
+      </h2>
+      <div id="device-list-container">
+        <div class="empty-state">
+          <div class="icon">🐠</div>
+          <h3>Noch kein Aquarium angelegt</h3>
+          <p>Lege dein erstes Aquarium an, um Messwerte zu erfassen und Dosierpläne zu berechnen.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device-Detail-Ansicht (Tabs) — kommt mit den nächsten Iterationen -->
+  <div id="device-detail-view" style="display:none">
+    <div class="card">
+      <h2>
+        <span id="device-name-display">—</span>
+        <button class="btn btn-ghost" id="back-to-list-btn">← Zurück</button>
+      </h2>
+      <div class="tabs" id="device-tabs">
+        <button class="tab-btn active" data-tab="tab-overview">Übersicht</button>
+        <button class="tab-btn" data-tab="tab-measurements">Messungen</button>
+        <button class="tab-btn" data-tab="tab-plan">Plan</button>
+        <button class="tab-btn" data-tab="tab-history">Verlauf</button>
+        <button class="tab-btn" data-tab="tab-pumps">Pumpen</button>
+        <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
+      </div>
+
+      <div id="tab-overview" class="tab-content active">
+        <div class="empty-state">
+          <div class="icon">📊</div>
+          <h3>Übersicht</h3>
+          <p>Hier kommen Live-Status, aktueller Plan und letzte Dosierungen.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">Implementierung folgt in der nächsten Iteration.</p>
+        </div>
+      </div>
+      <div id="tab-measurements" class="tab-content">
+        <div class="empty-state">
+          <div class="icon">🧪</div>
+          <h3>Messungen</h3>
+          <p>Manuelle KH/Ca/pH-Werte eingeben, Verlauf anzeigen.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+      <div id="tab-plan" class="tab-content">
+        <div class="empty-state">
+          <div class="icon">📈</div>
+          <h3>Dosierplan</h3>
+          <p>24h-Vorhersage mit Tag/Nacht-Aufteilung.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+      <div id="tab-history" class="tab-content">
+        <div class="empty-state">
+          <div class="icon">📋</div>
+          <h3>Dosierverlauf</h3>
+          <p>Welche Pumpe wann wieviel dosiert hat.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+      <div id="tab-pumps" class="tab-content">
+        <div class="empty-state">
+          <div class="icon">⚙️</div>
+          <h3>Pumpen-Kalibrierung</h3>
+          <p>ml pro Schritt, Anti-Drip, Container-Levels.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+      <div id="tab-settings" class="tab-content">
+        <div class="empty-state">
+          <div class="icon">🔧</div>
+          <h3>Aquarium-Einstellungen</h3>
+          <p>Volumen, Targets, Tag/Nacht-Zeiten, Verbrauchsraten.</p>
+          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
+  <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Mit Login werden deine Daten verschlüsselt bei Google Firebase (Server EU) gespeichert. Ohne Login ist diese Seite nicht nutzbar.</span>
+</footer>
+
+<!-- Firebase Auth + Sync (Login-Modal kommt aus auth-sync.js) -->
+<script type="module">
+  import { initAuthSync } from "../assets/auth-sync.js";
+  import {
+    listDevices, createDevice, deleteDevice, getDevice, getAuthInstance
+  } from "./firestore-store.js";
+
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  function toast(msg, type = "") {
+    const t = document.createElement("div");
+    t.className = "toast" + (type ? " " + type : "");
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = "0"; setTimeout(() => t.remove(), 300); }, 2800);
+  }
+
+  function showSection(id) {
+    ["login-required", "device-list-view", "device-detail-view"].forEach(s => {
+      const el = document.getElementById(s);
+      if (el) el.style.display = s === id ? "block" : "none";
+    });
+    const beta = document.getElementById("beta-banner");
+    if (beta) beta.style.display = (id === "device-list-view" || id === "device-detail-view") ? "block" : "none";
+  }
+
+  async function refreshDeviceList() {
+    try {
+      const devices = await listDevices();
+      const container = $("#device-list-container");
+      if (devices.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">🐠</div>
+            <h3>Noch kein Aquarium angelegt</h3>
+            <p>Lege dein erstes Aquarium an, um Messwerte zu erfassen und Dosierpläne zu berechnen.</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = '<div class="device-list">' + devices.map(d => `
+        <div class="device-item ${d.online ? "online" : ""}" data-device-id="${d.id}">
+          <div class="device-status">
+            <div class="status-dot"></div>
+            <div class="status-label">${d.online ? "online" : "offline"}</div>
+          </div>
+          <div class="device-info">
+            <div class="name">${escapeHtml(d.name || "Aquarium")}</div>
+            <div class="meta">${d.aquariumVolume || "?"} L · ${d.lastSeen ? "zuletzt gesehen " + relativeTime(d.lastSeen) : "noch nie verbunden"}</div>
+          </div>
+          <div class="device-actions">
+            <button class="icon-btn danger" data-action="delete" data-device-id="${d.id}" title="Löschen">🗑️</button>
+          </div>
+        </div>
+      `).join('') + '</div>';
+
+      // Event-Handler binden
+      container.querySelectorAll(".device-item").forEach(el => {
+        el.onclick = (e) => {
+          if (e.target.closest("[data-action]")) return;
+          openDevice(el.dataset.deviceId);
+        };
+      });
+      container.querySelectorAll("[data-action='delete']").forEach(btn => {
+        btn.onclick = async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.deviceId;
+          if (!confirm("Aquarium wirklich löschen? Alle Mess- und Dosier-Daten gehen verloren.")) return;
+          try {
+            await deleteDevice(id);
+            toast("Aquarium gelöscht.", "success");
+            refreshDeviceList();
+          } catch (e) {
+            toast("Fehler: " + e.message, "error");
+          }
+        };
+      });
+    } catch (e) {
+      console.error(e);
+      toast("Konnte Geräte nicht laden: " + e.message, "error");
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function relativeTime(ts) {
+    const seconds = ts.seconds || ts._seconds || (typeof ts === "number" ? ts : 0);
+    const diff = Date.now() / 1000 - seconds;
+    if (diff < 60) return "gerade eben";
+    if (diff < 3600) return Math.floor(diff / 60) + " Min";
+    if (diff < 86400) return Math.floor(diff / 3600) + " h";
+    return Math.floor(diff / 86400) + " Tage";
+  }
+
+  // ---------- Aquarium-anlegen-Modal ----------
+  function openCreateDeviceModal() {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal">
+        <button class="modal-close" title="Schließen">&times;</button>
+        <h3>Neues Aquarium</h3>
+        <label>Name</label>
+        <input type="text" id="dev-name" placeholder="Riff-Aquarium" autofocus>
+        <label>Volumen (Liter)</label>
+        <input type="number" id="dev-volume" value="450" min="1" step="1">
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="dev-cancel">Abbrechen</button>
+          <button class="btn btn-primary" id="dev-save">Anlegen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+    overlay.querySelector(".modal-close").onclick = close;
+    overlay.querySelector("#dev-cancel").onclick = close;
+    overlay.querySelector("#dev-save").onclick = async () => {
+      const name = overlay.querySelector("#dev-name").value.trim();
+      const volume = parseFloat(overlay.querySelector("#dev-volume").value) || 450;
+      if (!name) { toast("Bitte einen Namen eingeben.", "error"); return; }
+      try {
+        await createDevice({ name, aquariumVolume: volume });
+        toast("Aquarium angelegt.", "success");
+        close();
+        refreshDeviceList();
+      } catch (e) {
+        toast("Fehler: " + e.message, "error");
+      }
+    };
+    setTimeout(() => overlay.querySelector("#dev-name").focus(), 50);
+  }
+
+  // ---------- Device-Detail (Skelett) ----------
+  async function openDevice(deviceId) {
+    try {
+      const dev = await getDevice(deviceId);
+      if (!dev) { toast("Aquarium nicht gefunden.", "error"); return; }
+      $("#device-name-display").textContent = dev.name || "Aquarium";
+      showSection("device-detail-view");
+      // Tab-Handler
+      $$("#device-tabs .tab-btn").forEach(btn => {
+        btn.onclick = () => {
+          $$("#device-tabs .tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+          $$(".tab-content").forEach(c => c.classList.toggle("active", c.id === btn.dataset.tab));
+        };
+      });
+    } catch (e) {
+      toast("Fehler: " + e.message, "error");
+    }
+  }
+
+  $("#add-device-btn").onclick = openCreateDeviceModal;
+  $("#back-to-list-btn").onclick = () => { showSection("device-list-view"); refreshDeviceList(); };
+
+  // ---------- Init: Auth-Sync (loginOnly) ----------
+  await initAuthSync({
+    calculatorId: "dosier",
+    calculatorName: "Dosierpumpe",
+    getLocalState: () => ({}),
+    applyState: () => {},
+    hostElementSelector: "header",
+    theme: "dark",
+    loginOnly: true
+  });
+
+  // Auth-Status beobachten
+  const auth = getAuthInstance();
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      showSection("device-list-view");
+      refreshDeviceList();
+    } else {
+      showSection("login-required");
+    }
+  });
+</script>
+</body>
+</html>

@@ -60,9 +60,27 @@
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
   }
+  @media (max-width: 900px) {
+    .cards { grid-template-columns: 1fr 1fr; }
+  }
   @media (max-width: 600px) {
     .cards { grid-template-columns: 1fr; }
     h1 { font-size: 1.7rem; }
+  }
+  .card.beta { position: relative; }
+  .card.beta::after {
+    content: "Beta";
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+    background: #f39c12;
+    color: #fff;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
   .card {
     background: var(--card);
@@ -120,6 +138,11 @@
       <a class="card" href="spurenrechner/">
         <h2>Spurenelemente Rechner</h2>
         <p>Plant Tagesdosen einzelner Spurenelemente basierend auf deinen ICP-Messwerten und der Historie.</p>
+        <span class="arrow">Öffnen →</span>
+      </a>
+      <a class="card beta" href="dosier/">
+        <h2>Dosierpumpe</h2>
+        <p>Ca, Mg und KH (Tag/Nacht) automatisch dosieren. Plan-Berechnung, Verlauf, Steuerung deiner ESP-Dosierpumpe.</p>
         <span class="arrow">Öffnen →</span>
       </a>
     </div>
