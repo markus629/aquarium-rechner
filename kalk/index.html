@@ -49,11 +49,20 @@
   .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(52,152,219,0.4); }
   .btn-ghost { background:#fff; border:2px solid var(--border); color:var(--text); }
 
-  /* Setup-Form */
+  /* Form */
   .form-row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.9rem; }
   .form-row label { font-size:0.8rem; font-weight:600; color:#5a6776; }
-  .form-row input { padding:0.6rem 0.7rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; }
-  .form-row input:focus { outline:none; border-color:var(--blue); }
+  .form-row .hint { font-size:0.72rem; color:var(--text-light); font-weight:400; }
+  .form-row input[type=text], .form-row input[type=number] { padding:0.6rem 0.7rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; }
+  .form-row input[type=text]:focus, .form-row input[type=number]:focus { outline:none; border-color:var(--blue); }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0.9rem 1.2rem; }
+  .form-toggle { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; }
+  .form-toggle input { width:18px; height:18px; cursor:pointer; flex-shrink:0; }
+  .form-toggle label { font-weight:600; font-size:0.88rem; cursor:pointer; flex:1; }
+  .section-title { font-size:0.78rem; font-weight:700; color:var(--blue-dark); text-transform:uppercase; letter-spacing:0.06em; margin:1.3rem 0 0.7rem; padding-bottom:0.3rem; border-bottom:1px solid var(--blue-light); }
+  .section-title:first-child { margin-top:0; }
+  .save-status { font-size:0.78rem; color:var(--green); opacity:0; transition:opacity 0.2s; margin-left:0.5rem; }
+  .save-status.show { opacity:1; }
 
   /* Tabs — gleicher Look wie Spurenrechner */
   .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow-x:auto; overflow-y:hidden; }
@@ -116,13 +125,13 @@
       ⚠️ <strong>Beta-Version.</strong> Phase 1: Basis-Struktur steht. Mess-Eingabe, Plan-Berechnung und Pumpen-Konfiguration folgen in den nächsten Updates.
     </div>
     <div class="tabs" id="main-tabs">
-      <button class="tab-btn active" data-tab="tab-dashboard">📊 Dashboard</button>
-      <button class="tab-btn" data-tab="tab-kalk">🧪 Kalkhaushalt</button>
-      <button class="tab-btn" data-tab="tab-dosage">📈 Dosierung</button>
-      <button class="tab-btn" data-tab="tab-manual">💧 Manuell</button>
-      <button class="tab-btn" data-tab="tab-container">🪣 Kanister</button>
-      <button class="tab-btn" data-tab="tab-ph">📉 pH-Sensor</button>
-      <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+      <button class="tab-btn active" data-tab="tab-dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="tab-kalk">Kalkhaushalt</button>
+      <button class="tab-btn" data-tab="tab-dosage">Dosierung</button>
+      <button class="tab-btn" data-tab="tab-manual">Manuell</button>
+      <button class="tab-btn" data-tab="tab-container">Kanister</button>
+      <button class="tab-btn" data-tab="tab-ph">pH-Sensor</button>
+      <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
     </div>
 
     <div id="tab-dashboard" class="tab-content active">
@@ -187,11 +196,101 @@
     </div>
     <div id="tab-settings" class="tab-content">
       <div class="card">
-        <div class="center-state">
-          <div class="icon">⚙️</div>
-          <h3>Einstellungen</h3>
-          <p>Aquariumvolumen, KH/Ca-Targets, max. tägliche Änderung, KH-Tag/Nacht-Zeiten, Anti-Drip, Pumpen-Kalibrierung.</p>
-          <p style="font-size:0.85rem;margin-top:0.5rem">In Arbeit.</p>
+        <h2>Einstellungen<span class="save-status" id="settings-save-status">✓ gespeichert</span></h2>
+        <p style="font-size:0.82rem;color:var(--text-light);margin-bottom:1rem">Änderungen werden automatisch gespeichert (sobald du das Feld verlässt).</p>
+
+        <div class="section-title">Aquarium &amp; Zielwerte</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Aquariumvolumen (Liter)</label>
+            <input type="number" data-setting="aquariumVolume" step="1" min="10" max="5000">
+          </div>
+          <div class="form-row">
+            <label>Ziel KH (°dKH)</label>
+            <input type="number" data-setting="targetKH" step="0.1" min="0" max="20">
+          </div>
+          <div class="form-row">
+            <label>Ziel Calcium (mg/L)</label>
+            <input type="number" data-setting="targetCalcium" step="1" min="0" max="1000">
+          </div>
+        </div>
+
+        <div class="section-title">Maximale Tagesänderung</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>KH (°dKH/Tag) <span class="hint">Maximale Erhöhung/Senkung pro Tag</span></label>
+            <input type="number" data-setting="maxDailyChangeKH" step="0.1" min="0" max="3">
+          </div>
+          <div class="form-row">
+            <label>Calcium (mg/L/Tag)</label>
+            <input type="number" data-setting="maxDailyChangeCalcium" step="1" min="0" max="30">
+          </div>
+          <div class="form-row">
+            <label>Magnesium-Verhältnis (% von Ca-Dosis)</label>
+            <input type="number" data-setting="magnesiumRatio" step="1" min="0" max="100">
+          </div>
+          <div class="form-row">
+            <label>Historie-Anzahl Messwerte <span class="hint">Wie viele letzte Messungen für Verbrauchs-Schätzung</span></label>
+            <input type="number" data-setting="historyCount" step="1" min="1" max="20">
+          </div>
+        </div>
+
+        <div class="section-title">KH-Tag/Nacht-Aufteilung</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Nacht-Start (Stunde, 0–23)</label>
+            <input type="number" data-setting="khNightStart" step="1" min="0" max="23">
+          </div>
+          <div class="form-row">
+            <label>Nacht-Ende (Stunde, 0–23)</label>
+            <input type="number" data-setting="khNightEnd" step="1" min="0" max="23">
+          </div>
+        </div>
+        <div class="form-toggle">
+          <input type="checkbox" id="usePhBasedKHDosing" data-setting="usePhBasedKHDosing">
+          <label for="usePhBasedKHDosing">pH-basierte KH-Tag/Nacht-Schaltung verwenden</label>
+        </div>
+        <div class="form-row" style="max-width:300px">
+          <label>pH-Schwellwert für Nacht-Pumpe <span class="hint">Wenn pH darunter → Nacht-Lösung</span></label>
+          <input type="number" data-setting="phThresholdForKHNight" step="0.1" min="6.0" max="9.0">
+        </div>
+
+        <div class="section-title">Verbrauchsraten</div>
+        <div class="form-toggle">
+          <input type="checkbox" id="autoUpdateInitialRates" data-setting="autoUpdateInitialRates">
+          <label for="autoUpdateInitialRates">Initiale Raten automatisch mit gemessenen aktualisieren</label>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Initiale KH-Dosierrate (ml/Tag)</label>
+            <input type="number" data-setting="initialKHConsumption" step="0.1" min="0" max="500">
+          </div>
+          <div class="form-row">
+            <label>Initiale Ca-Dosierrate (ml/Tag)</label>
+            <input type="number" data-setting="initialCalciumConsumption" step="0.1" min="0" max="500">
+          </div>
+        </div>
+
+        <div class="section-title">Anti-Tropf</div>
+        <div class="form-toggle">
+          <input type="checkbox" id="enableAntiDrip" data-setting="enableAntiDrip">
+          <label for="enableAntiDrip">Anti-Tropf-Rückzug aktivieren <span class="hint" style="font-weight:400;display:block">Pumpe zieht nach Dosierung kurz zurück um Nachtropfen zu verhindern</span></label>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Rückzugsmenge (ml)</label>
+            <input type="number" data-setting="antiDripML" step="0.005" min="0" max="1">
+          </div>
+          <div class="form-row">
+            <label>Rückzugsgeschwindigkeit (ml/min)</label>
+            <input type="number" data-setting="antiDripSpeedML" step="0.1" min="0.1" max="50">
+          </div>
+        </div>
+
+        <div class="section-title">Automatik</div>
+        <div class="form-toggle">
+          <input type="checkbox" id="autoDosing" data-setting="autoDosing">
+          <label for="autoDosing">Automatische Dosierung aktivieren <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP führt den Dosierplan selbständig aus</span></label>
         </div>
       </div>
     </div>
@@ -205,7 +304,7 @@
 
 <script type="module">
   import { initAuthSync } from "/assets/auth-sync.js";
-  import { getAuthInstance } from "/kalk/firestore-store.js";
+  import { getAuthInstance, getSettings, saveSettings } from "/kalk/firestore-store.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
@@ -249,9 +348,71 @@
     loginOnly: true
   });
 
+  // ---------- Settings: laden + auto-save ----------
+  function setInputValue(inp, value) {
+    if (inp.type === "checkbox") inp.checked = !!value;
+    else if (value != null) inp.value = value;
+  }
+  function getInputValue(inp) {
+    if (inp.type === "checkbox") return inp.checked;
+    if (inp.type === "number") {
+      const v = parseFloat(inp.value);
+      return isNaN(v) ? null : v;
+    }
+    return inp.value;
+  }
+
+  let settingsLoaded = false;
+  async function loadSettingsIntoForm() {
+    try {
+      const s = await getSettings();
+      document.querySelectorAll("[data-setting]").forEach(inp => {
+        setInputValue(inp, s[inp.dataset.setting]);
+      });
+      settingsLoaded = true;
+    } catch (e) {
+      console.warn("Settings-Laden:", e);
+    }
+  }
+
+  let saveTimer = null;
+  function flashSaveStatus(text = "✓ gespeichert", isError = false) {
+    const el = document.getElementById("settings-save-status");
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isError ? "var(--red)" : "var(--green)";
+    el.classList.add("show");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => el.classList.remove("show"), 1500);
+  }
+
+  async function persistSetting(key, value) {
+    if (!settingsLoaded) return;
+    try {
+      await saveSettings({ [key]: value });
+      flashSaveStatus("✓ gespeichert");
+    } catch (e) {
+      flashSaveStatus("⚠️ " + (e.message || "Fehler"), true);
+    }
+  }
+
+  // Event-Handler für alle Settings-Inputs
+  document.querySelectorAll("[data-setting]").forEach(inp => {
+    const evt = inp.type === "checkbox" ? "change" : "change"; // bei number-input feuert change beim blur
+    inp.addEventListener(evt, () => {
+      persistSetting(inp.dataset.setting, getInputValue(inp));
+    });
+  });
+
   // Auth-Status beobachten — der EINZIGE State-Treiber
-  getAuthInstance().onAuthStateChanged((user) => {
-    showView(user ? "view-main" : "view-login");
+  getAuthInstance().onAuthStateChanged(async (user) => {
+    if (user) {
+      showView("view-main");
+      await loadSettingsIntoForm();
+    } else {
+      settingsLoaded = false;
+      showView("view-login");
+    }
   });
 </script>
 </body>
