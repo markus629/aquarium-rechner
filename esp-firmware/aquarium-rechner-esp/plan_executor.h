@@ -1,10 +1,19 @@
 // =============================================================
-// Plan-Executor + Command-Dispatcher (Session B + C komplett)
+// Plan-Executor + Command-Dispatcher
 // =============================================================
-// Verarbeitet:
-//  - Commands aus Firestore (calibrate, dose, stop)
-//  - Plan-Einträge (Auto-Doses inkl. KH-Tag/Nacht, Erhaltung, Mg)
-// Cached Plan und Settings im NVS — überlebt Reboot bis PLAN_CACHE_TTL_MS
+// Portiert die bewährte Logik aus 088_sketch_sep3a_01.ino:
+//
+// - Trigger-Fenster: NUR in Minute 10-15 jeder GERADEN Stunde
+//   (0:10, 2:10, 4:10, ..., 22:10) — deterministisches 2-h-Raster
+// - Pro Stunde dedupliziert via lastDosageTimeCache[] pro Typ
+// - Pro Typ wird geprüft: gibt es eine spezifische Plan-Dose in dieser
+//   Stunde (AUSGLEICH-Phase) oder nicht (ERHALTUNG-Phase)
+// - Alle anwendbaren Doses (KH + Ca + Mg) werden in EINE Sequenz
+//   gepackt → laufen sequentiell ab via Queue
+// - KH-Tag/Nacht-Entscheidung zur Laufzeit (pH-basiert oder Uhrzeit)
+// - KH-Nacht: ml × 0.5 (Konzentrat ist doppelt konzentriert)
+//
+// Cached Plan + Settings + Kalibrierung + Maintenance-Timestamps im NVS.
 // =============================================================
 #pragma once
 
@@ -17,31 +26,43 @@
 
 namespace plan_executor {
 
-unsigned long lastPlanCheckMs = 0;
 unsigned long lastCommandPollMs = 0;
 unsigned long lastPumpConfigSyncMs = 0;
 unsigned long lastPlanFetchMs = 0;
-const unsigned long PLAN_FETCH_INTERVAL_MS = 30 * 1000UL;  // 30s = Quasi-Push
+unsigned long lastSequenceCheckMs = 0;
+const unsigned long PLAN_FETCH_INTERVAL_MS = 30UL * 1000;       // 30s = Quasi-Push
+const unsigned long SEQUENCE_CHECK_INTERVAL_MS = 30UL * 1000;   // jede 30s in Trigger-Fenster gucken
 
-// Aktuelles ausführendes Command (Web-Command oder Plan-Dose)
+// Dosage-Typen (für lastDosageTimeCache + dosings)
+enum DosageType {
+  DT_KH_DAY = 0,
+  DT_KH_NIGHT = 1,
+  DT_CA = 2,
+  DT_MG = 3,
+  DT_COUNT = 4
+};
+const char* DT_LABELS[DT_COUNT] = { "kh-day", "kh-night", "ca", "mg" };
+time_t lastDosageTimeCache[DT_COUNT] = { 0, 0, 0, 0 };
+
+// ---------- Aktive Dose / Command ----------
 struct ActiveCmd {
-  String docPath;        // bei Web-Command: docPath für Bestätigung; bei Plan-Dose: leer
+  String docPath;     // Web-Command-Doc (leer wenn Plan-Dose)
   String action;
   int pump = -1;
   float ml = NAN;
   long steps = 0;
   unsigned long startMs = 0;
   bool active = false;
-  bool fromPlan = false;  // true wenn aus Plan, dann keine Command-Bestätigung sondern Dosing-Log
-  String dosageType;      // "kh-day"|"kh-night"|"ca"|"mg"|"kh-maintenance"|"ca-maintenance"
+  bool fromPlan = false;
+  DosageType dosageType = DT_KH_DAY;
 };
 ActiveCmd current;
 
-// ---------- Dose-Queue (für aufeinanderfolgende Doses: Ca + Mg) ----------
+// ---------- Dose-Queue (für Sequenz: KH → Ca → Mg) ----------
 struct QueuedDose {
   int pump;
   float ml;
-  String dosageType;
+  DosageType type;
 };
 static const int MAX_QUEUE = 4;
 QueuedDose doseQueue[MAX_QUEUE];
@@ -49,10 +70,11 @@ int queueHead = 0, queueTail = 0;
 
 bool queueEmpty() { return queueHead == queueTail; }
 bool queueFull()  { return ((queueTail + 1) % MAX_QUEUE) == queueHead; }
-void enqueueDose(int pump, float ml, const String &type) {
-  if (queueFull()) { Serial.println("[Queue] FULL — drop"); return; }
+void enqueueDose(int pump, float ml, DosageType type) {
+  if (queueFull()) { Serial.println("[Queue] FULL"); return; }
   doseQueue[queueTail] = { pump, ml, type };
   queueTail = (queueTail + 1) % MAX_QUEUE;
+  Serial.printf("[Queue] +%s pump=%d ml=%.2f\n", DT_LABELS[type], pump, ml);
 }
 bool dequeueDose(QueuedDose &out) {
   if (queueEmpty()) return false;
@@ -61,40 +83,30 @@ bool dequeueDose(QueuedDose &out) {
   return true;
 }
 
-// ---------- Doppelausführungs-Schutz ----------
-// Ring-Buffer von Timestamps die schon ausgeführt wurden (KH + Ca getrennt)
-static const int MAX_EXECUTED_RECENT = 32;
-time_t executedKH[MAX_EXECUTED_RECENT] = {0};
-time_t executedCa[MAX_EXECUTED_RECENT] = {0};
-int executedHeadKH = 0, executedHeadCa = 0;
-
-bool wasExecuted(time_t ts, time_t *arr) {
-  for (int i = 0; i < MAX_EXECUTED_RECENT; i++) if (arr[i] == ts) return true;
-  return false;
-}
-void markExecuted(time_t ts, time_t *arr, int &head) {
-  arr[head] = ts;
-  head = (head + 1) % MAX_EXECUTED_RECENT;
-}
-
 // ---------- Plan-Cache (NVS) ----------
 String cachedPlanJson = "";
 unsigned long cachedPlanTimeMs = 0;
-// Maintenance-Tracking: letzte Erhaltungs-Dose pro Typ
-time_t lastMaintenanceKH = 0;
-time_t lastMaintenanceCa = 0;
 
 void loadFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
   cachedPlanJson = p.getString("planJson", "");
   cachedPlanTimeMs = (unsigned long)p.getULong("planTime", 0);
-  lastMaintenanceKH = (time_t)p.getULong("maintKH", 0);
-  lastMaintenanceCa = (time_t)p.getULong("maintCa", 0);
-  p.end();
-  if (cachedPlanJson.length() > 0) {
-    Serial.printf("[Plan] Cache aus NVS: %d Zeichen\n", cachedPlanJson.length());
+  for (int i = 0; i < DT_COUNT; i++) {
+    String key = "lastD" + String(i);
+    lastDosageTimeCache[i] = (time_t)p.getULong(key.c_str(), 0);
   }
+  p.end();
+  if (cachedPlanJson.length() > 0)
+    Serial.printf("[Plan] Cache aus NVS: %d Zeichen\n", cachedPlanJson.length());
+}
+
+void saveLastDosageTime(DosageType t) {
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  String key = "lastD" + String((int)t);
+  p.putULong(key.c_str(), (unsigned long)lastDosageTimeCache[t]);
+  p.end();
 }
 
 void savePlanCacheToNVS(const String &json) {
@@ -105,18 +117,10 @@ void savePlanCacheToNVS(const String &json) {
   p.end();
 }
 
-void saveMaintenanceTimestamps() {
-  Preferences p;
-  p.begin(NVS_NAMESPACE, false);
-  p.putULong("maintKH", (unsigned long)lastMaintenanceKH);
-  p.putULong("maintCa", (unsigned long)lastMaintenanceCa);
-  p.end();
-}
-
 // ---------- Pump-Configs alle 5 Min syncen ----------
 void syncPumpConfigs() {
   unsigned long now = millis();
-  if (lastPumpConfigSyncMs != 0 && now - lastPumpConfigSyncMs < 5 * 60 * 1000UL) return;
+  if (lastPumpConfigSyncMs != 0 && now - lastPumpConfigSyncMs < 5UL * 60 * 1000) return;
   lastPumpConfigSyncMs = now;
   for (int i = 0; i < pumps::NUM_PUMPS; i++) {
     float v;
@@ -129,7 +133,7 @@ void syncPumpConfigs() {
   }
 }
 
-// ---------- Plan alle 30s syncen (quasi-push) ----------
+// ---------- Plan alle 30s syncen (Quasi-Push) ----------
 void syncPlan() {
   if (!firebase_sync::isReady()) return;
   unsigned long now = millis();
@@ -153,31 +157,28 @@ bool isPlanCacheStale() {
   return (millis() - cachedPlanTimeMs) > PLAN_CACHE_TTL_MS;
 }
 
-// ---------- Dose aus Plan starten ----------
-bool startPlanDose(int pump, float ml, const String &type) {
-  if (current.active) {
-    // verzögern via Queue
-    enqueueDose(pump, ml, type);
-    return false;
+// ---------- Dose-Sequenz aus Queue starten ----------
+bool startNextQueuedDose() {
+  if (current.active) return false;
+  QueuedDose next;
+  if (!dequeueDose(next)) return false;
+  if (!pumps::runMl(next.pump, next.ml)) {
+    Serial.printf("[Plan] Pumpe %d nicht startbar — überspringe\n", next.pump);
+    return startNextQueuedDose();  // try next
   }
-  if (!pumps::runMl(pump, ml)) {
-    Serial.printf("[Plan] Pumpe %d konnte nicht gestartet (busy oder nicht kalibriert)\n", pump);
-    return false;
-  }
-  current.docPath = "";
+  current = {};
   current.action = "dose";
-  current.pump = pump;
-  current.ml = ml;
-  current.steps = 0;
+  current.pump = next.pump;
+  current.ml = next.ml;
   current.startMs = millis();
   current.active = true;
   current.fromPlan = true;
-  current.dosageType = type;
-  Serial.printf("[Plan] DOSE %s pump=%d ml=%.2f\n", type.c_str(), pump, ml);
+  current.dosageType = next.type;
+  Serial.printf("[Plan] DOSE %s pump=%d ml=%.2f\n", DT_LABELS[next.type], next.pump, next.ml);
   return true;
 }
 
-// ---------- Command-Dispatch ----------
+// ---------- Command-Dispatch (Web-Commands) ----------
 bool startCommand(const String &docPath, const String &action, int pump, float ml, long steps) {
   if (current.active) {
     Serial.println("[Cmd] bereits aktiv");
@@ -214,13 +215,13 @@ bool startCommand(const String &docPath, const String &action, int pump, float m
     firebase_sync::updateCommand(docPath, "failed", &r);
     return false;
   }
-
   if (!ok) {
-    FirebaseJson r; r.set("error/stringValue", "Pumpe nicht startbar (busy oder unkalibriert)");
+    FirebaseJson r; r.set("error/stringValue", "Pumpe nicht startbar");
     firebase_sync::updateCommand(docPath, "failed", &r);
     return false;
   }
 
+  current = {};
   current.docPath = docPath;
   current.action = action;
   current.pump = pump;
@@ -229,10 +230,10 @@ bool startCommand(const String &docPath, const String &action, int pump, float m
   current.startMs = millis();
   current.active = true;
   current.fromPlan = false;
-  current.dosageType = "manual";
   firebase_sync::updateCommand(docPath, "running");
-  Serial.printf("[Cmd] gestartet: %s pump=%d %s\n", action.c_str(), pump,
-                action == "dose" ? (String("ml=") + ml).c_str() : (String("steps=") + steps).c_str());
+  Serial.printf("[Cmd] %s pump=%d %s\n", action.c_str(), pump,
+                action == "dose" ? (String("ml=") + ml).c_str()
+                                 : (String("steps=") + steps).c_str());
   return true;
 }
 
@@ -241,12 +242,20 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
   unsigned long duration = millis() - current.startMs;
 
   if (current.fromPlan) {
-    // Aus Plan: direkt in dosings-Subcollection loggen, kein Command-Doc
-    firebase_sync::addDosing(current.pump, current.ml, current.dosageType.c_str(),
-                              true, 1.0f, success);
-    Serial.printf("[Plan] DOSE %s (%lu ms)\n", success ? "done" : "FAILED", duration);
+    // Plan-Dose: dosings-Subcollection + lastDosageTimeCache aktualisieren
+    if (success) {
+      time_t now; time(&now);
+      if (now > 1700000000) {
+        lastDosageTimeCache[current.dosageType] = now;
+        saveLastDosageTime(current.dosageType);
+      }
+    }
+    firebase_sync::addDosing(current.pump, current.ml,
+                              DT_LABELS[current.dosageType], true, 1.0f, success);
+    Serial.printf("[Plan] DOSE %s %s (%lums)\n",
+                  DT_LABELS[current.dosageType],
+                  success ? "done" : "FAILED", duration);
   } else {
-    // Web-Command: Command-Doc aktualisieren + dosings-Eintrag bei Dose
     FirebaseJson result;
     result.set("durationMs/integerValue", (int)duration);
     if (current.action == "calibrate") result.set("actualSteps/integerValue", (int)current.steps);
@@ -256,22 +265,18 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     if (current.action == "dose" && success) {
       firebase_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
     }
-    Serial.printf("[Cmd] %s (%lu ms)\n", success ? "done" : "FAILED", duration);
+    Serial.printf("[Cmd] %s (%lums)\n", success ? "done" : "FAILED", duration);
   }
   current.active = false;
 
-  // Queue: nächste Dose starten
-  QueuedDose next;
-  if (dequeueDose(next)) {
-    Serial.printf("[Queue] nächste Dose: pump=%d ml=%.2f\n", next.pump, next.ml);
-    startPlanDose(next.pump, next.ml, next.dosageType);
-  }
+  // Sequenz weiterführen
+  startNextQueuedDose();
 }
 
 // ---------- Command-Polling (adaptive) ----------
 void pollCommands() {
   unsigned long now = millis();
-  unsigned long interval = current.active ? COMMAND_POLL_FAST_MS : COMMAND_POLL_NORMAL_MS;
+  unsigned long interval = (current.active || !queueEmpty()) ? COMMAND_POLL_FAST_MS : COMMAND_POLL_NORMAL_MS;
   if (lastCommandPollMs != 0 && now - lastCommandPollMs < interval) return;
   lastCommandPollMs = now;
   if (current.active) return;
@@ -303,142 +308,170 @@ void pollCommands() {
                fSteps.success ? (long)fSteps.intValue : 0);
 }
 
-// ---------- Plan-Check (alle 60 s) ----------
-// Geht Plan-Einträge durch und feuert fällige Doses.
-//  - Spezifisch datierte Einträge (date != 0): fire wenn jetzt ± 90 s
-//  - Erhaltungs-Einträge (date == 0 / isMaintenanceDose): fire wenn 2h seit
-//    letzter Erhaltungs-Dose desselben Typs vergangen UND keine spezifische
-//    Dose innerhalb der nächsten 90 s ansteht
-void checkPlanForDueDose() {
-  unsigned long ms = millis();
-  if (lastPlanCheckMs != 0 && ms - lastPlanCheckMs < PLAN_CHECK_INTERVAL_MS) return;
-  lastPlanCheckMs = ms;
+// ---------- Helpers für Plan-Iteration ----------
+struct PlanEntry {
+  time_t date;
+  float dosageML;       // KH
+  float caDosageML;     // Ca
+  float mgDosageML;     // Mg
+  bool isMaintenanceDose;
+  bool valid;
+};
 
-  if (current.active) return;
+PlanEntry parseEntry(FirebaseJson &entry, bool isKH) {
+  PlanEntry pe = { 0, 0, 0, 0, false, false };
+  FirebaseJsonData v;
+  if (entry.get(v, "mapValue/fields/date/integerValue") && v.success) pe.date = (time_t)v.intValue;
+  if (isKH) {
+    if (entry.get(v, "mapValue/fields/dosageML/doubleValue") && v.success) pe.dosageML = v.floatValue;
+  } else {
+    if (entry.get(v, "mapValue/fields/caDosageML/doubleValue") && v.success) pe.caDosageML = v.floatValue;
+    if (entry.get(v, "mapValue/fields/mgDosageML/doubleValue") && v.success) pe.mgDosageML = v.floatValue;
+  }
+  if (entry.get(v, "mapValue/fields/isMaintenanceDose/booleanValue") && v.success)
+    pe.isMaintenanceDose = (v.stringValue == "true");
+  pe.valid = true;
+  return pe;
+}
+
+// Liefert true wenn lastTs in der gleichen Stunde wie now liegt (lokale Zeit)
+bool sameLocalHour(time_t lastTs, time_t now) {
+  if (lastTs == 0) return false;
+  struct tm a, b;
+  localtime_r(&lastTs, &a);
+  localtime_r(&now, &b);
+  return a.tm_year == b.tm_year && a.tm_yday == b.tm_yday && a.tm_hour == b.tm_hour;
+}
+
+// Hole Plan-Array (khEntries oder caEntries) als FirebaseJsonArray
+bool getPlanArray(FirebaseJson &doc, const char* fieldKey, FirebaseJsonArray &out) {
+  String basePath = String("fields/") + fieldKey + "/arrayValue/values";
+  FirebaseJsonData arrData;
+  if (!doc.get(arrData, basePath.c_str())) return false;
+  arrData.get(out);
+  return true;
+}
+
+// ---------- Auto-Dosing-Sequenz prüfen ----------
+// Wird alle 30s aufgerufen, fired aber nur in Minute 10-15 gerader Stunden.
+void checkAutoDosingSequence() {
+  unsigned long ms = millis();
+  if (lastSequenceCheckMs != 0 && ms - lastSequenceCheckMs < SEQUENCE_CHECK_INTERVAL_MS) return;
+  lastSequenceCheckMs = ms;
+
+  if (current.active || !queueEmpty()) return;
   if (cachedPlanJson.length() == 0) return;
   if (isPlanCacheStale()) {
     Serial.println("[Plan] Cache zu alt (>25h) — keine Auto-Doses");
     return;
   }
+
   time_t now; time(&now);
   if (now < 1700000000) return;
+  struct tm t;
+  localtime_r(&now, &t);
+
+  // Trigger-Fenster: Minute 10-15 in gerader Stunde
+  if (t.tm_hour % 2 != 0 || t.tm_min < 10 || t.tm_min > 15) return;
 
   FirebaseJson doc;
   doc.setJsonData(cachedPlanJson);
 
-  // Pro Typ: bestimme ob spezifische Dose oder Erhaltung dran ist
-  auto processType = [&](bool isKH) {
-    const char* arrKey = isKH ? "khEntries" : "caEntries";
-    String basePath = String("fields/") + arrKey + "/arrayValue/values";
-    FirebaseJsonData arrData;
-    if (!doc.get(arrData, basePath.c_str())) return;
-    FirebaseJsonArray entries;
-    arrData.get(entries);
+  // Stunden-Fenster für AUSGLEICH-Detection
+  time_t hourStart = now - t.tm_min * 60 - t.tm_sec;
+  time_t hourEnd = hourStart + 3600 - 1;
 
-    bool hasUpcomingSpecific = false;
-    int maintenanceIdx = -1;
-
-    // Erster Durchgang: spezifische Doses checken
-    for (size_t i = 0; i < entries.size(); i++) {
-      FirebaseJsonData itemData;
-      entries.get(itemData, i);
-      FirebaseJson entry;
-      entry.setJsonData(itemData.stringValue);
-      FirebaseJsonData dateF, mlF, isMaintF;
-      entry.get(dateF, "mapValue/fields/date/integerValue");
-      const char* mlField = isKH ? "mapValue/fields/dosageML/doubleValue"
-                                  : "mapValue/fields/caDosageML/doubleValue";
-      entry.get(mlF, mlField);
-      entry.get(isMaintF, "mapValue/fields/isMaintenanceDose/booleanValue");
-
-      time_t date = dateF.success ? (time_t)dateF.intValue : 0;
-      float ml = mlF.success ? mlF.floatValue : 0;
-      bool isMaint = isMaintF.success && (isMaintF.stringValue == "true");
-
-      if (isMaint || date == 0) {
-        maintenanceIdx = (int)i;
-        continue;
+  // ---------- KH-Plan analysieren ----------
+  FirebaseJsonArray khArr;
+  bool hasKHPlan = getPlanArray(doc, "khEntries", khArr);
+  float khDosageML = 0;
+  bool khAdjustment = false;
+  if (hasKHPlan) {
+    // 1) Spezifische AUSGLEICH-Dose für diese Stunde?
+    for (size_t i = 0; i < khArr.size(); i++) {
+      FirebaseJsonData ed; khArr.get(ed, i);
+      FirebaseJson entry; entry.setJsonData(ed.stringValue);
+      PlanEntry pe = parseEntry(entry, true);
+      if (pe.isMaintenanceDose || pe.date == 0) continue;
+      if (pe.date >= hourStart && pe.date <= hourEnd) {
+        khDosageML = pe.dosageML;
+        khAdjustment = true;
+        break;
       }
-      if (ml <= 0.001f) continue;
-
-      time_t *exArr = isKH ? executedKH : executedCa;
-      int &exHead = isKH ? executedHeadKH : executedHeadCa;
-
-      // Fällig im Fenster ± 90 s
-      if (date >= now - 90 && date <= now + 90) {
-        if (wasExecuted(date, exArr)) continue;
-        // KH: Tag/Nacht-Entscheidung
-        int pump;
-        String type;
-        if (isKH) {
-          bool isNight = settings_cache::isKHNightNow(ph_sensor::getPH());
-          pump = isNight ? 3 : 2;
-          type = isNight ? "kh-night" : "kh-day";
-        } else {
-          pump = 0;
-          type = "ca";
-        }
-        Serial.printf("[Plan] Fällige %s-Dose ml=%.2f pump=%d (date=%lu)\n",
-                      isKH ? "KH" : "Ca", ml, pump, (unsigned long)date);
-        markExecuted(date, exArr, exHead);
-        startPlanDose(pump, ml, type);
-        // Bei Ca: Mg parallel (in Queue)
-        if (!isKH) {
-          FirebaseJsonData mgF;
-          entry.get(mgF, "mapValue/fields/mgDosageML/doubleValue");
-          float mgML = mgF.success ? mgF.floatValue : 0;
-          if (mgML > 0.001f) {
-            enqueueDose(1, mgML, "mg");
-          }
-        }
-        return;  // nur eine Plan-Dose pro Check
-      }
-      // Liegt diese spezifische Dose in den nächsten 2h?
-      if (date > now && date <= now + 2 * 3600) hasUpcomingSpecific = true;
     }
-
-    // Wenn keine spezifische Dose in den nächsten 2h ansteht: Erhaltungs-Dose prüfen
-    if (maintenanceIdx >= 0 && !hasUpcomingSpecific) {
-      time_t &lastMaint = isKH ? lastMaintenanceKH : lastMaintenanceCa;
-      if (now - lastMaint >= 2 * 3600 - 60) {  // 2h Toleranz -1 Min
-        FirebaseJsonData itemData;
-        entries.get(itemData, maintenanceIdx);
-        FirebaseJson entry;
-        entry.setJsonData(itemData.stringValue);
-        FirebaseJsonData mlF;
-        const char* mlField = isKH ? "mapValue/fields/dosageML/doubleValue"
-                                    : "mapValue/fields/caDosageML/doubleValue";
-        entry.get(mlF, mlField);
-        float ml = mlF.success ? mlF.floatValue : 0;
-        if (ml <= 0.001f) return;
-
-        int pump;
-        String type;
-        if (isKH) {
-          bool isNight = settings_cache::isKHNightNow(ph_sensor::getPH());
-          pump = isNight ? 3 : 2;
-          type = isNight ? "kh-maintenance-night" : "kh-maintenance-day";
-        } else {
-          pump = 0;
-          type = "ca-maintenance";
-        }
-        Serial.printf("[Plan] Erhaltungs-%s-Dose ml=%.2f pump=%d\n",
-                      isKH ? "KH" : "Ca", ml, pump);
-        lastMaint = now;
-        saveMaintenanceTimestamps();
-        startPlanDose(pump, ml, type);
-        if (!isKH) {
-          FirebaseJsonData mgF;
-          entry.get(mgF, "mapValue/fields/mgDosageML/doubleValue");
-          float mgML = mgF.success ? mgF.floatValue : 0;
-          if (mgML > 0.001f) enqueueDose(1, mgML, "mg-maintenance");
+    // 2) ERHALTUNG (nur wenn kein Ausgleich für diese Stunde)
+    if (!khAdjustment) {
+      for (size_t i = 0; i < khArr.size(); i++) {
+        FirebaseJsonData ed; khArr.get(ed, i);
+        FirebaseJson entry; entry.setJsonData(ed.stringValue);
+        PlanEntry pe = parseEntry(entry, true);
+        if (pe.isMaintenanceDose || pe.date == 0) {
+          khDosageML = pe.dosageML;
+          break;
         }
       }
     }
-  };
+  }
 
-  processType(true);   // KH
-  processType(false);  // Ca + Mg
+  // ---------- Ca-Plan analysieren ----------
+  FirebaseJsonArray caArr;
+  bool hasCaPlan = getPlanArray(doc, "caEntries", caArr);
+  float caDosageML = 0, mgDosageML = 0;
+  bool caAdjustment = false;
+  if (hasCaPlan) {
+    for (size_t i = 0; i < caArr.size(); i++) {
+      FirebaseJsonData ed; caArr.get(ed, i);
+      FirebaseJson entry; entry.setJsonData(ed.stringValue);
+      PlanEntry pe = parseEntry(entry, false);
+      if (pe.isMaintenanceDose || pe.date == 0) continue;
+      if (pe.date >= hourStart && pe.date <= hourEnd) {
+        caDosageML = pe.caDosageML;
+        mgDosageML = pe.mgDosageML;
+        caAdjustment = true;
+        break;
+      }
+    }
+    if (!caAdjustment) {
+      for (size_t i = 0; i < caArr.size(); i++) {
+        FirebaseJsonData ed; caArr.get(ed, i);
+        FirebaseJson entry; entry.setJsonData(ed.stringValue);
+        PlanEntry pe = parseEntry(entry, false);
+        if (pe.isMaintenanceDose || pe.date == 0) {
+          caDosageML = pe.caDosageML;
+          mgDosageML = pe.mgDosageML;
+          break;
+        }
+      }
+    }
+  }
+
+  // ---------- KH-Tag/Nacht-Entscheidung ----------
+  bool isNight = settings_cache::isKHNightNow(ph_sensor::getPH());
+  DosageType khType = isNight ? DT_KH_NIGHT : DT_KH_DAY;
+  int khPump = isNight ? 3 : 2;
+  // KH-Nacht-Konzentrat ist 2× konzentriert → halbe Menge
+  if (isNight) khDosageML *= 0.5f;
+
+  // ---------- Per-Stunde-Dedup: schon dosiert? ----------
+  bool needKH = khDosageML > 0.001f && !sameLocalHour(lastDosageTimeCache[khType], now);
+  bool needCa = caDosageML > 0.001f && !sameLocalHour(lastDosageTimeCache[DT_CA], now);
+  bool needMg = mgDosageML > 0.001f && !sameLocalHour(lastDosageTimeCache[DT_MG], now);
+
+  if (!needKH && !needCa && !needMg) return;
+
+  Serial.printf("[Plan] Sequenz Stunde %d: KH=%.2fml(%s%s) Ca=%.2fml Mg=%.2fml\n",
+                t.tm_hour,
+                khDosageML, khAdjustment ? "Ausgleich" : "Erhaltung",
+                isNight ? "/Nacht" : "/Tag",
+                caDosageML, mgDosageML);
+
+  // ---------- Queue füllen ----------
+  if (needKH) enqueueDose(khPump, khDosageML, khType);
+  if (needCa) enqueueDose(0, caDosageML, DT_CA);
+  if (needMg) enqueueDose(1, mgDosageML, DT_MG);
+
+  // Erste Dose starten
+  startNextQueuedDose();
 }
 
 // ---------- Pump-Status checken ----------
@@ -459,7 +492,7 @@ void tick() {
   syncPumpConfigs();
   settings_cache::sync();
   syncPlan();
-  checkPlanForDueDose();
+  checkAutoDosingSequence();
 }
 
 } // namespace plan_executor
