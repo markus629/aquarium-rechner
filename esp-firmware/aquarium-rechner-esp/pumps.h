@@ -10,6 +10,7 @@
 #pragma once
 
 #include <FastAccelStepper.h>
+#include <Preferences.h>
 #include "config.h"
 
 namespace pumps {
@@ -29,6 +30,37 @@ int activePump = -1;
 unsigned long doseStartMs = 0;
 unsigned long doseExpectedMs = 0;
 
+// ---------- Kalibrierung aus NVS laden/speichern ----------
+void loadCalibrationFromNVS() {
+  Preferences p;
+  p.begin(NVS_NAMESPACE, true);
+  for (int i = 0; i < NUM_PUMPS; i++) {
+    String key = "mlps" + String(i);
+    mlPerStep[i] = p.getFloat(key.c_str(), 0.0f);
+    if (mlPerStep[i] > 0) {
+      Serial.printf("[Pumps] NVS-Kalibrierung Pumpe %d: %.5f ml/Schritt\n", i, mlPerStep[i]);
+    }
+  }
+  p.end();
+}
+
+void saveCalibrationToNVS(int pumpIdx) {
+  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return;
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  String key = "mlps" + String(pumpIdx);
+  p.putFloat(key.c_str(), mlPerStep[pumpIdx]);
+  p.end();
+}
+
+// Setter mit automatischer NVS-Persistenz
+void setMlPerStep(int pumpIdx, float v) {
+  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return;
+  if (mlPerStep[pumpIdx] == v) return;
+  mlPerStep[pumpIdx] = v;
+  saveCalibrationToNVS(pumpIdx);
+}
+
 // ---------- Init ----------
 void begin() {
   // ENABLE-Pins als Outputs, alle HIGH (= disabled bei den meisten Treibern)
@@ -45,6 +77,7 @@ void begin() {
   } else {
     Serial.println("[Pumps] FEHLER: stepperConnectToPin fehlgeschlagen");
   }
+  loadCalibrationFromNVS();
 }
 
 void enablePump(int idx) {

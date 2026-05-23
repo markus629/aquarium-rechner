@@ -30,6 +30,7 @@ struct ActiveCmd {
 ActiveCmd current;
 
 // ---------- Pump-Configs alle 5 Min syncen ----------
+// Holt mlPerStep aus Firestore, persistiert in NVS (überlebt Reboot).
 void syncPumpConfigs() {
   unsigned long now = millis();
   if (lastPumpConfigSyncMs != 0 && now - lastPumpConfigSyncMs < 5 * 60 * 1000UL) return;
@@ -37,8 +38,10 @@ void syncPumpConfigs() {
   for (int i = 0; i < pumps::NUM_PUMPS; i++) {
     float v;
     if (firebase_sync::fetchPumpMlPerStep(i, v)) {
-      pumps::mlPerStep[i] = v;
-      Serial.printf("[PumpConfig] Pumpe %d: mlPerStep=%.5f\n", i, v);
+      if (v != pumps::mlPerStep[i]) {
+        pumps::setMlPerStep(i, v);  // schreibt auch in NVS
+        Serial.printf("[PumpConfig] Pumpe %d aktualisiert: mlPerStep=%.5f\n", i, v);
+      }
     }
   }
 }
@@ -180,12 +183,163 @@ void pollCommands() {
   startCommand(docPath, action, pump, ml, steps);
 }
 
-// ---------- Plan-Check (alle 60 s) ----------
-void checkPlanForDueDose() {
+// ---------- Plan-Cache (NVS) ----------
+// Wir cachen den Plan als JSON-String + Zeitstempel + Liste der schon-ausgeführten Doses
+// (um Doppelausführung zu verhindern).
+unsigned long lastPlanFetchMs = 0;
+String cachedPlanJson = "";
+unsigned long cachedPlanTimeMs = 0;
+static const int MAX_EXECUTED_RECENT = 32;
+time_t executedDoses[MAX_EXECUTED_RECENT] = {0};  // Timestamps schon-ausgeführter KH-Doses
+time_t executedDosesCa[MAX_EXECUTED_RECENT] = {0};
+int executedHead = 0, executedHeadCa = 0;
+
+bool wasExecuted(time_t ts, time_t *arr) {
+  for (int i = 0; i < MAX_EXECUTED_RECENT; i++) {
+    if (arr[i] == ts) return true;
+  }
+  return false;
+}
+void markExecuted(time_t ts, time_t *arr, int &head) {
+  arr[head] = ts;
+  head = (head + 1) % MAX_EXECUTED_RECENT;
+}
+
+void loadPlanCacheFromNVS() {
+  Preferences p;
+  p.begin(NVS_NAMESPACE, true);
+  cachedPlanJson = p.getString("planJson", "");
+  cachedPlanTimeMs = (unsigned long)p.getULong("planTime", 0);
+  p.end();
+  if (cachedPlanJson.length() > 0) {
+    Serial.printf("[Plan] Cache aus NVS geladen (%d Zeichen)\n", cachedPlanJson.length());
+  }
+}
+
+void savePlanCacheToNVS(const String &json) {
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  p.putString("planJson", json);
+  p.putULong("planTime", (unsigned long)(millis()));
+  p.end();
+}
+
+// ---------- Plan aus Firestore holen ----------
+// Versucht jeden 5 Min, schreibt bei Erfolg in NVS-Cache.
+void syncPlan() {
+  if (!firebase_sync::isReady()) return;
   unsigned long now = millis();
-  if (lastPlanCheckMs != 0 && now - lastPlanCheckMs < PLAN_CHECK_INTERVAL_MS) return;
-  lastPlanCheckMs = now;
-  // TODO Session C: Plan aus Firestore (oder Cache) holen, fällige Einträge ausführen
+  if (lastPlanFetchMs != 0 && now - lastPlanFetchMs < 5 * 60 * 1000UL) return;
+  lastPlanFetchMs = now;
+
+  FirebaseJson doc;
+  if (!firebase_sync::fetchPlan(doc)) {
+    Serial.println("[Plan] Fetch fehlgeschlagen — nutze Cache falls vorhanden");
+    return;
+  }
+  String json;
+  doc.toString(json);
+  if (json.length() > 0 && json != cachedPlanJson) {
+    cachedPlanJson = json;
+    cachedPlanTimeMs = now;
+    savePlanCacheToNVS(json);
+    Serial.printf("[Plan] aktualisiert (%d Zeichen)\n", json.length());
+  }
+}
+
+// ---------- Cache-Alter prüfen ----------
+bool isPlanCacheStale() {
+  if (cachedPlanJson.length() == 0) return true;
+  unsigned long age = millis() - cachedPlanTimeMs;
+  return age > PLAN_CACHE_TTL_MS;
+}
+
+// ---------- Plan-Check (alle 60 s) ----------
+// Geht die KH- und Ca-Plan-Einträge durch und führt fällige aus.
+// "fällig" = entry.date liegt in der Vergangenheit oder innerhalb der nächsten 90 s.
+void checkPlanForDueDose() {
+  unsigned long ms = millis();
+  if (lastPlanCheckMs != 0 && ms - lastPlanCheckMs < PLAN_CHECK_INTERVAL_MS) return;
+  lastPlanCheckMs = ms;
+
+  if (current.active) return;  // erst aktuelle Dose abwarten
+  if (cachedPlanJson.length() == 0) return;
+  if (isPlanCacheStale()) {
+    Serial.println("[Plan] Cache zu alt (>25h) — keine Auto-Doses");
+    return;
+  }
+
+  time_t now;
+  time(&now);
+  if (now < 1700000000) return;  // Zeit noch nicht synced
+
+  FirebaseJson doc;
+  doc.setJsonData(cachedPlanJson);
+
+  // Helper: Plan-Array (kh oder ca) durchgehen
+  auto processArray = [&](const char* fieldKey, bool isKH) {
+    String basePath = String("fields/") + fieldKey + "/arrayValue/values";
+    FirebaseJsonData arr;
+    if (!doc.get(arr, basePath.c_str())) return;
+    FirebaseJsonArray entries;
+    arr.get(entries);
+    for (size_t i = 0; i < entries.size(); i++) {
+      FirebaseJsonData itemData;
+      entries.get(itemData, i);
+      FirebaseJson entry;
+      entry.setJsonData(itemData.stringValue);
+      // Einträge sind unter mapValue/fields/{date,dosageML,caDosageML,mgDosageML,isMaintenanceDose}
+      FirebaseJsonData dateF, mlF, isMaintF;
+      entry.get(dateF, "mapValue/fields/date/integerValue");
+      const char* mlField = isKH ? "mapValue/fields/dosageML/doubleValue" : "mapValue/fields/caDosageML/doubleValue";
+      entry.get(mlF, mlField);
+      entry.get(isMaintF, "mapValue/fields/isMaintenanceDose/booleanValue");
+
+      time_t date = dateF.success ? (time_t)dateF.intValue : 0;
+      float ml = mlF.success ? mlF.floatValue : 0;
+      bool isMaint = isMaintF.success ? (isMaintF.stringValue == "true") : false;
+
+      if (ml <= 0.001f) continue;
+
+      // Erhaltungsdosis (date == 0): TODO — alle 2 Stunden ausführen
+      if (date == 0 || isMaint) continue;  // Session C: maintenance pacing
+
+      // Liegt fällig in Vergangenheit oder innerhalb 90s?
+      if (date < now - 90 || date > now + 90) continue;
+
+      time_t *exArr = isKH ? executedDoses : executedDosesCa;
+      int &exHead = isKH ? executedHead : executedHeadCa;
+      if (wasExecuted(date, exArr)) continue;
+
+      // KH: bei isNightDosage und pH-Mode → Pumpe 3 statt 2
+      int pump = isKH ? 2 : 0;
+      if (isKH) {
+        // TODO Session C: Tag/Nacht-Entscheidung anhand pH/Uhrzeit
+      }
+
+      Serial.printf("[Plan] Fällige Dose: %s ml=%.2f pump=%d\n", isKH?"KH":"Ca", ml, pump);
+      if (pumps::runMl(pump, ml)) {
+        markExecuted(date, exArr, exHead);
+        // Bestätigung in dosings via Heartbeat-Mechanismus (finishCommand wird's nicht abdecken,
+        // da kein Command-Doc — wir loggen direkt):
+        firebase_sync::addDosing(pump, ml, isKH?"kh-plan":"ca-plan", true, 1.0f, true);
+        break;  // nur eine Dose pro Check
+      }
+
+      // Bei Ca-Plan zusätzlich Mg-Pumpe
+      if (!isKH) {
+        FirebaseJsonData mgF;
+        entry.get(mgF, "mapValue/fields/mgDosageML/doubleValue");
+        if (mgF.success && mgF.floatValue > 0.001f) {
+          // direkt nach Ca: wird im nächsten Tick gefahren
+          // Vereinfachung für Session B: erstmal nur die Hauptpumpe
+        }
+      }
+    }
+  };
+
+  processArray("khEntries", true);
+  processArray("caEntries", false);
 }
 
 // ---------- Pump-Status checken (im Loop aufrufen) ----------
@@ -196,11 +350,16 @@ void checkPumpFinished() {
   }
 }
 
+void begin() {
+  loadPlanCacheFromNVS();
+}
+
 void tick() {
   checkPumpFinished();
   pollCommands();
-  checkPlanForDueDose();
   syncPumpConfigs();
+  syncPlan();
+  checkPlanForDueDose();
 }
 
 } // namespace plan_executor

@@ -53,6 +53,7 @@ void setup() {
   // Hardware-Init zuerst (Pumpen sicher in disabled state)
   pumps::begin();
   ph_sensor::begin();
+  plan_executor::begin();  // lädt Plan-Cache aus NVS
 
   // Keine gespeicherte Config? → Setup-Portal
   if (!setup_portal::hasStoredConfig()) {

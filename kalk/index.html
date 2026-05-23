@@ -557,7 +557,8 @@
     addMeasurement, listMeasurements, deleteMeasurement,
     addDosing, listDosings,
     getPumps, savePump,
-    sendCommand, watchCommand, deleteCommand
+    sendCommand, watchCommand, deleteCommand,
+    savePlan
   } from "/kalk/firestore-store.js";
   import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
 
@@ -1084,6 +1085,8 @@
       const dosings = await listDosings(500);
       const now = Math.floor(Date.now() / 1000);
 
+      let khPlan = null, caPlan = null;
+
       // KH-Plan
       if (khItems.length > 0) {
         const currentKH = khItems[0].value;
@@ -1093,8 +1096,10 @@
           historyCount: settings.historyCount || 5
         }) || settings.initialKHConsumption || 160;
 
-        const plan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, now });
-        renderKHPlan(plan, currentKH, dailyKH);
+        khPlan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, now });
+        khPlan._currentKH = currentKH;
+        khPlan._dailyConsumption = dailyKH;
+        renderKHPlan(khPlan, currentKH, dailyKH);
       } else {
         document.getElementById("kh-plan-table").style.display = "none";
         document.getElementById("kh-plan-summary").innerHTML = `<div class="center-state"><p>Erst KH-Messwert eintragen.</p></div>`;
@@ -1109,12 +1114,32 @@
           historyCount: settings.historyCount || 5
         }) || settings.initialCalciumConsumption || 60;
 
-        const plan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, now });
-        renderCaPlan(plan, currentCa, dailyCa);
+        caPlan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, now });
+        caPlan._currentCa = currentCa;
+        caPlan._dailyConsumption = dailyCa;
+        renderCaPlan(caPlan, currentCa, dailyCa);
       } else {
         document.getElementById("ca-plan-table").style.display = "none";
         document.getElementById("ca-plan-summary").innerHTML = `<div class="center-state"><p>Erst Ca-Messwert eintragen.</p></div>`;
       }
+
+      // Plan ans ESP übermitteln (in Firestore speichern)
+      // ESP holt sich das + cached lokal für Offline-Fallback
+      const planDoc = {
+        khEntries: khPlan?.entries || [],
+        caEntries: caPlan?.entries || [],
+        meta: {
+          khMaintenance: khPlan?.maintenance ?? null,
+          caMaintenance: caPlan?.maintenance ?? null,
+          khCurrent: khPlan?._currentKH ?? null,
+          caCurrent: caPlan?._currentCa ?? null,
+          khDailyConsumption: khPlan?._dailyConsumption ?? null,
+          caDailyConsumption: caPlan?._dailyConsumption ?? null,
+          generatedAtClient: now
+        }
+      };
+      try { await savePlan(planDoc); }
+      catch (e) { console.warn("Plan-Save zu Firestore:", e); }
     } catch (e) { console.warn("Plan rechnen:", e); }
   }
 
