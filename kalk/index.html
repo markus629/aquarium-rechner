@@ -1124,7 +1124,8 @@
       }
 
       // Plan ans ESP übermitteln (in Firestore speichern)
-      // ESP holt sich das + cached lokal für Offline-Fallback
+      // ESP holt sich das alle 30s (quasi-push, schnelle Aktualisierung)
+      // + cached lokal für Offline-Fallback bis 25h
       const planDoc = {
         khEntries: khPlan?.entries || [],
         caEntries: caPlan?.entries || [],
@@ -1138,8 +1139,10 @@
           generatedAtClient: now
         }
       };
-      try { await savePlan(planDoc); }
-      catch (e) { console.warn("Plan-Save zu Firestore:", e); }
+      try {
+        await savePlan(planDoc);
+        // dezenter Status — kein lauter Toast bei jedem Refresh
+      } catch (e) { console.warn("Plan-Save zu Firestore:", e); }
     } catch (e) { console.warn("Plan rechnen:", e); }
   }
 

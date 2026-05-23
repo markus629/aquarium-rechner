@@ -31,6 +31,7 @@
 #include "firebase_sync.h"
 #include "ph_sensor.h"
 #include "pumps.h"
+#include "settings_cache.h"
 #include "plan_executor.h"
 #include "ota_update.h"
 
