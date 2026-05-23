@@ -27,10 +27,13 @@ function aquaPath(docId) {
 }
 
 // ---------- Einstellungen ----------
-// Liefert gespeicherte Settings ODER Defaults (ohne automatisch zu speichern)
+// Liefert Defaults + gespeicherte Settings darüber gemergt.
+// Wichtig: einzelne Felder werden mit merge:true gespeichert. Wenn nur
+// einzelne Felder im Doc sind, fallen die anderen auf Defaults zurück.
 export async function getSettings() {
   const snap = await getDoc(doc(db, aquaPath("settings")));
-  return snap.exists() ? snap.data() : defaultSettings();
+  const stored = snap.exists() ? snap.data() : {};
+  return { ...defaultSettings(), ...stored };
 }
 
 export async function saveSettings(settings) {
@@ -38,11 +41,13 @@ export async function saveSettings(settings) {
 }
 
 // ---------- Pumpen ----------
+// Auch hier: Defaults pro Pumpe + gespeicherte Felder darüber.
 export async function getPumps() {
   const pumps = [];
   for (let i = 0; i < 4; i++) {
     const snap = await getDoc(doc(db, aquaPath(`pump-${i}`)));
-    pumps.push(snap.exists() ? { index: i, ...snap.data() } : { index: i, ...defaultPump(i) });
+    const stored = snap.exists() ? snap.data() : {};
+    pumps.push({ index: i, ...defaultPump(i), ...stored });
   }
   return pumps;
 }
