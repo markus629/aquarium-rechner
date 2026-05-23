@@ -99,14 +99,7 @@ void loop() {
   // pH-Sampling (alle 100 ms)
   ph_sensor::tick();
 
-  // Pumpen-Check (haben sie fertig dosiert?)
-  int finishedPump = pumps::checkAndDisable();
-  if (finishedPump >= 0) {
-    Serial.printf("[Loop] Pumpe %d (%s) fertig\n", finishedPump, pumps::PUMP_NAMES[finishedPump]);
-    // TODO Session B: addDosing-Bestätigung schreiben
-  }
-
-  // Plan + Commands (adaptives Polling intern)
+  // Plan + Commands (adaptives Polling intern, übernimmt auch Pump-Check + finishCommand)
   plan_executor::tick();
 
   // Heartbeat

@@ -64,7 +64,8 @@ const String& uid() { return currentUid; }
 String pathInfo()      { return "users/" + currentUid + "/aquarium/info"; }
 String pathSettings()  { return "users/" + currentUid + "/aquarium/settings"; }
 String pathPlan()      { return "users/" + currentUid + "/aquarium/plan-current"; }
-String pathCommands()  { return "users/" + currentUid + "/aquarium/commands"; }
+String pathCommands()  { return "users/" + currentUid + "/aquarium-commands"; }
+String pathPump(int i) { return "users/" + currentUid + "/aquarium/pump-" + String(i); }
 String pathMeasurements() { return "users/" + currentUid + "/aquarium/measurements/items"; }
 String pathDosings()   { return "users/" + currentUid + "/aquarium/dosings/items"; }
 
@@ -162,27 +163,93 @@ bool addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, 
                                            content.raw(), "");
 }
 
-// ---------- Command-Queue lesen ----------
-// Pollt das commands-Dokument, gibt Liste offener Commands als JSON zurück.
-bool fetchPendingCommands(FirebaseJson &out) {
+// ---------- Pump-Konfig lesen (Kalibrierung) ----------
+// Returns true wenn erfolgreich, schreibt mlPerStep ins out-Parameter.
+bool fetchPumpMlPerStep(int pumpIdx, float &outMlPerStep) {
   if (!isReady()) return false;
-  if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathCommands().c_str())) {
-    out.setJsonData(fbdo.payload());
+  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathPump(pumpIdx).c_str())) {
+    return false;
+  }
+  FirebaseJson doc;
+  doc.setJsonData(fbdo.payload());
+  FirebaseJsonData v;
+  if (doc.get(v, "fields/mlPerStep/doubleValue") && v.success) {
+    outMlPerStep = v.floatValue;
+    return true;
+  }
+  // Manchmal als integer gespeichert (0)
+  if (doc.get(v, "fields/mlPerStep/integerValue") && v.success) {
+    outMlPerStep = (float)v.intValue;
     return true;
   }
   return false;
 }
 
-// ---------- Command als erledigt markieren ----------
-// Setzt status="done" + result-Felder im Command-Dokument.
-bool ackCommand(const String &commandId, const String &resultJson) {
+// ---------- Command-Queue lesen ----------
+// Liefert via runQuery alle pending commands. Bis zu 5 werden zurückgegeben.
+// out: FirebaseJsonArray mit den Doc-Inhalten (jeweils mit "name" für ID-Extraktion)
+bool fetchPendingCommands(FirebaseJsonArray &out) {
+  out.clear();
   if (!isReady()) return false;
-  // Pfad: users/{uid}/aquarium/commands/{commandId}
-  String path = pathCommands() + "/" + commandId;
+  // StructuredQuery: SELECT * FROM aquarium-commands WHERE status == "pending"
+  // Mobizt's Library: Firebase.Firestore.runQuery
+  FirebaseJson queryJson;
+  queryJson.set("structuredQuery/from/[0]/collectionId", "aquarium-commands");
+  queryJson.set("structuredQuery/where/fieldFilter/field/fieldPath", "status");
+  queryJson.set("structuredQuery/where/fieldFilter/op", "EQUAL");
+  queryJson.set("structuredQuery/where/fieldFilter/value/stringValue", "pending");
+  queryJson.set("structuredQuery/limit", 5);
+  // OrderBy createdAt asc (älteste zuerst)
+  queryJson.set("structuredQuery/orderBy/[0]/field/fieldPath", "createdAt");
+  queryJson.set("structuredQuery/orderBy/[0]/direction", "ASCENDING");
+
+  // Parent für runQuery: users/{uid}
+  String parent = "users/" + currentUid;
+  if (!Firebase.Firestore.runQuery(&fbdo, FIREBASE_PROJECT_ID, "", parent.c_str(), &queryJson)) {
+    return false;
+  }
+  // fbdo.payload() ist Array von [{document: {...}, ...}, ...]
+  FirebaseJsonArray arr;
+  arr.setJsonArrayData(fbdo.payload());
+  // Jedes Element kann ein Result mit document sein oder {} (Sentinel)
+  for (size_t i = 0; i < arr.size(); i++) {
+    FirebaseJsonData item;
+    arr.get(item, i);
+    FirebaseJson el;
+    el.setJsonData(item.stringValue);
+    FirebaseJsonData docPath;
+    if (el.get(docPath, "document/name") && docPath.success) {
+      out.add(el);
+    }
+  }
+  return true;
+}
+
+// ---------- Command-Status aktualisieren ----------
+// Schreibt status + optional result-Felder via PATCH.
+// commandPath: vollständiger Pfad (so wie er aus dem document/name kommt, ohne
+// das "projects/.../documents/" Prefix)
+bool updateCommand(const String &commandPath, const String &status, FirebaseJson *resultJson = nullptr) {
+  if (!isReady()) return false;
   FirebaseJson content;
-  content.setJsonData(resultJson);
-  String mask = "status,result,completedAt";
-  return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(),
+  content.set("fields/status/stringValue", status);
+  time_t now; time(&now);
+  if (now > 1700000000) {
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    if (status == "running") content.set("fields/startedAt/timestampValue", buf);
+    else if (status == "done" || status == "failed") content.set("fields/completedAt/timestampValue", buf);
+  }
+  String mask = "status";
+  if (status == "running") mask += ",startedAt";
+  if (status == "done" || status == "failed") mask += ",completedAt";
+
+  if (resultJson) {
+    // result ist ein Map-Field. Wir setzen es als komplettes Objekt.
+    content.set("fields/result/mapValue/fields", *resultJson);
+    mask += ",result";
+  }
+  return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", commandPath.c_str(),
                                           content.raw(), mask.c_str());
 }
 

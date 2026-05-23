@@ -6,7 +6,7 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.13
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, collection, doc,
-  getDoc, getDocs, setDoc, addDoc, deleteDoc,
+  getDoc, getDocs, setDoc, addDoc, deleteDoc, onSnapshot,
   query, orderBy, limit, where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -100,6 +100,63 @@ export async function listDosings(maxItems = 200) {
   const q = query(
     collection(db, `users/${uid}/aquarium/dosings/items`),
     orderBy("timestamp", "desc"),
+    limit(maxItems)
+  );
+  const snap = await getDocs(q);
+  const out = [];
+  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+  return out;
+}
+
+// ---------- Commands (ESP-Steuerung) ----------
+// Pfad: users/{uid}/aquarium-commands/{auto-id}
+// Wir verwenden eine separate Subcollection auf User-Ebene, damit
+// die Pumpen-Config-Docs aquarium/pump-N und die Commands sich nicht
+// auf gleichem "aquarium" Pfad mischen.
+function commandsPath() {
+  return `users/${requireUid()}/aquarium-commands`;
+}
+
+// Sendet einen Command an den ESP. Liefert command-ID zurück.
+//   action: "calibrate" → braucht pump + steps
+//   action: "dose"      → braucht pump + ml
+//   action: "stop"      → stoppt aktuelle Pumpenaktion
+export async function sendCommand({ action, pump, ml, steps }) {
+  const uid = requireUid();
+  const cmd = {
+    action,
+    status: "pending",
+    createdAt: serverTimestamp()
+  };
+  if (pump != null) cmd.pump = pump;
+  if (ml != null) cmd.ml = ml;
+  if (steps != null) cmd.steps = steps;
+  const ref = await addDoc(collection(db, commandsPath()), cmd);
+  return ref.id;
+}
+
+// onSnapshot auf einen bestimmten Command-Doc. callback bekommt das aktuelle data oder null wenn gelöscht.
+// Liefert die Unsubscribe-Funktion.
+export function watchCommand(commandId, callback) {
+  const uid = requireUid();
+  const ref = doc(db, `${commandsPath()}/${commandId}`);
+  return onSnapshot(ref, snap => {
+    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  }, err => {
+    console.warn("watchCommand error:", err);
+    callback(null);
+  });
+}
+
+export async function deleteCommand(commandId) {
+  await deleteDoc(doc(db, `${commandsPath()}/${commandId}`));
+}
+
+// Letzte Commands (für Debug/Verlauf)
+export async function listRecentCommands(maxItems = 20) {
+  const q = query(
+    collection(db, commandsPath()),
+    orderBy("createdAt", "desc"),
     limit(maxItems)
   );
   const snap = await getDocs(q);
