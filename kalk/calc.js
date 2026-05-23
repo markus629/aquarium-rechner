@@ -260,37 +260,69 @@ export function calculateCaPlan({
 }
 
 // ---------- Verbrauchs-Schätzung aus Messhistorie ----------
-// Liefert ml/Tag basierend auf den letzten N Messungen und dosierten Mengen.
-// Wenn zu wenig Daten: null (Caller verwendet dann initialKHConsumption).
+// Portiert 1:1 aus 088_sketch_sep3a_01.ino — calculateConsumption() (Zeile 3992+):
 //
-// Vereinfacht: nimmt erste und letzte Messung, errechnet linearen Drift,
-// und addiert die in dem Intervall dosierte Menge zurück.
+//  - 0 oder 1 Messung: null → Caller nutzt settings.initialXxxConsumption
+//  - 2 Messungen: direkte Berechnung über den gesamten Zeitraum
+//  - 3+ Messungen: pro Intervall berechnen, dann gleichgewichtet mitteln
+//
+// KH-Nacht-Dosierungen werden mit Faktor 2 gewertet (Konzentrat ist 2×).
+//
+// Formel pro Intervall:
+//   consumption = (dosagedML_im_intervall − valueDrift / perMlFactor) / days
+// Bedeutet: ml die das Aquarium "natürlich" verbraucht (alles was dosiert wurde
+// minus das, was als Wertänderung sichtbar wurde).
+function dosagesInInterval(dosings, type, startTs, endTs) {
+  let sum = 0;
+  for (const d of dosings || []) {
+    if (d.timestamp < startTs || d.timestamp >= endTs) continue;
+    let multi = 0;
+    if (type === "kh") {
+      if (d.pump === 2) multi = 1;        // KH-Tag
+      else if (d.pump === 3) multi = 2;   // KH-Nacht: 2× konzentriert
+    } else if (type === "ca") {
+      if (d.pump === 0) multi = 1;
+    }
+    sum += (d.ml || 0) * multi;
+  }
+  return sum;
+}
+
 export function estimateDailyConsumption({ measurements, dosings, type, perMlFactor, historyCount = 5 }) {
+  if (!perMlFactor || perMlFactor <= 0) return null;
   const sorted = (measurements || [])
     .filter(m => m.type === type)
     .sort((a, b) => a.timestamp - b.timestamp);
+
+  // 0 oder 1 Messung: Caller soll initialKHConsumption nutzen
   if (sorted.length < 2) return null;
-  const recent = sorted.slice(-historyCount);
-  const first = recent[0], last = recent[recent.length - 1];
-  const elapsedDays = (last.timestamp - first.timestamp) / 86400;
-  if (elapsedDays < 0.5) return null;
 
-  const drift = last.value - first.value;            // wert-änderung
-  // Dosierungen in dem Zeitraum
-  const ml = (dosings || [])
-    .filter(d => d.timestamp >= first.timestamp && d.timestamp <= last.timestamp)
-    .filter(d => {
-      // KH: Pumpe 2 (Tag) + 3 (Nacht); Ca: Pumpe 0
-      if (type === "kh") return d.pump === 2 || d.pump === 3;
-      if (type === "ca") return d.pump === 0;
-      return false;
-    })
-    .reduce((s, d) => s + (d.ml || 0), 0);
+  // 2 Messungen: direkter Verbrauch
+  if (sorted.length === 2) {
+    const a = sorted[0], b = sorted[1];
+    const days = (b.timestamp - a.timestamp) / 86400;
+    if (days <= 0) return null;
+    const dosed = dosagesInInterval(dosings, type, a.timestamp, b.timestamp);
+    const drift = b.value - a.value;
+    const c = (dosed - (drift / perMlFactor)) / days;
+    return (isFinite(c) && c > 0) ? c : null;
+  }
 
-  // verbrauch_value = ml_dosiert × perMlFactor − drift
-  // verbrauch_ml/Tag = verbrauch_value / (perMlFactor × elapsedDays)
-  const consumedValue = (ml * perMlFactor) - drift;
-  const dailyConsumption = consumedValue / (perMlFactor * elapsedDays);
-  if (!isFinite(dailyConsumption) || dailyConsumption < 0) return null;
-  return dailyConsumption;
+  // 3+ Messungen: per-Intervall berechnen, gleichgewichtet mitteln
+  const used = Math.min(sorted.length, historyCount);
+  const startIdx = Math.max(0, sorted.length - used);
+  const window = sorted.slice(startIdx);
+  const intervalConsumptions = [];
+  for (let i = 1; i < window.length; i++) {
+    const a = window[i - 1], b = window[i];
+    const days = (b.timestamp - a.timestamp) / 86400;
+    if (days <= 0) continue;
+    const dosed = dosagesInInterval(dosings, type, a.timestamp, b.timestamp);
+    const drift = b.value - a.value;
+    const c = (dosed - (drift / perMlFactor)) / days;
+    if (isFinite(c)) intervalConsumptions.push(c);
+  }
+  if (intervalConsumptions.length === 0) return null;
+  const avg = intervalConsumptions.reduce((s, x) => s + x, 0) / intervalConsumptions.length;
+  return avg > 0 ? avg : null;
 }
