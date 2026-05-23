@@ -31,6 +31,20 @@ Firebase synchronisiert.
    - `ArduinoJson` (von Benoit Blanchon) — Version 7.x
 7. Sketch `aquarium-rechner-esp.ino` öffnen, kompilieren, hochladen
 
+## Vor dem ESP-Setup: E-Mail-Passwort einrichten (einmalig)
+
+Wenn du dich bisher nur per **Google-Login** auf `aquarium-rechner.web.app`
+angemeldet hast, hast du **kein klassisches E-Mail-Passwort** — der ESP
+braucht aber eines, weil er kein Browser-basiertes OAuth durchlaufen kann.
+
+So setzt du eines:
+1. `aquarium-rechner.web.app` öffnen → einloggen
+2. Tab **„Gerät"** → Button **„📧 Passwort-Reset-Link senden"**
+3. Mail von Firebase (auch im Spam-Ordner) → Link → Passwort setzen
+
+Danach kannst du dich sowohl mit Google als auch mit E-Mail+Passwort
+anmelden. Letzteres verwendet der ESP.
+
 ## Erster Boot — WiFi-Setup
 
 Nach dem ersten Flash:
@@ -38,7 +52,7 @@ Nach dem ersten Flash:
 1. ESP startet einen Access-Point: **`AquariumRechner-Setup`**
 2. Verbinde dich mit Handy/Laptop (kein Passwort)
 3. Browser öffnet automatisch das Setup-Portal (Captive-Portal), oder gehe zu `http://192.168.4.1/`
-4. **WLAN-Daten** + **Firebase-Login** (deine E-Mail + Passwort vom Aquarium-Rechner-Konto) eingeben
+4. **WLAN-Daten** + **E-Mail + dein neu gesetztes Passwort** eingeben
 5. Speichern → ESP startet neu, verbindet sich mit deinem WLAN, meldet sich an Firebase an
 
 Ab da an läuft alles automatisch. Im Web-UI siehst du den ESP als „online" mit Live-Heartbeat.
