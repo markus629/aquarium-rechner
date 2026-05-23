@@ -372,17 +372,26 @@
     </div>
     <div id="tab-ph" class="tab-content">
       <div class="card">
-        <h2>pH-Sensor</h2>
+        <h2>pH-Sensor-Kalibrierung</h2>
         <p style="color:var(--text-light);margin-bottom:1rem">
-          pH-Werte kommen automatisch vom ESP (alle 30 s). Manuelle Eingabe ist auch möglich (z. B. von externem Messgerät).
+          Zweipunkt-Kalibrierung mit pH-4- und pH-7-Pufferlösung. Lege die Sonde in den jeweiligen Puffer,
+          warte bis sich der Wert stabilisiert (~30 Sek.), klick Start. Der ESP sampelt 10 Sekunden lang
+          und speichert die Voltage.
         </p>
-
-        <div class="info-banner">
-          <strong>Hinweis:</strong> Sensor-Kalibrierung (pH-4 / pH-7-Puffer) und Live-Werte vom Sensor werden in Phase 2/3
-          mit der ESP-Anbindung freigeschaltet. Für jetzt kannst du manuell pH-Werte eintragen, um den Verlauf zu beobachten.
+        <div id="ph-cal-status" style="margin-bottom:1rem"></div>
+        <div style="display:flex;gap:0.7rem;flex-wrap:wrap">
+          <button class="btn btn-primary" id="ph-cal-4">▶ pH-4 kalibrieren</button>
+          <button class="btn btn-primary" id="ph-cal-7">▶ pH-7 kalibrieren</button>
         </div>
+        <div id="ph-cal-wizard" style="margin-top:1rem"></div>
+      </div>
 
-        <h3 style="margin-top:1rem">Manuell eintragen</h3>
+      <div class="card">
+        <h2>Manuell eintragen</h2>
+        <p style="color:var(--text-light);margin-bottom:0.7rem">
+          Z. B. wenn du extern misst und mit dem ESP-Wert vergleichen willst. Der ESP schreibt automatisch
+          alle 2 Stunden um :05 einen Mittelwert in die Historie (synchron zur Dosier-Sequenz um :10).
+        </p>
         <div class="inline-form">
           <div class="form-row">
             <label>pH-Wert</label>
@@ -395,8 +404,8 @@
       <div class="card">
         <h2>pH-Verlauf</h2>
         <table class="data-table">
-          <thead><tr><th>Zeit</th><th class="num">pH</th><th class="act">Löschen</th></tr></thead>
-          <tbody id="ph-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+          <thead><tr><th>Zeit</th><th class="num">pH</th><th>Quelle</th><th class="act">Löschen</th></tr></thead>
+          <tbody id="ph-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -744,6 +753,109 @@
     }
   };
 
+  // ---------- pH-Kalibrierung-Wizard ----------
+  let phCalUnsub = null;
+  function renderPhCalStep(html) {
+    document.getElementById("ph-cal-wizard").innerHTML = html;
+  }
+  async function runPhCalibration(targetPh) {
+    // Bestehendes Wizard schließen
+    if (phCalUnsub) { try { phCalUnsub(); } catch(_){} phCalUnsub = null; }
+    document.getElementById("ph-cal-4").disabled = true;
+    document.getElementById("ph-cal-7").disabled = true;
+    renderPhCalStep(`
+      <div class="pump-cal-step active">
+        <strong>pH-${targetPh} Kalibrierung läuft …</strong>
+        <div class="cal-progress"><div class="cal-progress-fill" style="width:0%"></div></div>
+        <div style="font-size:0.85rem;color:var(--text-light);margin-top:0.4rem">ESP sampelt 10 Sekunden lang.</div>
+      </div>`);
+
+    let cmdId;
+    try {
+      cmdId = await sendCommand({ action: "calibratePh", phValue: targetPh });
+    } catch (e) {
+      renderPhCalStep(`<div class="pump-cal-step" style="color:var(--red)">Fehler: ${e.message}</div>`);
+      document.getElementById("ph-cal-4").disabled = false;
+      document.getElementById("ph-cal-7").disabled = false;
+      return;
+    }
+
+    const timeoutHandle = setTimeout(() => {
+      renderPhCalStep(`<div class="pump-cal-step" style="color:var(--orange)">⚠️ ESP antwortet nicht. Ist er online? (Tab „Gerät" prüfen)</div>`);
+      if (phCalUnsub) { try { phCalUnsub(); } catch(_){} phCalUnsub = null; }
+      document.getElementById("ph-cal-4").disabled = false;
+      document.getElementById("ph-cal-7").disabled = false;
+    }, 30000);
+
+    let elapsedTimer = null;
+    let startTime = Date.now();
+    phCalUnsub = watchCommand(cmdId, (data) => {
+      if (!data) return;
+      if (data.status === "running") {
+        if (!elapsedTimer) {
+          elapsedTimer = setInterval(() => {
+            const pct = Math.min(100, (Date.now() - startTime) / 100);
+            const bar = document.querySelector(".cal-progress-fill");
+            if (bar) bar.style.width = pct + "%";
+          }, 200);
+        }
+      } else if (data.status === "done") {
+        clearTimeout(timeoutHandle);
+        if (elapsedTimer) clearInterval(elapsedTimer);
+        if (phCalUnsub) { phCalUnsub(); phCalUnsub = null; }
+        const v = data.result?.voltage;
+        const fully = data.result?.isFullyCalibrated;
+        renderPhCalStep(`
+          <div class="pump-cal-step done">
+            <strong>pH-${targetPh} Kalibrierung erfolgreich</strong><br>
+            Voltage: <code>${v ? v.toFixed(4) + " V" : "—"}</code>
+            ${fully ? "<br>✅ Beide Punkte kalibriert — Sensor jetzt einsatzbereit." : "<br>ℹ️ Jetzt den anderen Punkt kalibrieren."}
+          </div>`);
+        document.getElementById("ph-cal-4").disabled = false;
+        document.getElementById("ph-cal-7").disabled = false;
+        refreshDeviceTab();
+      } else if (data.status === "failed") {
+        clearTimeout(timeoutHandle);
+        if (elapsedTimer) clearInterval(elapsedTimer);
+        if (phCalUnsub) { phCalUnsub(); phCalUnsub = null; }
+        renderPhCalStep(`<div class="pump-cal-step" style="color:var(--red)">Fehler: ${data.result?.error || "unbekannt"}</div>`);
+        document.getElementById("ph-cal-4").disabled = false;
+        document.getElementById("ph-cal-7").disabled = false;
+      }
+    });
+  }
+
+  // Status der pH-Kalibrierung beim Tab-Öffnen anzeigen
+  async function refreshPhCalStatus() {
+    try {
+      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+      const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+      const user = getAuthInstance().currentUser;
+      if (!user) return;
+      const app = getApps()[0];
+      const db = getFirestore(app);
+      const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/ph-calibration`));
+      const el = document.getElementById("ph-cal-status");
+      if (!el) return;
+      if (!snap.exists()) {
+        el.innerHTML = `<div class="info-banner">⚠️ <strong>Noch nicht kalibriert.</strong> Ohne Kalibrierung liefert der Sensor keine pH-Werte und die KH-Tag/Nacht-Entscheidung nutzt die Uhrzeit-Logik.</div>`;
+        return;
+      }
+      const d = snap.data();
+      const v4 = d.voltage_pH4, v7 = d.voltage_pH7, cal = d.isCalibrated;
+      const when = d.lastCalibratedAt ? new Date(d.lastCalibratedAt * 1000).toLocaleString("de-DE") : "—";
+      if (cal) {
+        el.innerHTML = `<div class="info-banner" style="background:#e8f8ec;border-color:var(--green);color:#1d6a3a">✅ <strong>Voll kalibriert</strong> &middot; pH-4: <code>${v4?.toFixed(4)} V</code> &middot; pH-7: <code>${v7?.toFixed(4)} V</code> &middot; ${when}</div>`;
+      } else {
+        const missing = isNaN(v4) ? "pH-4" : "pH-7";
+        el.innerHTML = `<div class="info-banner">⚠️ <strong>Teilweise kalibriert</strong> — ${missing} fehlt noch. Bitte beide Punkte kalibrieren.</div>`;
+      }
+    } catch (e) { console.warn("pH-Cal-Status:", e); }
+  }
+
+  document.getElementById("ph-cal-4").onclick = () => runPhCalibration(4);
+  document.getElementById("ph-cal-7").onclick = () => runPhCalibration(7);
+
   // ---------- pH-Sensor Tab ----------
   document.getElementById("ph-save").onclick = async () => {
     const v = parseFloat(document.getElementById("ph-value").value);
@@ -761,12 +873,13 @@
       const items = await listMeasurements("ph", 100);
       const tbody = document.getElementById("ph-tbody");
       if (!items.length) {
-        tbody.innerHTML = `<tr><td class="empty" colspan="3">Keine pH-Messungen erfasst</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="4">Keine pH-Messungen erfasst</td></tr>`;
       } else {
         tbody.innerHTML = items.map(m => `
           <tr>
             <td>${fmtDateTime(m.timestamp)}</td>
             <td class="num">${Number(m.value).toFixed(2)}</td>
+            <td>${m.source === "esp" ? "ESP" : "Manuell"}</td>
             <td class="act"><button class="row-del" data-del-ph="${m.id}" title="Löschen">✕</button></td>
           </tr>`).join("");
         tbody.querySelectorAll("[data-del-ph]").forEach(btn => {
@@ -1337,6 +1450,7 @@
     await Promise.all([
       refreshMeasurements(),
       refreshPh(),
+      refreshPhCalStatus(),
       refreshDosings(),
       refreshPumpCalibration(),
       refreshContainers(),

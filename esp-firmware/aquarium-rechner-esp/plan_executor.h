@@ -30,6 +30,7 @@ unsigned long lastCommandPollMs = 0;
 unsigned long lastPumpConfigSyncMs = 0;
 unsigned long lastPlanFetchMs = 0;
 unsigned long lastSequenceCheckMs = 0;
+time_t lastPhSampleAt = 0;  // letzter pH-Sample-Zeitpunkt (für 2h-Raster)
 const unsigned long PLAN_FETCH_INTERVAL_MS = 30UL * 1000;       // 30s = Quasi-Push
 const unsigned long SEQUENCE_CHECK_INTERVAL_MS = 30UL * 1000;   // jede 30s in Trigger-Fenster gucken
 
@@ -178,9 +179,122 @@ bool startNextQueuedDose() {
   return true;
 }
 
+// ---------- pH-Kalibrierung (Command-Handler) ----------
+// Sampelt 10 Sekunden lang, mittelt die Voltage, speichert für gewählten pH-Wert.
+struct PhCalibrationCmd {
+  bool active = false;
+  String docPath;
+  float targetPh = 0;
+  unsigned long startMs = 0;
+  float voltageSum = 0;
+  int sampleCount = 0;
+};
+PhCalibrationCmd phCal;
+
+bool startPhCalibration(const String &docPath, float targetPh) {
+  if (phCal.active) {
+    FirebaseJson r; r.set("error/stringValue", "Kalibrierung bereits aktiv");
+    firebase_sync::updateCommand(docPath, "failed", &r);
+    return false;
+  }
+  if (targetPh != 4.0f && targetPh != 7.0f) {
+    FirebaseJson r; r.set("error/stringValue", "phValue muss 4.0 oder 7.0 sein");
+    firebase_sync::updateCommand(docPath, "failed", &r);
+    return false;
+  }
+  phCal.active = true;
+  phCal.docPath = docPath;
+  phCal.targetPh = targetPh;
+  phCal.startMs = millis();
+  phCal.voltageSum = 0;
+  phCal.sampleCount = 0;
+  firebase_sync::updateCommand(docPath, "running");
+  Serial.printf("[PhCal] starte pH-%g Kalibrierung (10s sampling)\n", targetPh);
+  return true;
+}
+
+void tickPhCalibration() {
+  if (!phCal.active) return;
+  // 10 Sekunden lang Voltage sammeln
+  unsigned long elapsed = millis() - phCal.startMs;
+  // pH-Sensor läuft eh in ph_sensor::tick() weiter — wir holen den Mittelwert
+  float v = ph_sensor::getVoltage();
+  if (!isnan(v)) {
+    phCal.voltageSum += v;
+    phCal.sampleCount++;
+  }
+  if (elapsed < 10000) return;
+
+  // Kalibrierung abgeschlossen
+  if (phCal.sampleCount == 0) {
+    FirebaseJson r; r.set("error/stringValue", "Keine Voltage-Samples");
+    firebase_sync::updateCommand(phCal.docPath, "failed", &r);
+    phCal.active = false;
+    return;
+  }
+  float avg = phCal.voltageSum / phCal.sampleCount;
+  Serial.printf("[PhCal] pH-%g: Voltage = %.4f V (%d Samples)\n",
+                phCal.targetPh, avg, phCal.sampleCount);
+
+  // In ph_sensor speichern und in Firestore (gepuffert)
+  if (phCal.targetPh == 4.0f) ph_sensor::voltagePH4 = avg;
+  else if (phCal.targetPh == 7.0f) ph_sensor::voltagePH7 = avg;
+  ph_sensor::calibrated = !isnan(ph_sensor::voltagePH4) && !isnan(ph_sensor::voltagePH7);
+
+  // NVS speichern (überlebt Reboot)
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  if (!isnan(ph_sensor::voltagePH4)) p.putFloat("phV4", ph_sensor::voltagePH4);
+  if (!isnan(ph_sensor::voltagePH7)) p.putFloat("phV7", ph_sensor::voltagePH7);
+  p.end();
+
+  // In Firestore (gepuffert)
+  firebase_sync::writePhCalibration(ph_sensor::voltagePH4, ph_sensor::voltagePH7,
+                                     ph_sensor::calibrated);
+
+  FirebaseJson result;
+  result.set("voltage/doubleValue", avg);
+  result.set("samples/integerValue", phCal.sampleCount);
+  result.set("phValue/doubleValue", phCal.targetPh);
+  result.set("durationMs/integerValue", (int)elapsed);
+  result.set("isFullyCalibrated/booleanValue", ph_sensor::calibrated);
+  firebase_sync::updateCommand(phCal.docPath, "done", &result);
+  phCal.active = false;
+}
+
+// ---------- pH-Probe schreiben — :05 jeder geraden Stunde ----------
+// 5 Minuten vor Dosis-Trigger, sodass aktueller pH-Wert in dosings/items
+// landet UND beim Trigger um :10 für die Tag/Nacht-Entscheidung verfügbar ist.
+void checkPhSampleSchedule() {
+  if (!ph_sensor::isCalibrated()) return;  // unsicher ohne Kalibrierung
+  time_t now; time(&now);
+  if (now < 1700000000) return;
+  struct tm t; localtime_r(&now, &t);
+
+  // Trigger: Minute 5 jeder geraden Stunde
+  if (t.tm_hour % 2 != 0) return;
+  if (t.tm_min < 5 || t.tm_min > 8) return;
+
+  // Schon in dieser Stunde geschrieben?
+  if (lastPhSampleAt > 0) {
+    struct tm last; localtime_r(&lastPhSampleAt, &last);
+    if (last.tm_year == t.tm_year && last.tm_yday == t.tm_yday && last.tm_hour == t.tm_hour) return;
+  }
+
+  float ph = ph_sensor::getPH();
+  if (isnan(ph)) return;
+  firebase_sync::addPhMeasurement(ph);
+  lastPhSampleAt = now;
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  p.putULong("lastPhAt", (unsigned long)now);
+  p.end();
+  Serial.printf("[pH] :05-Sample: %.2f → measurements\n", ph);
+}
+
 // ---------- Command-Dispatch (Web-Commands) ----------
-bool startCommand(const String &docPath, const String &action, int pump, float ml, long steps) {
-  if (current.active) {
+bool startCommand(const String &docPath, const String &action, int pump, float ml, long steps, float phValue) {
+  if (current.active || phCal.active) {
     Serial.println("[Cmd] bereits aktiv");
     return false;
   }
@@ -188,6 +302,9 @@ bool startCommand(const String &docPath, const String &action, int pump, float m
     pumps::emergencyStop();
     firebase_sync::updateCommand(docPath, "done");
     return true;
+  }
+  if (action == "calibratePh") {
+    return startPhCalibration(docPath, phValue);
   }
   if (pump < 0 || pump >= pumps::NUM_PUMPS) {
     FirebaseJson r; r.set("error/stringValue", "ungültige Pumpe");
@@ -290,12 +407,13 @@ void pollCommands() {
   FirebaseJson cmd;
   cmd.setJsonData(item.stringValue);
 
-  FirebaseJsonData fName, fAction, fPump, fMl, fSteps;
+  FirebaseJsonData fName, fAction, fPump, fMl, fSteps, fPhValue;
   cmd.get(fName, "document/name");
   cmd.get(fAction, "document/fields/action/stringValue");
   cmd.get(fPump, "document/fields/pump/integerValue");
   cmd.get(fMl, "document/fields/ml/doubleValue");
   cmd.get(fSteps, "document/fields/steps/integerValue");
+  cmd.get(fPhValue, "document/fields/phValue/doubleValue");
   if (!fName.success || !fAction.success) return;
 
   String fullName = fName.stringValue;
@@ -305,7 +423,8 @@ void pollCommands() {
   startCommand(docPath, fAction.stringValue,
                fPump.success ? (int)fPump.intValue : -1,
                fMl.success ? fMl.floatValue : NAN,
-               fSteps.success ? (long)fSteps.intValue : 0);
+               fSteps.success ? (long)fSteps.intValue : 0,
+               fPhValue.success ? fPhValue.floatValue : NAN);
 }
 
 // ---------- Helpers für Plan-Iteration ----------
@@ -484,15 +603,29 @@ void checkPumpFinished() {
 void begin() {
   loadFromNVS();
   settings_cache::begin();
+  // pH-Kalibrierung aus NVS laden
+  Preferences p;
+  p.begin(NVS_NAMESPACE, true);
+  float v4 = p.getFloat("phV4", NAN);
+  float v7 = p.getFloat("phV7", NAN);
+  lastPhSampleAt = (time_t)p.getULong("lastPhAt", 0);
+  p.end();
+  ph_sensor::setCalibration(v4, v7);
+  if (ph_sensor::isCalibrated()) {
+    Serial.printf("[pH] Kalibrierung aus NVS: V4=%.4f V7=%.4f\n", v4, v7);
+  }
 }
 
 void tick() {
   checkPumpFinished();
+  tickPhCalibration();             // pH-Kalibrierungs-Sampling
   pollCommands();
   syncPumpConfigs();
   settings_cache::sync();
   syncPlan();
-  checkAutoDosingSequence();
+  checkPhSampleSchedule();         // pH-Probe um :05 schreiben
+  checkAutoDosingSequence();       // Dosier-Sequenz um :10
+  firebase_sync::flushBuffer();    // Backlog-Uploads versuchen
 }
 
 } // namespace plan_executor

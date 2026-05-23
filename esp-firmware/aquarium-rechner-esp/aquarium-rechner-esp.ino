@@ -32,6 +32,7 @@
 #include "ph_sensor.h"
 #include "pumps.h"
 #include "settings_cache.h"
+#include "upload_buffer.h"
 #include "plan_executor.h"
 #include "ota_update.h"
 
@@ -54,7 +55,8 @@ void setup() {
   // Hardware-Init zuerst (Pumpen sicher in disabled state)
   pumps::begin();
   ph_sensor::begin();
-  plan_executor::begin();  // lädt Plan-Cache aus NVS
+  upload_buffer::begin();   // lädt offline-gepufferte Doses/pH aus NVS
+  plan_executor::begin();   // lädt Plan-Cache + Settings + pH-Kalib aus NVS
 
   // Keine gespeicherte Config? → Setup-Portal
   if (!setup_portal::hasStoredConfig()) {
@@ -117,12 +119,9 @@ void loop() {
     }
   }
 
-  // pH-Messung alle 5 Min separat in measurements/items schreiben
-  if (ph_sensor::isCalibrated() && now - lastPhReportMs > PH_REPORT_INTERVAL_MS) {
-    lastPhReportMs = now;
-    float ph = ph_sensor::getPH();
-    if (!isnan(ph)) firebase_sync::addPhMeasurement(ph);
-  }
+  // pH-Messung wird jetzt in plan_executor::checkPhSampleSchedule um :05
+  // jeder geraden Stunde geschrieben (synchron zur Dosier-Sequenz).
+  // Nicht mehr alle 5 Min unnötig spammen.
 
   // OTA-Check alle 6 h
   ota_update::tick();

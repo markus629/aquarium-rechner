@@ -22,6 +22,7 @@
 #include <addons/TokenHelper.h>
 #include <ArduinoJson.h>
 #include "config.h"
+#include "upload_buffer.h"
 
 namespace firebase_sync {
 
@@ -122,29 +123,21 @@ bool fetchPlan(FirebaseJson &out) {
   return false;
 }
 
-// ---------- pH-Messung schreiben ----------
-bool addPhMeasurement(float phValue) {
-  if (!isReady()) return false;
+// ---------- pH-Messung schreiben (gepuffert) ----------
+// Immer erst in upload_buffer einreihen, der Flush-Mechanismus
+// versucht periodisch zu senden. Garantiert: kein Datenverlust.
+void addPhMeasurement(float phValue) {
   FirebaseJson content;
   content.set("fields/type/stringValue", "ph");
   content.set("fields/value/doubleValue", phValue);
   content.set("fields/source/stringValue", "esp");
-  time_t now;
-  time(&now);
-  if (now > 1700000000) {
-    content.set("fields/timestamp/integerValue", (int)now);
-    char buf[32];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    content.set("fields/createdAt/timestampValue", buf);
-  }
-  return Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "",
-                                           pathMeasurements().c_str(), "",
-                                           content.raw(), "");
+  time_t now; time(&now);
+  if (now > 1700000000) content.set("fields/timestamp/integerValue", (int)now);
+  upload_buffer::enqueue(pathMeasurements(), content.raw());
 }
 
-// ---------- Dosier-Bestätigung schreiben ----------
-bool addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, float factor, bool success) {
-  if (!isReady()) return false;
+// ---------- Dosier-Bestätigung schreiben (gepuffert) ----------
+void addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, float factor, bool success) {
   FirebaseJson content;
   content.set("fields/pump/integerValue", pumpIdx);
   content.set("fields/ml/doubleValue", ml);
@@ -153,14 +146,75 @@ bool addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, 
   content.set("fields/factor/doubleValue", factor);
   content.set("fields/success/booleanValue", success);
   content.set("fields/source/stringValue", "esp");
-  time_t now;
-  time(&now);
-  if (now > 1700000000) {
-    content.set("fields/timestamp/integerValue", (int)now);
+  time_t now; time(&now);
+  if (now > 1700000000) content.set("fields/timestamp/integerValue", (int)now);
+  upload_buffer::enqueue(pathDosings(), content.raw());
+}
+
+// ---------- pH-Kalibrierung schreiben (gepuffert) ----------
+void writePhCalibration(float voltage_pH4, float voltage_pH7, bool isCalibrated) {
+  FirebaseJson content;
+  if (!isnan(voltage_pH4)) content.set("fields/voltage_pH4/doubleValue", voltage_pH4);
+  if (!isnan(voltage_pH7)) content.set("fields/voltage_pH7/doubleValue", voltage_pH7);
+  content.set("fields/isCalibrated/booleanValue", isCalibrated);
+  time_t now; time(&now);
+  if (now > 1700000000) content.set("fields/lastCalibratedAt/integerValue", (int)now);
+  String path = "users/" + currentUid + "/aquarium/ph-calibration";
+  upload_buffer::enqueue(path, content.raw());
+}
+
+// ---------- pH-Kalibrierung lesen ----------
+bool fetchPhCalibration(float &v4_out, float &v7_out, bool &calibrated_out) {
+  if (!isReady()) return false;
+  String path = "users/" + currentUid + "/aquarium/ph-calibration";
+  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) return false;
+  FirebaseJson doc;
+  doc.setJsonData(fbdo.payload());
+  FirebaseJsonData v;
+  if (doc.get(v, "fields/voltage_pH4/doubleValue") && v.success) v4_out = v.floatValue;
+  if (doc.get(v, "fields/voltage_pH7/doubleValue") && v.success) v7_out = v.floatValue;
+  calibrated_out = !isnan(v4_out) && !isnan(v7_out);
+  return true;
+}
+
+// ---------- Buffer-Flush ----------
+// Versucht den ältesten gepufferten Eintrag zu senden.
+// Returns true wenn erfolgreich (oder Queue leer), false wenn fehlgeschlagen.
+bool flushBuffer() {
+  if (!isReady() || upload_buffer::queue.empty()) return true;
+  unsigned long ms = millis();
+  if (upload_buffer::nextRetryAtMs != 0 && ms < upload_buffer::nextRetryAtMs) return false;
+  if (ms - upload_buffer::lastFlushAttemptMs < upload_buffer::FLUSH_INTERVAL_MS) return false;
+  upload_buffer::lastFlushAttemptMs = ms;
+
+  upload_buffer::PendingWrite &first = upload_buffer::queue.front();
+  first.attempts++;
+  bool ok;
+  // Heuristik: ph-calibration ist ein einzelnes Doc → patchDocument (Merge)
+  if (first.path.endsWith("/ph-calibration")) {
+    ok = Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "",
+                                          first.path.c_str(), first.payload.c_str(),
+                                          "voltage_pH4,voltage_pH7,isCalibrated,lastCalibratedAt");
+  } else {
+    // measurements/items oder dosings/items → createDocument
+    ok = Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "",
+                                           first.path.c_str(), "",
+                                           first.payload.c_str(), "");
   }
-  return Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "",
-                                           pathDosings().c_str(), "",
-                                           content.raw(), "");
+  if (ok) {
+    Serial.printf("[Buffer] flushed (%d remaining)\n", (int)upload_buffer::queue.size() - 1);
+    upload_buffer::queue.erase(upload_buffer::queue.begin());
+    upload_buffer::save();
+    upload_buffer::nextRetryAtMs = 0;
+    return true;
+  } else {
+    Serial.printf("[Buffer] flush FAIL (attempts=%d, %d in queue): %s\n",
+                  first.attempts, (int)upload_buffer::queue.size(),
+                  fbdo.errorReason().c_str());
+    upload_buffer::nextRetryAtMs = ms + upload_buffer::BACKOFF_AFTER_FAIL_MS;
+    upload_buffer::save();  // attempts++ persistieren
+    return false;
+  }
 }
 
 // ---------- Pump-Konfig lesen (Kalibrierung) ----------
