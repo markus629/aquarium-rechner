@@ -178,6 +178,7 @@
       <button class="tab-btn" data-tab="tab-manual">Manuell</button>
       <button class="tab-btn" data-tab="tab-container">Kanister</button>
       <button class="tab-btn" data-tab="tab-ph">pH-Sensor</button>
+      <button class="tab-btn" data-tab="tab-device">Gerät</button>
       <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
     </div>
 
@@ -379,6 +380,47 @@
         </table>
       </div>
     </div>
+    <div id="tab-device" class="tab-content">
+      <div class="card">
+        <h2>ESP-Status</h2>
+        <div id="device-status-display">
+          <div class="center-state">
+            <p>Noch nichts vom ESP empfangen. Sobald der ESP online ist, erscheinen hier Live-Werte.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ESP einrichten</h2>
+        <p style="color:var(--text-light);margin-bottom:0.8rem">
+          So verbindest du einen ESP32 mit deinem Account:
+        </p>
+        <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:1rem">
+          <li><strong>Geräte-Passwort einrichten</strong> (nur einmal, falls du dich bisher nur mit Google angemeldet hast):
+            <div id="device-pw-section" style="margin:0.6rem 0;padding:0.8rem;background:var(--bg);border-radius:8px">
+              <div id="device-pw-info" style="font-size:0.88rem;margin-bottom:0.5rem">Lade Account-Info …</div>
+              <button class="btn btn-primary" id="device-pw-reset" style="display:none">📧 Passwort-Reset-Link senden</button>
+            </div>
+          </li>
+          <li><strong>ESP flashen</strong> — siehe <a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README im GitHub-Repo</a></li>
+          <li><strong>ESP einschalten</strong> — beim ersten Start öffnet er ein WLAN namens <code style="background:var(--bg);padding:0.1rem 0.4rem;border-radius:4px">AquariumRechner-Setup</code></li>
+          <li>Mit dem WLAN verbinden — Browser öffnet automatisch das Setup-Portal (sonst <code>http://192.168.4.1</code>)</li>
+          <li><strong>WLAN-Daten + deine E-Mail + dein neu gesetztes Passwort</strong> (nicht das Google-Passwort!) eintragen → Speichern</li>
+          <li>ESP startet neu und meldet sich automatisch an. Status erscheint hier oben.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Firmware-Update</h2>
+        <p style="color:var(--text-light);margin-bottom:0.8rem">
+          Hier kannst du eine neue Firmware-Datei (<code>.bin</code>) hochladen. Der ESP holt sich diese automatisch innerhalb von 6 Stunden — keine USB-Verbindung mehr nötig.
+        </p>
+        <div class="center-state" style="padding:1rem">
+          <p style="font-size:0.85rem">Firmware-Upload kommt in der nächsten Iteration (Session B). Bis dahin: Updates über Arduino IDE per USB.</p>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-settings" class="tab-content">
       <div class="card">
         <h2>Einstellungen<span class="save-status" id="settings-save-status">✓ gespeichert</span></h2>
@@ -489,6 +531,7 @@
 
 <script type="module">
   import { initAuthSync } from "/assets/auth-sync.js";
+  import { sendPasswordResetEmail, EmailAuthProvider, linkWithCredential } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
   import {
     getAuthInstance, getSettings, saveSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
@@ -984,6 +1027,94 @@
     } catch (e) { console.warn("Dashboard refresh:", e); }
   }
 
+  // ---------- Gerät-Tab ----------
+  async function refreshDeviceTab() {
+    const user = getAuthInstance().currentUser;
+    if (!user) return;
+    const providers = user.providerData.map(p => p.providerId);
+    const hasPassword = providers.includes("password");
+    const hasGoogle = providers.includes("google.com");
+    const info = document.getElementById("device-pw-info");
+    const btn = document.getElementById("device-pw-reset");
+
+    if (hasPassword) {
+      info.innerHTML = `✅ <strong>Du hast schon ein E-Mail-Passwort.</strong> Du kannst es im ESP-Setup direkt verwenden (E-Mail: <code>${user.email}</code>).`;
+      btn.style.display = "inline-block";
+      btn.textContent = "📧 Passwort zurücksetzen (falls vergessen)";
+    } else if (hasGoogle) {
+      info.innerHTML = `⚠️ <strong>Du bist nur mit Google angemeldet</strong> — der ESP braucht ein klassisches E-Mail-Passwort. Klick auf den Button, dann bekommst du eine Mail mit Reset-Link an <code>${user.email}</code>.`;
+      btn.style.display = "inline-block";
+      btn.textContent = "📧 Passwort-Reset-Link senden";
+    } else {
+      info.innerHTML = `Account: <code>${user.email}</code>`;
+      btn.style.display = "inline-block";
+      btn.textContent = "📧 Passwort-Reset-Link senden";
+    }
+
+    btn.onclick = async () => {
+      try {
+        btn.disabled = true;
+        btn.textContent = "📤 Sende …";
+        await sendPasswordResetEmail(getAuthInstance(), user.email);
+        info.innerHTML = `✅ <strong>Reset-Link gesendet!</strong> Prüfe dein Postfach (auch Spam) für eine Mail von Firebase mit Link zum Passwort setzen.`;
+        btn.style.display = "none";
+      } catch (e) {
+        info.innerHTML = `❌ Fehler: ${e.message}`;
+        btn.disabled = false;
+      }
+    };
+
+    // ESP-Status: lese aquarium/info
+    try {
+      const settings = await getSettings();  // wir nutzen settings nicht direkt, aber sichert auth
+      // info.lastSeen, info.online etc. wären in aquarium/info dokument
+      // Da wir das nicht direkt exportieren, kurz ad-hoc fetch:
+      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+      const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+      const app = getApps()[0];
+      const db = getFirestore(app);
+      const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/info`));
+      const statusEl = document.getElementById("device-status-display");
+      if (!snap.exists()) {
+        statusEl.innerHTML = `<div class="center-state"><p>Noch nichts vom ESP empfangen.</p></div>`;
+        return;
+      }
+      const d = snap.data();
+      const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
+      const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
+      const dotColor = isOnlineRecent ? "var(--green)" : "#aabbcc";
+      statusEl.innerHTML = `
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" style="font-size:1.05rem">
+              <span style="display:inline-block;width:10px;height:10px;background:${dotColor};border-radius:50%;margin-right:0.4rem"></span>
+              ${isOnlineRecent ? "online" : "offline"}
+            </div>
+            <div class="stat-meta">${lastSeenTs ? lastSeenTs.toLocaleString("de-DE") : "nie"}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Firmware</div>
+            <div class="stat-value" style="font-size:1.05rem">${d.firmware || "—"}</div>
+            <div class="stat-meta">Uptime ${d.uptimeSec ? Math.floor(d.uptimeSec / 3600) + " h " + (Math.floor(d.uptimeSec / 60) % 60) + " min" : "—"}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">WLAN</div>
+            <div class="stat-value" style="font-size:1.05rem">${d.rssi != null ? d.rssi + " dBm" : "—"}</div>
+            <div class="stat-meta">${d.ip || "—"}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Freier RAM</div>
+            <div class="stat-value" style="font-size:1.05rem">${d.freeHeap ? Math.round(d.freeHeap / 1024) + " kB" : "—"}</div>
+            <div class="stat-meta">${d.pendingDoses != null ? d.pendingDoses + " offene Doses" : ""}</div>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("ESP-Status:", e);
+    }
+  }
+
   // ---------- Zentraler Refresh ----------
   async function refreshAll() {
     await Promise.all([
@@ -993,7 +1124,8 @@
       refreshPumpCalibration(),
       refreshContainers(),
       refreshPlan(),
-      refreshDashboard()
+      refreshDashboard(),
+      refreshDeviceTab()
     ]);
   }
 

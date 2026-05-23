@@ -58,7 +58,12 @@ button:hover { box-shadow: 0 4px 12px rgba(52,152,219,0.4); }
   <input type="password" name="wifi_pass" placeholder="Lass leer wenn offen">
 
   <h2>Aquarium-Rechner-Konto</h2>
-  <p class="note" style="margin:0 0 0.5rem">Verwende deine Zugangsdaten von <strong>aquarium-rechner.web.app</strong>. Damit kann der ESP deine Daten lesen und schreiben.</p>
+  <p class="note" style="margin:0 0 0.5rem">Deine Zugangsdaten von <strong>aquarium-rechner.web.app</strong>. Der ESP nutzt sie, um deine Daten zu lesen/schreiben.</p>
+  <div style="background:#fff8e1;border-left:3px solid #f39c12;padding:0.6rem 0.8rem;border-radius:6px;margin:0.5rem 0;font-size:0.78rem;line-height:1.5">
+    <strong>⚠️ Nur mit Google angemeldet?</strong> Dann hast du noch kein E-Mail-Passwort.
+    Öffne <strong>aquarium-rechner.web.app</strong> → Tab <em>„Gerät"</em> → Button <em>„Geräte-Passwort einrichten"</em>.
+    Dort kannst du dir einen Passwort-Reset-Link schicken lassen.
+  </div>
   <label>E-Mail</label>
   <input type="email" name="fb_email" required autocomplete="email">
   <label>Passwort</label>
