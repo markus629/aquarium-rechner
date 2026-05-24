@@ -506,7 +506,8 @@
           <ol style="line-height:1.7;padding-left:1.3rem;margin-top:0.5rem;color:var(--text-light)">
             <li>Account auf <a href="https://healthchecks.io" target="_blank" style="color:var(--blue)">healthchecks.io</a> anlegen (kostenlos, 20 Checks frei)</li>
             <li>„Add Check" → Name: <em>Aquarium-Rechner ESP</em></li>
-            <li>Schedule: <strong>Simple Periodic</strong>, Period: <strong>30 seconds</strong>, Grace: <strong>5 minutes</strong></li>
+            <li>Schedule: <strong>Simple Periodic</strong>, Period: <strong>1 minute</strong>, Grace: <strong>5 minutes</strong>
+              <span class="hint" style="display:block">(ESP pingt zwar alle 30 s, aber das Free-Tier verlangt mindestens 1 Minute — egal, mehr Pings sind erlaubt)</span></li>
             <li>Tab „Integrations" → Email aktivieren (oder Telegram/Discord/Pushover/…)</li>
             <li>Ping-URL (<code>https://hc-ping.com/&lt;uuid&gt;</code>) kopieren und oben einfügen</li>
             <li>Speichern → ESP übernimmt die URL beim nächsten Settings-Sync (max 2 min)</li>
