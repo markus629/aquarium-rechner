@@ -356,6 +356,23 @@
       </div>
 
       <div class="card">
+        <h2>Globale Pumpen-Geschwindigkeit<span class="save-status" id="speed-save-status">✓ gespeichert</span></h2>
+        <p style="color:var(--text-light);margin-bottom:0.8rem">
+          Gilt für alle vier Pumpen. Änderungen werden beim nächsten Dose-Start vom ESP verwendet.
+        </p>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Geschwindigkeit (ml/min) <span class="hint">Default: 3.6</span></label>
+            <input type="number" data-setting="speedML" step="0.1" min="0.1" max="60">
+          </div>
+          <div class="form-row">
+            <label>Beschleunigung (ml/min²) <span class="hint">0 = quasi sofort; Default: 1.8</span></label>
+            <input type="number" data-setting="accelerationML" step="0.1" min="0" max="60">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Pumpen-Kalibrierung</h2>
         <p style="color:var(--text-light);margin-bottom:1rem">
           Der ESP fährt eine definierte Anzahl Schritte, du misst die geförderte Flüssigkeit
@@ -679,13 +696,14 @@
 
   let saveTimer = null;
   function flashSaveStatus(text = "✓ gespeichert", isError = false) {
-    const el = document.getElementById("settings-save-status");
-    if (!el) return;
-    el.textContent = text;
-    el.style.color = isError ? "var(--red)" : "var(--green)";
-    el.classList.add("show");
+    const els = document.querySelectorAll(".save-status");
+    els.forEach(el => {
+      el.textContent = text;
+      el.style.color = isError ? "var(--red)" : "var(--green)";
+      el.classList.add("show");
+    });
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => el.classList.remove("show"), 1500);
+    saveTimer = setTimeout(() => els.forEach(el => el.classList.remove("show")), 1500);
   }
 
   async function persistSetting(key, value) {

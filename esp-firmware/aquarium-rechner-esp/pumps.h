@@ -98,26 +98,47 @@ bool isBusy() {
   return stepper && stepper->isRunning();
 }
 
-// ---------- Schritte fahren (für Kalibrierung) ----------
+// ---------- Umrechnung ml/min ↔ Steps/sec (1:1 aus Original-ESP-Code) ----------
+// Setzt voraus dass mlPerStep[pumpIdx] > 0 (Pumpe kalibriert).
+uint32_t mlPerMinToStepsPerSec(float mlPerMin, int pumpIdx) {
+  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return 0;
+  if (mlPerStep[pumpIdx] <= 0.0f) return 0;
+  float mlPerSec = mlPerMin / 60.0f;
+  return (uint32_t)roundf(mlPerSec / mlPerStep[pumpIdx]);
+}
+
+uint32_t mlPerMin2ToStepsPerSec2(float mlPerMin2, int pumpIdx) {
+  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return 0;
+  if (mlPerStep[pumpIdx] <= 0.0f) return 0;
+  float mlPerSec2 = mlPerMin2 / 3600.0f;
+  return (uint32_t)roundf(mlPerSec2 / mlPerStep[pumpIdx]);
+}
+
+// ---------- Schritte fahren (für Kalibrierung & Dosierung) ----------
 bool runSteps(int pumpIdx, long steps) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS || !stepper) return false;
   if (isBusy()) return false;
   enablePump(pumpIdx);
-  // Stepper-Speed in Steps/Sec aus ml/Min ableiten — solange wir nicht kalibriert sind,
-  // verwenden wir einen Default von 800 steps/sec
-  uint32_t stepsPerSec = (uint32_t)(800.0 / 60.0 * speedML);
-  uint32_t accelSteps  = (uint32_t)(800.0 / 60.0 * accelML);
-  if (stepsPerSec < 100) stepsPerSec = 100;
-  if (accelSteps  < 100) accelSteps  = 100;
+  // Speed/Accel: ml/min → Steps/sec über die Kalibrierung der Pumpe
+  uint32_t stepsPerSec = mlPerMinToStepsPerSec(speedML, pumpIdx);
+  if (stepsPerSec < 10) stepsPerSec = 10;  // Minimum-Speed (sicher fahrbar)
+  // Beschleunigung: 0 = "quasi sofort" wie im Original (sehr hohe Accel)
+  uint32_t accelSteps;
+  if (accelML > 0) {
+    accelSteps = mlPerMin2ToStepsPerSec2(accelML, pumpIdx);
+    if (accelSteps < 10) accelSteps = 10;
+  } else {
+    accelSteps = 10000;
+  }
   stepper->setSpeedInHz(stepsPerSec);
   stepper->setAcceleration(accelSteps);
   long target = steps;  // signed: negative = rückwärts (Anti-Drip)
   stepper->move(target);
   doseStartMs = millis();
-  // erwartete Dauer (ms)
   doseExpectedMs = (uint32_t)((labs(steps) * 1000UL) / stepsPerSec);
-  Serial.printf("[Pumps] %s: %ld Schritte @ %u steps/sec (~%lu ms)\n",
-                PUMP_NAMES[pumpIdx], steps, stepsPerSec, (unsigned long)doseExpectedMs);
+  Serial.printf("[Pumps] %s: %ld Schritte @ %u steps/sec (accel %u) (~%lu ms)\n",
+                PUMP_NAMES[pumpIdx], steps, stepsPerSec, accelSteps,
+                (unsigned long)doseExpectedMs);
   return true;
 }
 

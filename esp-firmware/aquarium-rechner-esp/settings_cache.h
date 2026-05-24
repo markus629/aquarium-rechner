@@ -9,6 +9,7 @@
 #include <Preferences.h>
 #include "config.h"
 #include "firebase_sync.h"
+#include "pumps.h"
 
 namespace settings_cache {
 
@@ -28,6 +29,8 @@ void loadFromNVS() {
   khNightStart = p.getInt("nightSt", 19);
   khNightEnd = p.getInt("nightEnd", 7);
   magnesiumRatio = p.getFloat("mgRatio", 50.0f);
+  pumps::speedML = p.getFloat("speedML", DEFAULT_SPEED_ML);
+  pumps::accelML = p.getFloat("accelML", DEFAULT_ACCELERATION_ML);
   p.end();
 }
 
@@ -39,6 +42,8 @@ void saveToNVS() {
   p.putInt("nightSt", khNightStart);
   p.putInt("nightEnd", khNightEnd);
   p.putFloat("mgRatio", magnesiumRatio);
+  p.putFloat("speedML", pumps::speedML);
+  p.putFloat("accelML", pumps::accelML);
   p.end();
 }
 
@@ -80,10 +85,20 @@ void sync() {
     float nv = (float)v.intValue;
     if (nv != magnesiumRatio) { magnesiumRatio = nv; changed = true; }
   }
+  // Speed / Acceleration (kommen aus Pump-Settings)
+  if (doc.get(v, "fields/speedML/doubleValue") && v.success) {
+    float nv = v.floatValue;
+    if (nv != pumps::speedML) { pumps::speedML = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/accelerationML/doubleValue") && v.success) {
+    float nv = v.floatValue;
+    if (nv != pumps::accelML) { pumps::accelML = nv; changed = true; }
+  }
   if (changed) {
     saveToNVS();
-    Serial.printf("[Settings] aktualisiert: ph-Mode=%d, ph-Thr=%.2f, Nacht %d-%d, Mg-Ratio=%.1f%%\n",
-                  usePhBasedKHDosing, phThresholdForKHNight, khNightStart, khNightEnd, magnesiumRatio);
+    Serial.printf("[Settings] aktualisiert: ph-Mode=%d, ph-Thr=%.2f, Nacht %d-%d, Mg-Ratio=%.1f%%, Speed=%.2f ml/min, Accel=%.2f ml/min²\n",
+                  usePhBasedKHDosing, phThresholdForKHNight, khNightStart, khNightEnd, magnesiumRatio,
+                  pumps::speedML, pumps::accelML);
   }
 }
 
