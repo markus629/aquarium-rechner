@@ -1084,7 +1084,7 @@
         if (_manualDoseUnsub) { _manualDoseUnsub(); _manualDoseUnsub = null; }
         btn.disabled = false;
         btn.textContent = origText;
-        alert("⚠️ ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät").");
+        alert('⚠️ ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät").');
       }, 60000);
       _manualDoseUnsub = watchCommand(cmdId, async (data) => {
         if (!data) return;
