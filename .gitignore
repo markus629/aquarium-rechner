@@ -9,3 +9,4 @@ firestore-debug.log
 ui-debug.log
 .claude/
 **/.claude/
+esp-firmware/aquarium-rechner-esp/build/

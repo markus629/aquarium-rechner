@@ -38,7 +38,6 @@
 
 unsigned long lastHeartbeatMs = 0;
 unsigned long bootMs = 0;
-unsigned long lastPhReportMs = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -110,7 +109,12 @@ void loop() {
   unsigned long now = millis();
   if (now - lastHeartbeatMs > HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatMs = now;
-    float ph = ph_sensor::getPH();
+    // pH nur alle 10 Heartbeats (= alle 5 min) mitschicken — die Tag/Nacht-Logik
+    // läuft ohnehin lokal, das hier ist nur Live-Anzeige im Web-Dashboard.
+    static uint8_t hbCount = 0;
+    bool includePh = (hbCount++ % 10 == 0);
+    float ph = includePh ? ph_sensor::getPH() : NAN;
+    int phSamples = includePh ? ph_sensor::getSampleCount() : 0;
     long uptime = (now - bootMs) / 1000;
     firebase_sync::HeartbeatStats stats;
     stats.dosesTotal = plan_executor::dosesTotal;
@@ -120,11 +124,18 @@ void loop() {
     for (int i = 0; i < 4; i++) {
       stats.pumpsCalibrated[i] = pumps::stepsPerML[i] > 0.0f;
     }
-    if (firebase_sync::sendHeartbeat(ph, ph_sensor::getSampleCount(), uptime, stats)) {
-      Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
-                    uptime, ph, WiFi.RSSI(),
-                    stats.dosesOk24h, stats.dosesOk24h + stats.dosesFail24h,
-                    stats.bufferQueueSize);
+    if (firebase_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
+      if (includePh) {
+        Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
+                      uptime, ph, WiFi.RSSI(),
+                      stats.dosesOk24h, stats.dosesOk24h + stats.dosesFail24h,
+                      stats.bufferQueueSize);
+      } else {
+        Serial.printf("[HB] OK  up=%lds  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
+                      uptime, WiFi.RSSI(),
+                      stats.dosesOk24h, stats.dosesOk24h + stats.dosesFail24h,
+                      stats.bufferQueueSize);
+      }
     } else {
       Serial.println("[HB] FAIL");
     }
