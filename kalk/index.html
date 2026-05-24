@@ -1589,13 +1589,15 @@
       let khPlan = null, caPlan = null;
 
       // KH-Plan
+      let measuredDailyKH = null, measuredDailyCa = null;
       if (khItems.length > 0) {
         const currentKH = khItems[0].value;
-        const dailyKH = estimateDailyConsumption({
+        measuredDailyKH = estimateDailyConsumption({
           measurements: khItems, dosings, type: "kh",
           perMlFactor: khPerML(settings.aquariumVolume || 450),
           historyCount: settings.historyCount || 5
-        }) || settings.initialKHConsumption || 160;
+        });
+        const dailyKH = measuredDailyKH || settings.initialKHConsumption || 160;
 
         khPlan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, now });
         khPlan._currentKH = currentKH;
@@ -1609,11 +1611,12 @@
       // Ca-Plan
       if (caItems.length > 0) {
         const currentCa = caItems[0].value;
-        const dailyCa = estimateDailyConsumption({
+        measuredDailyCa = estimateDailyConsumption({
           measurements: caItems, dosings, type: "ca",
           perMlFactor: caPerML(settings.aquariumVolume || 450),
           historyCount: settings.historyCount || 5
-        }) || settings.initialCalciumConsumption || 60;
+        });
+        const dailyCa = measuredDailyCa || settings.initialCalciumConsumption || 60;
 
         caPlan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, now });
         caPlan._currentCa = currentCa;
@@ -1622,6 +1625,34 @@
       } else {
         document.getElementById("ca-plan-table").style.display = "none";
         document.getElementById("ca-plan-summary").innerHTML = `<div class="center-state"><p>Erst Ca-Messwert eintragen.</p></div>`;
+      }
+
+      // Auto-Update: errechnete Tages-Verbräuche als neuen Fallback speichern
+      // (nur wenn Checkbox an, Wert valide, und Änderung > 1% damit wir Firestore nicht spammen)
+      if (settings.autoUpdateInitialRates) {
+        const update = {};
+        if (measuredDailyKH != null && measuredDailyKH > 0) {
+          const old = settings.initialKHConsumption || 160;
+          if (Math.abs(measuredDailyKH - old) / old > 0.01) {
+            update.initialKHConsumption = Math.round(measuredDailyKH * 10) / 10;
+          }
+        }
+        if (measuredDailyCa != null && measuredDailyCa > 0) {
+          const old = settings.initialCalciumConsumption || 60;
+          if (Math.abs(measuredDailyCa - old) / old > 0.01) {
+            update.initialCalciumConsumption = Math.round(measuredDailyCa * 10) / 10;
+          }
+        }
+        if (Object.keys(update).length > 0) {
+          Object.assign(settings, update);
+          // UI-Felder aktualisieren, damit der Nutzer den neuen Wert sieht
+          const khIn = document.querySelector('[data-setting="initialKHConsumption"]');
+          const caIn = document.querySelector('[data-setting="initialCalciumConsumption"]');
+          if (khIn && update.initialKHConsumption != null) khIn.value = update.initialKHConsumption;
+          if (caIn && update.initialCalciumConsumption != null) caIn.value = update.initialCalciumConsumption;
+          try { await saveSettings(update); }
+          catch (e) { console.warn("auto-update initialRates:", e); }
+        }
       }
 
       // Plan ans ESP übermitteln (in Firestore speichern)
