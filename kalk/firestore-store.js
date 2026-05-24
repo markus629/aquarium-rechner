@@ -10,16 +10,11 @@ import {
   query, orderBy, limit, where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import {
-  getStorage, ref as storageRef, uploadBytesResumable,
-  getDownloadURL, deleteObject, listAll
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 import { firebaseConfig } from "/assets/firebase-config.js";
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 function requireUid() {
   const u = auth.currentUser;
@@ -232,58 +227,26 @@ export function getAuthInstance() {
   return auth;
 }
 
-// ---------- Firmware-Update (OTA) ----------
-// Upload einer .bin nach users/{uid}/firmware/{version}.bin, dann firmware-latest setzen.
-// onProgress(percent) wird während Upload aufgerufen.
-export function uploadFirmware(file, version, onProgress) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const uid = requireUid();
-      const cleanVersion = String(version).trim().replace(/[^0-9.]/g, "");
-      if (!cleanVersion.match(/^\d+\.\d+\.\d+$/)) {
-        throw new Error("Version muss Format X.Y.Z haben (z. B. 1.0.4)");
-      }
-      const path = `users/${uid}/firmware/${cleanVersion}.bin`;
-      const ref = storageRef(storage, path);
-      const task = uploadBytesResumable(ref, file, { contentType: "application/octet-stream" });
-      task.on("state_changed",
-        (snap) => {
-          if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
-        },
-        (err) => reject(err),
-        async () => {
-          try {
-            const url = await getDownloadURL(task.snapshot.ref);
-            await setDoc(doc(db, `users/${uid}/aquarium/firmware-latest`), {
-              version: cleanVersion,
-              url,
-              size: file.size,
-              uploadedAt: serverTimestamp()
-            });
-            resolve({ version: cleanVersion, url });
-          } catch (e) { reject(e); }
-        }
-      );
-    } catch (e) { reject(e); }
-  });
-}
-
-export async function getLatestFirmware() {
-  const snap = await getDoc(doc(db, aquaPath("firmware-latest")));
-  return snap.exists() ? snap.data() : null;
-}
-
-// Räumt alle .bin im Firmware-Ordner außer der angegebenen Version weg.
-export async function pruneOldFirmware(keepVersion) {
-  const uid = requireUid();
-  const dirRef = storageRef(storage, `users/${uid}/firmware`);
-  const list = await listAll(dirRef);
-  const keep = `${keepVersion}.bin`;
-  let deleted = 0;
-  for (const item of list.items) {
-    if (item.name !== keep) {
-      try { await deleteObject(item); deleted++; } catch (e) { console.warn("delete fw:", e); }
-    }
+// ---------- Firmware-Update (OTA via GitHub Releases) ----------
+// Liest das neueste Release direkt von der GitHub-API (public, keine Auth).
+// ESP liest die gleiche Quelle.
+export async function getLatestGithubRelease(owner, repo) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+  const r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
+  if (!r.ok) {
+    if (r.status === 404) return null;  // noch kein Release vorhanden
+    throw new Error(`GitHub API HTTP ${r.status}`);
   }
-  return deleted;
+  const data = await r.json();
+  const tag = (data.tag_name || "").replace(/^v/i, "");
+  const asset = (data.assets || []).find(a => /\.bin$/i.test(a.name));
+  return {
+    version: tag,
+    url: asset?.browser_download_url || null,
+    name: asset?.name || null,
+    size: asset?.size || 0,
+    publishedAt: data.published_at,
+    htmlUrl: data.html_url,
+    body: data.body || ""
+  };
 }

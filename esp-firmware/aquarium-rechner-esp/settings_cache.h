@@ -14,6 +14,7 @@
 namespace settings_cache {
 
 bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
+bool otaAutoUpdate = false;       // Master-Schalter: ESP installiert neuere GitHub-Releases automatisch
 bool usePhBasedKHDosing = false;
 float phThresholdForKHNight = 8.0f;
 int khNightStart = 19;
@@ -26,6 +27,7 @@ void loadFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
   autoDosing = p.getBool("autoDose", false);
+  otaAutoUpdate = p.getBool("otaAuto", false);
   usePhBasedKHDosing = p.getBool("phMode", false);
   phThresholdForKHNight = p.getFloat("phThr", 8.0f);
   khNightStart = p.getInt("nightSt", 19);
@@ -43,6 +45,7 @@ void saveToNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
   p.putBool("autoDose", autoDosing);
+  p.putBool("otaAuto", otaAutoUpdate);
   p.putBool("phMode", usePhBasedKHDosing);
   p.putFloat("phThr", phThresholdForKHNight);
   p.putInt("nightSt", khNightStart);
@@ -73,6 +76,10 @@ void sync() {
   if (doc.get(v, "fields/autoDosing/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
     if (nv != autoDosing) { autoDosing = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/otaAutoUpdate/booleanValue") && v.success) {
+    bool nv = (v.stringValue == "true");
+    if (nv != otaAutoUpdate) { otaAutoUpdate = nv; changed = true; }
   }
   if (doc.get(v, "fields/usePhBasedKHDosing/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");

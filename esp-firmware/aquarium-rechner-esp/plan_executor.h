@@ -23,6 +23,7 @@
 #include "pumps.h"
 #include "ph_sensor.h"
 #include "settings_cache.h"
+#include "ota_update.h"
 
 namespace plan_executor {
 
@@ -331,6 +332,17 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   if (action == "stop") {
     pumps::emergencyStop();
     firebase_sync::updateCommandStatus("done");
+    return true;
+  }
+  if (action == "otaCheck") {
+    firebase_sync::updateCommandStatus("running");
+    // Asynchron wäre besser, aber HTTPUpdate blockt sowieso. Bei Update folgt Reboot.
+    ota_update::triggerManualCheck();
+    // Falls kein Update nötig war: als done markieren
+    FirebaseJson r;
+    r.set("availableVersion/stringValue", ota_update::availableVersion);
+    r.set("currentVersion/stringValue", FW_VERSION);
+    firebase_sync::updateCommandStatus("done", &r);
     return true;
   }
   if (action == "calibratePh") {

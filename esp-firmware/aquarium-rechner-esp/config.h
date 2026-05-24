@@ -7,6 +7,13 @@
 #define FW_VERSION "0.1.0"
 #define FW_NAME "aquarium-rechner-esp"
 
+// OTA-Quelle: GitHub Releases (public, kein Auth nötig)
+// API: https://api.github.com/repos/<OWNER>/<REPO>/releases/latest
+#define OTA_GITHUB_OWNER "markus629"
+#define OTA_GITHUB_REPO  "aquarium-rechner"
+// Asset-Name-Filter: Datei im Release muss diesen Substring enthalten (z.B. ".bin")
+#define OTA_ASSET_FILTER ".bin"
+
 // ---------- Firebase Projekt ----------
 #define FIREBASE_API_KEY "AIzaSyAsQ9yj2ZrT6KBzffarsFDpov4787ON-00"
 #define FIREBASE_PROJECT_ID "aquarium-rechner"
