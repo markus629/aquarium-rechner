@@ -28,7 +28,7 @@
     padding: 1rem;
   }
   .container {
-    max-width: 720px;
+    max-width: 860px;
     width: 100%;
   }
   header {
@@ -115,6 +115,67 @@
     font-weight: 600;
     font-size: 0.9rem;
   }
+  /* --- Kalkmanagement breite Karte --- */
+  .card.kalk-wide {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: var(--text);
+    cursor: default;
+  }
+  .card.kalk-wide:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-color: var(--border); }
+  .card.kalk-wide .kalk-left {
+    text-decoration: none;
+    color: var(--text);
+    border-radius: 10px;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    transition: background 0.15s;
+    display: flex;
+    flex-direction: column;
+  }
+  .card.kalk-wide .kalk-left:hover { background: rgba(52, 152, 219, 0.06); }
+  .card.kalk-wide .kalk-right {
+    border-left: 2px solid var(--border);
+    padding-left: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  @media (max-width: 700px) {
+    .card.kalk-wide { grid-template-columns: 1fr; }
+    .card.kalk-wide .kalk-right { border-left: none; border-top: 2px solid var(--border); padding-left: 0; padding-top: 1rem; }
+  }
+  .quick-inputs { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: end; }
+  .quick-inputs .qf { display: flex; flex-direction: column; gap: 0.2rem; }
+  .quick-inputs label { font-size: 0.72rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+  .quick-inputs input {
+    padding: 0.45rem 0.55rem; border: 2px solid var(--border); border-radius: 7px;
+    font-size: 0.95rem; font-family: inherit; width: 100%;
+  }
+  .quick-inputs input:focus { outline: none; border-color: var(--accent); }
+  .quick-inputs button {
+    padding: 0.5rem 0.85rem; background: var(--accent); color: #fff; border: none;
+    border-radius: 7px; font-weight: 600; cursor: pointer; font-size: 0.88rem;
+    transition: background 0.15s;
+  }
+  .quick-inputs button:hover:not(:disabled) { background: var(--accent-dark); }
+  .quick-inputs button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .quick-msg { font-size: 0.78rem; color: var(--text-light); min-height: 1em; }
+  .quick-msg.ok { color: var(--green); }
+  .quick-msg.err { color: #c0392b; }
+  .canister-bars { display: flex; flex-direction: column; gap: 0.45rem; }
+  .canister-bars .bar { display: grid; grid-template-columns: 80px 1fr 55px; gap: 0.6rem; align-items: center; font-size: 0.8rem; }
+  .canister-bars .lbl { color: var(--text-light); }
+  .canister-bars .track { background: var(--border); border-radius: 4px; height: 10px; overflow: hidden; }
+  .canister-bars .fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+  .canister-bars .fill.warn { background: #f39c12; }
+  .canister-bars .fill.crit { background: #c0392b; }
+  .canister-bars .pct { text-align: right; color: var(--text-light); font-variant-numeric: tabular-nums; }
+  .quick-need-login { color: var(--text-light); font-size: 0.85rem; padding: 1rem; text-align: center; background: var(--bg); border-radius: 8px; }
   footer {
     text-align: center;
     margin-top: 2.5rem;
@@ -140,11 +201,35 @@
         <p>Plant Tagesdosen einzelner Spurenelemente basierend auf deinen ICP-Messwerten und der Historie.</p>
         <span class="arrow">Öffnen →</span>
       </a>
-      <a class="card beta" href="kalk">
-        <h2>Kalkmanagement</h2>
-        <p>Ca, Mg und KH (Tag/Nacht) verwalten und automatisch dosieren — mit oder ohne Pumpe. Plan, Verlauf, Steuerung deines Aquariums.</p>
-        <span class="arrow">Öffnen →</span>
-      </a>
+      <div class="card kalk-wide beta">
+        <a class="kalk-left" href="kalk">
+          <h2>Kalkmanagement</h2>
+          <p>Ca, Mg und KH (Tag/Nacht) verwalten und automatisch dosieren — mit oder ohne Pumpe. Plan, Verlauf, Steuerung deines Aquariums.</p>
+          <span class="arrow" style="margin-top:auto;color:var(--accent);font-weight:600;font-size:0.9rem">Öffnen →</span>
+        </a>
+        <div class="kalk-right">
+          <div id="quick-need-login" class="quick-need-login" style="display:none">
+            Einloggen, dann kannst du hier direkt KH/Ca eintragen und siehst die Kanister-Stände.
+          </div>
+          <div id="quick-controls" style="display:none">
+            <div class="quick-inputs">
+              <div class="qf">
+                <label>KH (°dKH)</label>
+                <input type="number" id="quick-kh" step="0.1" min="0" max="20" placeholder="7.8">
+              </div>
+              <div class="qf">
+                <label>Ca (mg/L)</label>
+                <input type="number" id="quick-ca" step="1" min="0" max="1000" placeholder="420">
+              </div>
+              <button id="quick-save">Speichern</button>
+            </div>
+            <div class="quick-msg" id="quick-msg"></div>
+            <div class="canister-bars" id="canister-bars">
+              <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <footer>
       Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
@@ -152,9 +237,13 @@
     </footer>
   </div>
 
-  <!-- Firebase Login (nur Auth, kein Sync — die Rechner syncen selbst) -->
+  <!-- Firebase Login + Live-Daten für Kalkmanagement-Kachel -->
   <script type="module">
     import { initAuthSync } from "./assets/auth-sync.js";
+    import {
+      getAuthInstance, getSettings, addMeasurement
+    } from "./kalk/firestore-store.js";
+
     await initAuthSync({
       calculatorId: "_overview",
       calculatorName: "Aquarium Rechner",
@@ -163,6 +252,82 @@
       hostElementSelector: "header",
       theme: "light",
       loginOnly: true
+    });
+
+    const PUMP_NAMES = ["Calcium", "Magnesium", "KH-Tag", "KH-Nacht"];
+    const needLogin = document.getElementById("quick-need-login");
+    const controls  = document.getElementById("quick-controls");
+    const msg       = document.getElementById("quick-msg");
+    const khIn      = document.getElementById("quick-kh");
+    const caIn      = document.getElementById("quick-ca");
+    const saveBtn   = document.getElementById("quick-save");
+    const bars      = document.getElementById("canister-bars");
+
+    function showMsg(text, kind) {
+      msg.textContent = text;
+      msg.className = "quick-msg" + (kind ? " " + kind : "");
+      if (text) setTimeout(() => { if (msg.textContent === text) { msg.textContent = ""; msg.className = "quick-msg"; } }, 4000);
+    }
+
+    function renderBars(settings) {
+      const cap = settings.containerCapacity || [5000, 5000, 5000, 5000];
+      const lvl = settings.containerLevel || [5000, 5000, 5000, 5000];
+      bars.innerHTML = PUMP_NAMES.map((name, i) => {
+        const c = Math.max(1, cap[i] || 0);
+        const l = Math.max(0, lvl[i] || 0);
+        const pct = Math.min(100, Math.round((l / c) * 100));
+        const cls = pct < 15 ? "fill crit" : pct < 30 ? "fill warn" : "fill";
+        return `
+          <div class="bar">
+            <div class="lbl">${name}</div>
+            <div class="track"><div class="${cls}" style="width:${pct}%"></div></div>
+            <div class="pct">${pct}%</div>
+          </div>`;
+      }).join("");
+    }
+
+    async function loadSettings() {
+      try {
+        const settings = await getSettings();
+        renderBars(settings);
+      } catch (e) {
+        bars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`;
+      }
+    }
+
+    saveBtn.onclick = async () => {
+      const kh = parseFloat(khIn.value);
+      const ca = parseFloat(caIn.value);
+      const hasKh = !isNaN(kh) && kh > 0;
+      const hasCa = !isNaN(ca) && ca > 0;
+      if (!hasKh && !hasCa) { showMsg("Bitte mindestens KH oder Ca eingeben.", "err"); return; }
+      saveBtn.disabled = true;
+      const origText = saveBtn.textContent;
+      saveBtn.textContent = "…";
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        if (hasKh) await addMeasurement({ type: "kh", value: kh, timestamp: now, source: "manual" });
+        if (hasCa) await addMeasurement({ type: "ca", value: ca, timestamp: now, source: "manual" });
+        khIn.value = ""; caIn.value = "";
+        const what = hasKh && hasCa ? "KH + Ca" : hasKh ? "KH" : "Ca";
+        showMsg(`✓ ${what} gespeichert`, "ok");
+      } catch (e) {
+        showMsg("Fehler: " + e.message, "err");
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = origText;
+      }
+    };
+
+    getAuthInstance().onAuthStateChanged(user => {
+      if (user) {
+        needLogin.style.display = "none";
+        controls.style.display = "block";
+        loadSettings();
+      } else {
+        needLogin.style.display = "block";
+        controls.style.display = "none";
+      }
     });
   </script>
 </body>
