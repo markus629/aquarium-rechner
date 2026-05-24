@@ -15,6 +15,7 @@ namespace settings_cache {
 
 bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
 bool otaAutoUpdate = false;       // Master-Schalter: ESP installiert neuere GitHub-Releases automatisch
+String healthcheckUrl = "";       // optionale URL (z.B. healthchecks.io) die bei jedem Heartbeat angepingt wird
 bool usePhBasedKHDosing = false;
 float phThresholdForKHNight = 8.0f;
 int khNightStart = 19;
@@ -28,6 +29,7 @@ void loadFromNVS() {
   p.begin(NVS_NAMESPACE, true);
   autoDosing = p.getBool("autoDose", false);
   otaAutoUpdate = p.getBool("otaAuto", false);
+  healthcheckUrl = p.getString("hcUrl", "");
   usePhBasedKHDosing = p.getBool("phMode", false);
   phThresholdForKHNight = p.getFloat("phThr", 8.0f);
   khNightStart = p.getInt("nightSt", 19);
@@ -46,6 +48,7 @@ void saveToNVS() {
   p.begin(NVS_NAMESPACE, false);
   p.putBool("autoDose", autoDosing);
   p.putBool("otaAuto", otaAutoUpdate);
+  p.putString("hcUrl", healthcheckUrl);
   p.putBool("phMode", usePhBasedKHDosing);
   p.putFloat("phThr", phThresholdForKHNight);
   p.putInt("nightSt", khNightStart);
@@ -80,6 +83,10 @@ void sync() {
   if (doc.get(v, "fields/otaAutoUpdate/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
     if (nv != otaAutoUpdate) { otaAutoUpdate = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/healthcheckUrl/stringValue") && v.success) {
+    String nv = v.stringValue;
+    if (nv != healthcheckUrl) { healthcheckUrl = nv; changed = true; }
   }
   if (doc.get(v, "fields/usePhBasedKHDosing/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");

@@ -193,6 +193,7 @@ function defaultSettings(volume) {
     targetCalcium: 420,
     historyCount: 5,
     autoDosing: false,
+    healthcheckUrl: "",
     maxDailyChangeKH: 2.0,
     maxDailyChangeCalcium: 20.0,
     magnesiumRatio: 50,

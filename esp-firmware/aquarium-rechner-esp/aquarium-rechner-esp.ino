@@ -36,6 +36,7 @@
 #include "upload_buffer.h"
 #include "plan_executor.h"
 #include "ota_update.h"
+#include "healthcheck.h"
 
 unsigned long lastHeartbeatMs = 0;
 unsigned long bootMs = 0;
@@ -127,6 +128,10 @@ void loop() {
     for (int i = 0; i < 4; i++) {
       stats.pumpsCalibrated[i] = pumps::stepsPerML[i] > 0.0f;
     }
+    // Dead-Man's-Switch: externe Healthcheck-URL pingen (z.B. healthchecks.io)
+    // Wenn der ESP ausfällt, bleibt der Ping aus → User bekommt Email/Telegram
+    healthcheck::ping();
+
     if (firebase_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
       if (includePh) {
         Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",

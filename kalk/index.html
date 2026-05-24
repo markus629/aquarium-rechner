@@ -489,6 +489,30 @@
           <code>.bin</code> als Asset anhängen → „Publish release". ESP findet sie automatisch.
         </p>
       </div>
+
+      <div class="card">
+        <h2>Ausfall-Benachrichtigung<span class="save-status">✓ gespeichert</span></h2>
+        <p style="color:var(--text-light);margin-bottom:0.8rem">
+          ESP pingt diese URL bei jedem Heartbeat (alle 30 s). Bleibt der Ping aus,
+          schickt der Dienst dir Email/Telegram/Discord/Pushover — sodass du
+          merkst wenn etwas nicht stimmt.
+        </p>
+        <div class="form-row" style="max-width:600px">
+          <label>Healthcheck-URL <span class="hint">leer lassen = aus</span></label>
+          <input type="url" data-setting="healthcheckUrl" placeholder="https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </div>
+        <details style="margin-top:0.8rem;font-size:0.85rem">
+          <summary style="cursor:pointer;color:var(--blue)">📖 So richtest du healthchecks.io ein (kostenlos)</summary>
+          <ol style="line-height:1.7;padding-left:1.3rem;margin-top:0.5rem;color:var(--text-light)">
+            <li>Account auf <a href="https://healthchecks.io" target="_blank" style="color:var(--blue)">healthchecks.io</a> anlegen (kostenlos, 20 Checks frei)</li>
+            <li>„Add Check" → Name: <em>Aquarium-Rechner ESP</em></li>
+            <li>Schedule: <strong>Simple Periodic</strong>, Period: <strong>30 seconds</strong>, Grace: <strong>5 minutes</strong></li>
+            <li>Tab „Integrations" → Email aktivieren (oder Telegram/Discord/Pushover/…)</li>
+            <li>Ping-URL (<code>https://hc-ping.com/&lt;uuid&gt;</code>) kopieren und oben einfügen</li>
+            <li>Speichern → ESP übernimmt die URL beim nächsten Settings-Sync (max 2 min)</li>
+          </ol>
+        </details>
+      </div>
     </div>
 
     <div id="tab-settings" class="tab-content">
