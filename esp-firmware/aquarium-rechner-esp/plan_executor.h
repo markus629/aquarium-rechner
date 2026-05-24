@@ -336,13 +336,39 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   }
   if (action == "otaCheck") {
     firebase_sync::updateCommandStatus("running");
-    // Asynchron wäre besser, aber HTTPUpdate blockt sowieso. Bei Update folgt Reboot.
-    ota_update::triggerManualCheck();
-    // Falls kein Update nötig war: als done markieren
+    // 1) GitHub-Release holen (~2 s)
+    bool found = ota_update::fetchLatestRelease();
     FirebaseJson r;
-    r.set("availableVersion/stringValue", ota_update::availableVersion);
     r.set("currentVersion/stringValue", FW_VERSION);
+    r.set("availableVersion/stringValue", ota_update::availableVersion);
+    if (!found) {
+      r.set("info/stringValue", "Kein GitHub-Release gefunden");
+      firebase_sync::updateCommandStatus("done", &r);
+      return true;
+    }
+    int cmp = ota_update::compareVersions(FW_VERSION, ota_update::availableVersion);
+    if (cmp >= 0) {
+      r.set("info/stringValue", "Bereits aktuell");
+      firebase_sync::updateCommandStatus("done", &r);
+      return true;
+    }
+    if (ota_update::isProtectedWindow()) {
+      r.set("info/stringValue", "Update verschoben — Dosier-Schutzfenster (:08-:20)");
+      firebase_sync::updateCommandStatus("done", &r);
+      return true;
+    }
+    // 2) Update wird durchgeführt — Web vorher informieren, sonst Timeout beim Reboot
+    r.set("info/stringValue", "Update läuft — ESP startet gleich neu");
     firebase_sync::updateCommandStatus("done", &r);
+    delay(500);  // Firestore-PATCH Zeit zum Committen geben
+    // 3) Jetzt der eigentliche Download + Reboot (blockt mehrere Sekunden)
+    ota_update::performUpdate(ota_update::availableUrl);
+    // Falls performUpdate scheitert (kein Reboot), Status nochmal melden
+    FirebaseJson r2;
+    r2.set("currentVersion/stringValue", FW_VERSION);
+    r2.set("availableVersion/stringValue", ota_update::availableVersion);
+    r2.set("info/stringValue", "Update fehlgeschlagen — siehe ESP-Serial");
+    firebase_sync::updateCommandStatus("failed", &r2);
     return true;
   }
   if (action == "calibratePh") {

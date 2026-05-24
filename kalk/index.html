@@ -1982,7 +1982,16 @@
             _otaCheckUnsub(); _otaCheckUnsub = null;
             const cur = data.result?.currentVersion || "?";
             const av  = data.result?.availableVersion || "?";
-            if (av && av !== cur && semverCompare(cur, av) < 0) {
+            const info = data.result?.info || "";
+            // ESP liefert seit v0.1.3 ein info-Feld — vorher Heuristik per SemVer-Vergleich
+            if (info) {
+              const color = info.includes("läuft") ? "var(--green)"
+                           : info.includes("verschoben") ? "var(--orange)"
+                           : info.includes("fehlgeschlagen") ? "var(--red)"
+                           : "var(--text-light)";
+              const icon = info.includes("läuft") ? "🚀" : info.includes("verschoben") ? "⏳" : info.includes("fehlgeschlagen") ? "❌" : "✓";
+              status.innerHTML = `<span style="color:${color}">${icon} ${info} (lokal v${cur}, verfügbar v${av})</span>`;
+            } else if (av && av !== cur && semverCompare(cur, av) < 0) {
               status.innerHTML = `<span style="color:var(--green)">🚀 Update auf v${av} läuft — ESP startet gleich neu.</span>`;
             } else {
               status.innerHTML = `<span style="color:var(--text-light)">✓ ESP ist bereits aktuell (v${cur}).</span>`;
