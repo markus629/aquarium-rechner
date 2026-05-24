@@ -224,9 +224,7 @@ function defaultPump(index) {
   const names = ["Calcium", "Magnesium", "KH-Tag", "KH-Nacht"];
   return {
     name: names[index] || `Pumpe ${index}`,
-    mlPerStep: 0,
-    speedML: 3.6,
-    accelerationML: 1.8,
+    stepsPerML: 0,   // Kalibrierung: Schritte pro ml
     lastCalibrationDate: null
   };
 }

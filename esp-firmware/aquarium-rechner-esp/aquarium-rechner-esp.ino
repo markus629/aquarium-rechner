@@ -118,7 +118,7 @@ void loop() {
     plan_executor::countDosesLast24h(stats.dosesOk24h, stats.dosesFail24h);
     stats.bufferQueueSize = upload_buffer::size();
     for (int i = 0; i < 4; i++) {
-      stats.pumpsCalibrated[i] = pumps::mlPerStep[i] > 0.0f;
+      stats.pumpsCalibrated[i] = pumps::stepsPerML[i] > 0.0f;
     }
     if (firebase_sync::sendHeartbeat(ph, ph_sensor::getSampleCount(), uptime, stats)) {
       Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",

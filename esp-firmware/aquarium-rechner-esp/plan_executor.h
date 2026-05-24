@@ -155,10 +155,10 @@ void syncPumpConfigs() {
   lastPumpConfigSyncMs = now;
   for (int i = 0; i < pumps::NUM_PUMPS; i++) {
     float v;
-    if (firebase_sync::fetchPumpMlPerStep(i, v)) {
-      if (v != pumps::mlPerStep[i]) {
-        pumps::setMlPerStep(i, v);
-        Serial.printf("[PumpConfig] Pumpe %d: mlPerStep=%.5f\n", i, v);
+    if (firebase_sync::fetchPumpStepsPerML(i, v)) {
+      if (v != pumps::stepsPerML[i]) {
+        pumps::setStepsPerML(i, v);
+        Serial.printf("[PumpConfig] Pumpe %d: %.2f Schritte/ml\n", i, v);
       }
     }
   }

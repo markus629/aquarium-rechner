@@ -22,7 +22,8 @@ const char* PUMP_NAMES[NUM_PUMPS] = { "Calcium", "Magnesium", "KH-Tag", "KH-Nach
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = nullptr;
 
-float mlPerStep[NUM_PUMPS] = { 0.0f, 0.0f, 0.0f, 0.0f };  // wird aus Firestore geladen
+// Kalibrierung: Schritte pro ml (lesbarer als ml/Schritt, besonders bei Microstepping)
+float stepsPerML[NUM_PUMPS] = { 0.0f, 0.0f, 0.0f, 0.0f };  // wird aus Firestore geladen
 // Schritt-Geschwindigkeit/Beschleunigung direkt in Hz — funktioniert
 // auch ohne Kalibrierung (für Kalibrier-Lauf selbst).
 uint32_t stepsPerSec  = 400;   // Default: 400 Hz
@@ -54,10 +55,10 @@ void loadCalibrationFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
   for (int i = 0; i < NUM_PUMPS; i++) {
-    String key = "mlps" + String(i);
-    mlPerStep[i] = p.getFloat(key.c_str(), 0.0f);
-    if (mlPerStep[i] > 0) {
-      Serial.printf("[Pumps] NVS-Kalibrierung Pumpe %d: %.5f ml/Schritt\n", i, mlPerStep[i]);
+    String key = "stpml" + String(i);
+    stepsPerML[i] = p.getFloat(key.c_str(), 0.0f);
+    if (stepsPerML[i] > 0) {
+      Serial.printf("[Pumps] NVS-Kalibrierung Pumpe %d: %.2f Schritte/ml\n", i, stepsPerML[i]);
     }
   }
   p.end();
@@ -67,16 +68,16 @@ void saveCalibrationToNVS(int pumpIdx) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return;
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
-  String key = "mlps" + String(pumpIdx);
-  p.putFloat(key.c_str(), mlPerStep[pumpIdx]);
+  String key = "stpml" + String(pumpIdx);
+  p.putFloat(key.c_str(), stepsPerML[pumpIdx]);
   p.end();
 }
 
 // Setter mit automatischer NVS-Persistenz
-void setMlPerStep(int pumpIdx, float v) {
+void setStepsPerML(int pumpIdx, float v) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return;
-  if (mlPerStep[pumpIdx] == v) return;
-  mlPerStep[pumpIdx] = v;
+  if (stepsPerML[pumpIdx] == v) return;
+  stepsPerML[pumpIdx] = v;
   saveCalibrationToNVS(pumpIdx);
 }
 
@@ -160,8 +161,8 @@ bool _runStepsAtSpeed(int pumpIdx, long steps, uint32_t hz) {
 // Effektives Fördervolumen = ml (prime + retract heben sich auf).
 bool runMl(int pumpIdx, float ml) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return false;
-  if (mlPerStep[pumpIdx] <= 0.0f) {
-    Serial.printf("[Pumps] FEHLER: Pumpe %d nicht kalibriert (mlPerStep=0)\n", pumpIdx);
+  if (stepsPerML[pumpIdx] <= 0.0f) {
+    Serial.printf("[Pumps] FEHLER: Pumpe %d nicht kalibriert (stepsPerML=0)\n", pumpIdx);
     return false;
   }
   if (ds.phase != PHASE_IDLE) {
@@ -169,9 +170,9 @@ bool runMl(int pumpIdx, float ml) {
     return false;
   }
   ds.pumpIdx = pumpIdx;
-  ds.doseSteps = (long)round(ml / mlPerStep[pumpIdx]);
+  ds.doseSteps = (long)round(ml * stepsPerML[pumpIdx]);
   ds.antiDripSteps = antiDripEnabled
-    ? (long)round(antiDripML / mlPerStep[pumpIdx])
+    ? (long)round(antiDripML * stepsPerML[pumpIdx])
     : 0;
 
   if (ds.antiDripSteps > 0) {

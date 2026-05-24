@@ -271,8 +271,8 @@ bool flushBuffer() {
 }
 
 // ---------- Pump-Konfig lesen (Kalibrierung) ----------
-// Returns true wenn erfolgreich, schreibt mlPerStep ins out-Parameter.
-bool fetchPumpMlPerStep(int pumpIdx, float &outMlPerStep) {
+// Returns true wenn erfolgreich, schreibt stepsPerML ins out-Parameter.
+bool fetchPumpStepsPerML(int pumpIdx, float &outStepsPerML) {
   if (!isReady()) return false;
   if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathPump(pumpIdx).c_str())) {
     return false;
@@ -280,13 +280,12 @@ bool fetchPumpMlPerStep(int pumpIdx, float &outMlPerStep) {
   FirebaseJson doc;
   doc.setJsonData(fbdo.payload());
   FirebaseJsonData v;
-  if (doc.get(v, "fields/mlPerStep/doubleValue") && v.success) {
-    outMlPerStep = v.floatValue;
+  if (doc.get(v, "fields/stepsPerML/doubleValue") && v.success) {
+    outStepsPerML = v.floatValue;
     return true;
   }
-  // Manchmal als integer gespeichert (0)
-  if (doc.get(v, "fields/mlPerStep/integerValue") && v.success) {
-    outMlPerStep = (float)v.intValue;
+  if (doc.get(v, "fields/stepsPerML/integerValue") && v.success) {
+    outStepsPerML = (float)v.intValue;
     return true;
   }
   return false;
