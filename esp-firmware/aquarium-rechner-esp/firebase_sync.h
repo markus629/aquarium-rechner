@@ -225,7 +225,9 @@ bool fetchPhCalibration(float &v4_out, float &v7_out, bool &calibrated_out) {
   doc.setJsonData(fbdo.payload());
   FirebaseJsonData v;
   if (doc.get(v, "fields/voltage_pH4/doubleValue") && v.success) v4_out = v.floatValue;
+  else if (doc.get(v, "fields/voltage_pH4/integerValue") && v.success) v4_out = (float)v.intValue;
   if (doc.get(v, "fields/voltage_pH7/doubleValue") && v.success) v7_out = v.floatValue;
+  else if (doc.get(v, "fields/voltage_pH7/integerValue") && v.success) v7_out = (float)v.intValue;
   calibrated_out = !isnan(v4_out) && !isnan(v7_out);
   return true;
 }

@@ -89,6 +89,10 @@ void sync() {
     float nv = v.floatValue;
     if (nv != phThresholdForKHNight) { phThresholdForKHNight = nv; changed = true; }
   }
+  if (doc.get(v, "fields/phThresholdForKHNight/integerValue") && v.success) {
+    float nv = (float)v.intValue;
+    if (nv != phThresholdForKHNight) { phThresholdForKHNight = nv; changed = true; }
+  }
   if (doc.get(v, "fields/khNightStart/integerValue") && v.success) {
     int nv = (int)v.intValue;
     if (nv != khNightStart) { khNightStart = nv; changed = true; }
@@ -118,6 +122,10 @@ void sync() {
   if (doc.get(v, "fields/enableAntiDrip/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
     if (nv != pumps::antiDripEnabled) { pumps::antiDripEnabled = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/antiDripML/integerValue") && v.success) {
+    float nv = (float)v.intValue;
+    if (nv != pumps::antiDripML) { pumps::antiDripML = nv; changed = true; }
   }
   if (doc.get(v, "fields/antiDripML/doubleValue") && v.success) {
     float nv = v.floatValue;

@@ -520,11 +520,15 @@ PlanEntry parseEntry(FirebaseJson &entry, bool isKH) {
   PlanEntry pe = { 0, 0, 0, 0, false, false };
   FirebaseJsonData v;
   if (entry.get(v, "mapValue/fields/date/integerValue") && v.success) pe.date = (time_t)v.intValue;
+  // Firestore speichert ganze Zahlen als integerValue — Fallback nötig
   if (isKH) {
     if (entry.get(v, "mapValue/fields/dosageML/doubleValue") && v.success) pe.dosageML = v.floatValue;
+    else if (entry.get(v, "mapValue/fields/dosageML/integerValue") && v.success) pe.dosageML = (float)v.intValue;
   } else {
     if (entry.get(v, "mapValue/fields/caDosageML/doubleValue") && v.success) pe.caDosageML = v.floatValue;
+    else if (entry.get(v, "mapValue/fields/caDosageML/integerValue") && v.success) pe.caDosageML = (float)v.intValue;
     if (entry.get(v, "mapValue/fields/mgDosageML/doubleValue") && v.success) pe.mgDosageML = v.floatValue;
+    else if (entry.get(v, "mapValue/fields/mgDosageML/integerValue") && v.success) pe.mgDosageML = (float)v.intValue;
   }
   if (entry.get(v, "mapValue/fields/isMaintenanceDose/booleanValue") && v.success)
     pe.isMaintenanceDose = (v.stringValue == "true");
