@@ -446,8 +446,11 @@ void pollCommands() {
   doc.get(fAction,  "fields/action/stringValue");
   doc.get(fPump,    "fields/pump/integerValue");
   doc.get(fMl,      "fields/ml/doubleValue");
+  if (!fMl.success) doc.get(fMl, "fields/ml/integerValue");  // Firestore speichert ganze Zahlen als integer
   doc.get(fSteps,   "fields/steps/integerValue");
+  if (!fSteps.success) doc.get(fSteps, "fields/steps/doubleValue");
   doc.get(fPhValue, "fields/phValue/doubleValue");
+  if (!fPhValue.success) doc.get(fPhValue, "fields/phValue/integerValue");
 
   if (!fStatus.success || !fAction.success || !fId.success) return;
   if (fStatus.stringValue != "pending") return;
