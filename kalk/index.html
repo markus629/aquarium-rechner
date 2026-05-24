@@ -708,10 +708,12 @@
 
   // ---------- Wiederverwendbare SVG-Line-Charts (vanilla, ohne Lib) ----------
   // Inspiriert vom Original-ESP-UI: trend-line + Datenpunkte + Hover-Tooltip
-  // series: [{ label, color, values: [{ ts, v }] }, ...]
+  // series: [{ label, color, values: [{ ts, v }], fract?, unit? }, ...]
+  // Jede Serie bekommt eine eigene Y-Achse (max 2 Serien: links + rechts)
   function renderLineChart(container, series, opts = {}) {
     if (!container) return;
-    const W = 800, H = 220, padL = 50, padR = 20, padT = 15, padB = 30;
+    const W = 800, H = 220, padT = 15, padB = 30;
+    const padL = 55, padR = series.length >= 2 ? 55 : 20;
     const cw = W - padL - padR, ch = H - padT - padB;
     const allPoints = series.flatMap(s => s.values).filter(p => p && !isNaN(p.v));
     if (allPoints.length === 0) {
@@ -722,7 +724,7 @@
     const tsMin = Math.min(...allPoints.map(p => p.ts));
     const tsMax = Math.max(...allPoints.map(p => p.ts));
     const tsSpan = Math.max(tsMax - tsMin, 1);
-    // Pro Serie eigene Y-Achse wenn nötig
+    // Pro Serie eigene Y-Achse
     series.forEach(s => {
       const vals = s.values.filter(p => !isNaN(p.v)).map(p => p.v);
       s._min = vals.length ? Math.min(...vals) : 0;
@@ -730,27 +732,44 @@
       if (s._min === s._max) { s._min -= 0.5; s._max += 0.5; }
       const margin = (s._max - s._min) * 0.1;
       s._min -= margin; s._max += margin;
+      s._fract = s.fract != null ? s.fract : (opts.fract != null ? opts.fract : 1);
     });
     const xOf = ts => padL + ((ts - tsMin) / tsSpan) * cw;
     const yOf = (v, s) => padT + ch - ((v - s._min) / (s._max - s._min)) * ch;
 
     let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
-    // Y-Grid (3 Linien, Werte der ersten Serie)
-    const primary = series[0];
-    if (primary) {
+
+    // Grid-Linien (4 Stück, an primärer Skala ausgerichtet)
+    for (let i = 0; i <= 3; i++) {
+      const y = padT + (ch / 3) * i;
+      svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e1e8ed" stroke-width="1"/>`;
+    }
+
+    // Linke Y-Achse: erste Serie
+    const left = series[0];
+    if (left) {
       for (let i = 0; i <= 3; i++) {
         const y = padT + (ch / 3) * i;
-        const v = primary._max - (primary._max - primary._min) * (i / 3);
-        svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e1e8ed" stroke-width="1"/>`;
-        svg += `<text x="${padL - 5}" y="${y + 3}" font-size="10" fill="${primary.color}" text-anchor="end">${v.toFixed(opts.fract ?? 1)}</text>`;
+        const v = left._max - (left._max - left._min) * (i / 3);
+        svg += `<text x="${padL - 6}" y="${y + 3}" font-size="10" fill="${left.color}" text-anchor="end">${v.toFixed(left._fract)}</text>`;
       }
     }
+    // Rechte Y-Achse: zweite Serie (falls vorhanden)
+    const right = series[1];
+    if (right) {
+      for (let i = 0; i <= 3; i++) {
+        const y = padT + (ch / 3) * i;
+        const v = right._max - (right._max - right._min) * (i / 3);
+        svg += `<text x="${W - padR + 6}" y="${y + 3}" font-size="10" fill="${right.color}" text-anchor="start">${v.toFixed(right._fract)}</text>`;
+      }
+    }
+
     // X-Achse (Datums-Labels)
     const dateOf = ts => new Date(ts * 1000).toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit" });
     svg += `<text x="${padL}" y="${H-8}" font-size="10" fill="var(--text-light)">${dateOf(tsMin)}</text>`;
     svg += `<text x="${W-padR}" y="${H-8}" font-size="10" fill="var(--text-light)" text-anchor="end">${dateOf(tsMax)}</text>`;
 
-    // Pro Serie: Trendlinie + Datenpunkte + Linie
+    // Pro Serie: Trendlinie + Linie + Datenpunkte
     series.forEach(s => {
       const pts = s.values.filter(p => !isNaN(p.v)).sort((a, b) => a.ts - b.ts);
       if (pts.length < 1) return;
@@ -769,8 +788,9 @@
       const path = pts.map((p, i) => (i === 0 ? "M" : "L") + xOf(p.ts) + " " + yOf(p.v, s)).join(" ");
       svg += `<path d="${path}" stroke="${s.color}" stroke-width="2" fill="none"/>`;
       // Datenpunkte
+      const unit = s.unit ? " " + s.unit : "";
       pts.forEach(p => {
-        svg += `<circle cx="${xOf(p.ts)}" cy="${yOf(p.v, s)}" r="3" fill="${s.color}"><title>${s.label}: ${Number(p.v).toFixed(opts.fract ?? 2)} am ${new Date(p.ts*1000).toLocaleString("de-DE")}</title></circle>`;
+        svg += `<circle cx="${xOf(p.ts)}" cy="${yOf(p.v, s)}" r="3" fill="${s.color}"><title>${s.label}: ${Number(p.v).toFixed(s._fract)}${unit} am ${new Date(p.ts*1000).toLocaleString("de-DE")}</title></circle>`;
       });
     });
     svg += `</svg>`;
@@ -845,12 +865,12 @@
         renderMeasurementTable("kalk-ca-tbody", ca, 0, "ca");
         document.getElementById("kalk-ca-count").textContent = ca.length;
       }
-      // Chart aktualisieren
+      // Chart aktualisieren — duale Y-Achse (links KH, rechts Ca)
       const chartBox = document.getElementById("chart-box-kh-ca");
       renderLineChart(chartBox, [
-        { label: "KH (°dKH)", color: "#3498db", values: kh.map(m => ({ ts: m.timestamp, v: m.value })) },
-        { label: "Ca (mg/L)", color: "#e8732a", values: ca.map(m => ({ ts: m.timestamp, v: m.value })) }
-      ], { title: "KH + Calcium Verlauf", fract: 1 });
+        { label: "KH (°dKH)", color: "#3498db", values: kh.map(m => ({ ts: m.timestamp, v: m.value })), fract: 1, unit: "°dKH" },
+        { label: "Ca (mg/L)", color: "#e8732a", values: ca.map(m => ({ ts: m.timestamp, v: m.value })), fract: 0, unit: "mg/L" }
+      ], { title: "KH (links) + Calcium (rechts)" });
     } catch (e) {
       console.warn("Messungen laden:", e);
     }
