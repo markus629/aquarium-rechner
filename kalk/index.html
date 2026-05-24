@@ -479,13 +479,46 @@
       </div>
 
       <div class="card">
-        <h2>Firmware-Update</h2>
+        <h2>Firmware-Update (OTA)</h2>
         <p style="color:var(--text-light);margin-bottom:0.8rem">
-          Hier kannst du eine neue Firmware-Datei (<code>.bin</code>) hochladen. Der ESP holt sich diese automatisch innerhalb von 6 Stunden — keine USB-Verbindung mehr nötig.
+          Lade eine neue Firmware-Datei (<code>.bin</code>) hoch. Der ESP prüft automatisch alle 6 Stunden auf neuere Versionen und installiert sie ohne USB-Kabel.
         </p>
-        <div class="center-state" style="padding:1rem">
-          <p style="font-size:0.85rem">Firmware-Upload kommt in der nächsten Iteration (Session B). Bis dahin: Updates über Arduino IDE per USB.</p>
+
+        <div id="fw-current" style="margin-bottom:1rem;padding:0.7rem;background:var(--bg);border-radius:8px;font-size:0.88rem">
+          Lade Firmware-Info …
         </div>
+
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap:0.7rem">
+          <div class="form-row">
+            <label for="fw-version">Neue Version (z. B. 1.0.4)</label>
+            <input type="text" id="fw-version" placeholder="1.0.4" pattern="\d+\.\d+\.\d+">
+          </div>
+          <div class="form-row">
+            <label for="fw-file">.bin-Datei</label>
+            <input type="file" id="fw-file" accept=".bin,application/octet-stream">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.6rem;margin-top:0.6rem;flex-wrap:wrap">
+          <button class="btn btn-primary" id="fw-upload">⬆️ Hochladen &amp; Verteilen</button>
+          <button class="btn btn-ghost" id="fw-refresh">🔄 Status aktualisieren</button>
+        </div>
+
+        <div id="fw-progress" style="display:none;margin-top:0.8rem">
+          <div style="background:var(--bg);border-radius:6px;overflow:hidden;height:14px">
+            <div id="fw-progress-bar" style="background:var(--blue);height:100%;width:0;transition:width 0.2s"></div>
+          </div>
+          <div id="fw-progress-text" style="font-size:0.82rem;color:var(--text-light);margin-top:0.3rem">0 %</div>
+        </div>
+
+        <div id="fw-status" style="margin-top:0.8rem;font-size:0.88rem"></div>
+
+        <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.8rem;line-height:1.5">
+          <strong>Wie es funktioniert:</strong> Die Datei wird in deinem Firebase Storage abgelegt
+          (<code>users/&lt;dein-uid&gt;/firmware/&lt;version&gt;.bin</code>). Der ESP liest alle 6 h das Dokument
+          <code>aquarium/firmware-latest</code>, vergleicht die Version mit seiner eigenen und lädt bei Bedarf die neue.
+          Nach erfolgreichem Update bootet er automatisch neu — alte Versionen werden anschließend gelöscht.
+        </p>
       </div>
     </div>
 
@@ -622,7 +655,8 @@
     addDosing, listDosings,
     getPumps, savePump,
     sendCommand, watchCommand, deleteCommand,
-    savePlan
+    savePlan,
+    uploadFirmware, getLatestFirmware, pruneOldFirmware
   } from "/kalk/firestore-store.js";
   import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
 
@@ -1836,6 +1870,7 @@
     };
 
     // ESP-Status: lese aquarium/info
+    let espFirmwareVersion = null;
     try {
       const settings = await getSettings();  // wir nutzen settings nicht direkt, aber sichert auth
       // info.lastSeen, info.online etc. wären in aquarium/info dokument
@@ -1851,6 +1886,7 @@
         return;
       }
       const d = snap.data();
+      espFirmwareVersion = d.firmware || null;
       const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
       const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
       const dotColor = isOnlineRecent ? "var(--green)" : "#aabbcc";
@@ -1902,6 +1938,99 @@
     } catch (e) {
       console.warn("ESP-Status:", e);
     }
+
+    // Firmware-Status laden
+    await refreshFirmwareStatus(espFirmwareVersion);
+  }
+
+  // ---------- Firmware-Update (OTA) ----------
+  async function refreshFirmwareStatus(espVersion) {
+    const cur = document.getElementById("fw-current");
+    if (!cur) return;
+    try {
+      const latest = await getLatestFirmware();
+      const espV = espVersion || "—";
+      if (!latest) {
+        cur.innerHTML = `📦 <strong>ESP-Version:</strong> ${espV} &nbsp;·&nbsp; <em>noch keine Firmware hochgeladen</em>`;
+        return;
+      }
+      const uploaded = latest.uploadedAt?.toDate?.()?.toLocaleString("de-DE") || "—";
+      const sizeKb = latest.size ? `${Math.round(latest.size / 1024)} kB` : "?";
+      const cmp = espVersion && espVersion !== latest.version
+        ? `<span style="color:var(--orange)">⏳ ESP hat noch ${espV} — Update beim nächsten 6h-Check</span>`
+        : espVersion === latest.version
+          ? `<span style="color:var(--green)">✅ ESP ist aktuell</span>`
+          : `<span style="color:var(--text-light)">ESP-Status unbekannt</span>`;
+      cur.innerHTML = `
+        📦 <strong>Aktuell verfügbar:</strong> v${latest.version} (${sizeKb}, ${uploaded})<br>
+        🛰️ <strong>ESP-Version:</strong> ${espV} — ${cmp}
+      `;
+    } catch (e) {
+      cur.innerHTML = `<span style="color:var(--red)">Firmware-Info konnte nicht geladen werden: ${e.message}</span>`;
+    }
+  }
+
+  function setupFirmwareUpload() {
+    const btn = document.getElementById("fw-upload");
+    const refreshBtn = document.getElementById("fw-refresh");
+    const fileInput = document.getElementById("fw-file");
+    const versionInput = document.getElementById("fw-version");
+    const status = document.getElementById("fw-status");
+    const prog = document.getElementById("fw-progress");
+    const progBar = document.getElementById("fw-progress-bar");
+    const progText = document.getElementById("fw-progress-text");
+    if (!btn) return;
+
+    refreshBtn.onclick = () => refreshDeviceTab();
+
+    // Auto-fill Version aus Dateiname (z.B. "aquarium-rechner-esp-1.0.4.bin" → "1.0.4")
+    fileInput.onchange = () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+      const m = f.name.match(/(\d+\.\d+\.\d+)/);
+      if (m && !versionInput.value) versionInput.value = m[1];
+    };
+
+    btn.onclick = async () => {
+      const file = fileInput.files?.[0];
+      const version = versionInput.value.trim();
+      if (!file) { status.innerHTML = `<span style="color:var(--red)">Bitte eine .bin-Datei wählen.</span>`; return; }
+      if (!version.match(/^\d+\.\d+\.\d+$/)) {
+        status.innerHTML = `<span style="color:var(--red)">Version muss Format X.Y.Z haben (z. B. 1.0.4).</span>`;
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        status.innerHTML = `<span style="color:var(--red)">Datei zu groß (${Math.round(file.size/1024)} kB, max 5 MB).</span>`;
+        return;
+      }
+      btn.disabled = true;
+      refreshBtn.disabled = true;
+      status.innerHTML = "";
+      prog.style.display = "block";
+      progBar.style.width = "0%";
+      progText.textContent = "0 %";
+      try {
+        const res = await uploadFirmware(file, version, (pct) => {
+          progBar.style.width = pct + "%";
+          progText.textContent = pct + " %";
+        });
+        status.innerHTML = `<span style="color:var(--green)">✅ v${res.version} hochgeladen. Der ESP holt sie sich innerhalb der nächsten 6 h automatisch.</span>`;
+        // Alte Versionen aufräumen
+        try {
+          const removed = await pruneOldFirmware(res.version);
+          if (removed > 0) status.innerHTML += ` <span style="color:var(--text-light);font-size:0.82rem">(${removed} alte Version${removed === 1 ? "" : "en"} gelöscht)</span>`;
+        } catch (e) { console.warn("prune:", e); }
+        fileInput.value = "";
+        versionInput.value = "";
+        await refreshFirmwareStatus();
+      } catch (e) {
+        status.innerHTML = `<span style="color:var(--red)">❌ Upload fehlgeschlagen: ${e.message || e}</span>`;
+      } finally {
+        btn.disabled = false;
+        refreshBtn.disabled = false;
+        setTimeout(() => { prog.style.display = "none"; }, 2000);
+      }
+    };
   }
 
   // ---------- Zentraler Refresh ----------
@@ -1933,6 +2062,7 @@
     if (user) {
       showView("view-main");
       await loadSettingsIntoForm();
+      setupFirmwareUpload();
       await refreshAll();
     } else {
       settingsLoaded = false;
