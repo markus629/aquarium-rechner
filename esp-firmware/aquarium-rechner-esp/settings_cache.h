@@ -31,6 +31,9 @@ void loadFromNVS() {
   magnesiumRatio = p.getFloat("mgRatio", 50.0f);
   pumps::stepsPerSec  = (uint32_t)p.getULong("stepsHz", 400);
   pumps::accelPerSec2 = (uint32_t)p.getULong("accelHz", 200);
+  pumps::antiDripEnabled = p.getBool("adEn", true);
+  pumps::antiDripML = p.getFloat("adML", 0.015f);
+  pumps::antiDripStepsPerSec = (uint32_t)p.getULong("adHz", 400);
   p.end();
 }
 
@@ -44,6 +47,9 @@ void saveToNVS() {
   p.putFloat("mgRatio", magnesiumRatio);
   p.putULong("stepsHz", (unsigned long)pumps::stepsPerSec);
   p.putULong("accelHz", (unsigned long)pumps::accelPerSec2);
+  p.putBool("adEn", pumps::antiDripEnabled);
+  p.putFloat("adML", pumps::antiDripML);
+  p.putULong("adHz", (unsigned long)pumps::antiDripStepsPerSec);
   p.end();
 }
 
@@ -93,6 +99,19 @@ void sync() {
   if (doc.get(v, "fields/accelStepsPerSec2/integerValue") && v.success) {
     uint32_t nv = (uint32_t)v.intValue;
     if (nv != pumps::accelPerSec2) { pumps::accelPerSec2 = nv; changed = true; }
+  }
+  // Anti-Drip Settings
+  if (doc.get(v, "fields/enableAntiDrip/booleanValue") && v.success) {
+    bool nv = (v.stringValue == "true");
+    if (nv != pumps::antiDripEnabled) { pumps::antiDripEnabled = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/antiDripML/doubleValue") && v.success) {
+    float nv = v.floatValue;
+    if (nv != pumps::antiDripML) { pumps::antiDripML = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/antiDripStepsPerSec/integerValue") && v.success) {
+    uint32_t nv = (uint32_t)v.intValue;
+    if (nv != pumps::antiDripStepsPerSec) { pumps::antiDripStepsPerSec = nv; changed = true; }
   }
   if (changed) {
     saveToNVS();
