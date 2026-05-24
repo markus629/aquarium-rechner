@@ -295,30 +295,27 @@ bool fetchPumpMlPerStep(int pumpIdx, float &outMlPerStep) {
 // ---------- Command-Queue lesen ----------
 // Liefert via runQuery alle pending commands. Bis zu 5 werden zurückgegeben.
 // out: FirebaseJsonArray mit den Doc-Inhalten (jeweils mit "name" für ID-Extraktion)
+// KEIN orderBy — vermeidet Composite-Index-Requirement.
 bool fetchPendingCommands(FirebaseJsonArray &out) {
   out.clear();
   if (!isReady()) return false;
-  // StructuredQuery: SELECT * FROM aquarium-commands WHERE status == "pending"
-  // Mobizt's Library: Firebase.Firestore.runQuery
   FirebaseJson queryJson;
   queryJson.set("structuredQuery/from/[0]/collectionId", "aquarium-commands");
   queryJson.set("structuredQuery/where/fieldFilter/field/fieldPath", "status");
   queryJson.set("structuredQuery/where/fieldFilter/op", "EQUAL");
   queryJson.set("structuredQuery/where/fieldFilter/value/stringValue", "pending");
   queryJson.set("structuredQuery/limit", 5);
-  // OrderBy createdAt asc (älteste zuerst)
-  queryJson.set("structuredQuery/orderBy/[0]/field/fieldPath", "createdAt");
-  queryJson.set("structuredQuery/orderBy/[0]/direction", "ASCENDING");
 
-  // Parent für runQuery: users/{uid}
+  // Parent: users/{uid} (Subcollection drunter)
   String parent = "users/" + currentUid;
   if (!Firebase.Firestore.runQuery(&fbdo, FIREBASE_PROJECT_ID, "", parent.c_str(), &queryJson)) {
+    Serial.printf("[Cmd] runQuery FAIL: %s | payload: %s\n",
+                  fbdo.errorReason().c_str(), fbdo.payload().c_str());
     return false;
   }
-  // fbdo.payload() ist Array von [{document: {...}, ...}, ...]
+  // fbdo.payload() ist Array [{document:{...}}, ...]
   FirebaseJsonArray arr;
   arr.setJsonArrayData(fbdo.payload());
-  // Jedes Element kann ein Result mit document sein oder {} (Sentinel)
   for (size_t i = 0; i < arr.size(); i++) {
     FirebaseJsonData item;
     arr.get(item, i);
@@ -329,6 +326,7 @@ bool fetchPendingCommands(FirebaseJsonArray &out) {
       out.add(el);
     }
   }
+  if (out.size() > 0) Serial.printf("[Cmd] %d pending commands\n", (int)out.size());
   return true;
 }
 
