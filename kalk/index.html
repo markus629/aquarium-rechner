@@ -1067,15 +1067,53 @@
 
   // ---------- Manuelle Dosierung Tab ----------
   const PUMP_NAMES = ["Calcium", "Magnesium", "KH-Tag", "KH-Nacht"];
+  let _manualDoseUnsub = null;
   document.getElementById("manual-dose").onclick = async () => {
+    const btn = document.getElementById("manual-dose");
     const pump = parseInt(document.getElementById("manual-pump").value, 10);
     const ml = parseFloat(document.getElementById("manual-ml").value);
     if (isNaN(ml) || ml <= 0) { alert("Bitte gültige ml-Menge eingeben."); return; }
+    if (_manualDoseUnsub) { _manualDoseUnsub(); _manualDoseUnsub = null; }
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = "Sende an ESP …";
     try {
-      await addDosing({ pump, ml, isAutomatic: false, dosageType: "manual" });
-      document.getElementById("manual-ml").value = "";
-      await refreshDosings();
-    } catch (e) { alert("Fehler: " + e.message); }
+      const cmdId = await sendCommand({ action: "dose", pump, ml });
+      btn.textContent = "Wartet auf ESP …";
+      const timeoutHandle = setTimeout(() => {
+        if (_manualDoseUnsub) { _manualDoseUnsub(); _manualDoseUnsub = null; }
+        btn.disabled = false;
+        btn.textContent = origText;
+        alert("⚠️ ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät").");
+      }, 60000);
+      _manualDoseUnsub = watchCommand(cmdId, async (data) => {
+        if (!data) return;
+        if (data.status === "running") {
+          btn.textContent = "Pumpe läuft …";
+        } else if (data.status === "done") {
+          clearTimeout(timeoutHandle);
+          _manualDoseUnsub(); _manualDoseUnsub = null;
+          btn.disabled = false;
+          btn.textContent = origText;
+          document.getElementById("manual-ml").value = "";
+          // ESP hat in dosings geschrieben + Container dekrementiert.
+          // Wir refreshen die Anzeige.
+          await refreshDosings();
+          await refreshContainers();
+          await refreshPlan();
+        } else if (data.status === "failed") {
+          clearTimeout(timeoutHandle);
+          _manualDoseUnsub(); _manualDoseUnsub = null;
+          btn.disabled = false;
+          btn.textContent = origText;
+          alert("Dosierung fehlgeschlagen: " + (data.result?.error || "unbekannt"));
+        }
+      });
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = origText;
+      alert("Fehler: " + e.message);
+    }
   };
 
   async function refreshPumpCalibration() {

@@ -86,6 +86,12 @@ export async function deleteMeasurement(measurementId) {
 }
 
 // ---------- Dosierungen ----------
+// HINWEIS: Web schreibt KEINE Dosen direkt — das macht ausschließlich der ESP.
+// Diese Funktion bleibt nur für Import/Restore aus JSON-Backups vorhanden.
+// Bei Manuell-Dosierungen über den Web-UI Tab Manuell wird stattdessen
+// sendCommand({action:"dose"}) verwendet, der ESP führt aus und schreibt
+// dann selbst nach dosings/items. So landen nur tatsächlich gefahrene
+// Doses in der DB — wichtig für korrekte Verbrauchs-Berechnung.
 export async function addDosing({ pump, ml, timestamp, isAutomatic, factor, dosageType, success }) {
   const uid = requireUid();
   await addDoc(collection(db, `users/${uid}/aquarium/dosings/items`), {
@@ -93,18 +99,6 @@ export async function addDosing({ pump, ml, timestamp, isAutomatic, factor, dosa
     isAutomatic: !!isAutomatic, factor: factor || 1, dosageType, success: success !== false,
     createdAt: serverTimestamp()
   });
-  // Container-Level dekrementieren (clamped bei 0). Nur Info-Tracking — wenn 0,
-  // wird trotzdem weiter dosiert (User hat evtl. nachgefüllt aber nicht geklickt).
-  if (pump != null && ml > 0 && success !== false) {
-    try {
-      const settings = await getSettings();
-      const levels = [...(settings.containerLevel || [5000, 5000, 5000, 5000])];
-      if (pump >= 0 && pump < levels.length) {
-        levels[pump] = Math.max(0, levels[pump] - ml);
-        await saveSettings({ containerLevel: levels });
-      }
-    } catch (e) { console.warn("Container-Decrement:", e); }
-  }
 }
 
 export async function listDosings(maxItems = 200) {
