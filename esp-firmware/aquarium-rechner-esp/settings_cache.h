@@ -13,6 +13,7 @@
 
 namespace settings_cache {
 
+bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
 bool usePhBasedKHDosing = false;
 float phThresholdForKHNight = 8.0f;
 int khNightStart = 19;
@@ -24,6 +25,7 @@ unsigned long lastSyncMs = 0;
 void loadFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
+  autoDosing = p.getBool("autoDose", false);
   usePhBasedKHDosing = p.getBool("phMode", false);
   phThresholdForKHNight = p.getFloat("phThr", 8.0f);
   khNightStart = p.getInt("nightSt", 19);
@@ -40,6 +42,7 @@ void loadFromNVS() {
 void saveToNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
+  p.putBool("autoDose", autoDosing);
   p.putBool("phMode", usePhBasedKHDosing);
   p.putFloat("phThr", phThresholdForKHNight);
   p.putInt("nightSt", khNightStart);
@@ -67,6 +70,10 @@ void sync() {
 
   bool changed = false;
   FirebaseJsonData v;
+  if (doc.get(v, "fields/autoDosing/booleanValue") && v.success) {
+    bool nv = (v.stringValue == "true");
+    if (nv != autoDosing) { autoDosing = nv; changed = true; }
+  }
   if (doc.get(v, "fields/usePhBasedKHDosing/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
     if (nv != usePhBasedKHDosing) { usePhBasedKHDosing = nv; changed = true; }
@@ -115,8 +122,8 @@ void sync() {
   }
   if (changed) {
     saveToNVS();
-    Serial.printf("[Settings] aktualisiert: ph-Mode=%d, ph-Thr=%.2f, Nacht %d-%d, Mg-Ratio=%.1f%%, Speed=%u Hz, Accel=%u Hz/s\n",
-                  usePhBasedKHDosing, phThresholdForKHNight, khNightStart, khNightEnd, magnesiumRatio,
+    Serial.printf("[Settings] aktualisiert: autoDose=%d, ph-Mode=%d, ph-Thr=%.2f, Nacht %d-%d, Mg-Ratio=%.1f%%, Speed=%u Hz, Accel=%u Hz/s\n",
+                  autoDosing, usePhBasedKHDosing, phThresholdForKHNight, khNightStart, khNightEnd, magnesiumRatio,
                   (unsigned)pumps::stepsPerSec, (unsigned)pumps::accelPerSec2);
   }
 }

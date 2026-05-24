@@ -520,6 +520,7 @@ void checkAutoDosingSequence() {
   lastSequenceCheckMs = ms;
 
   if (current.active || !queueEmpty()) return;
+  if (!settings_cache::autoDosing) return;  // Master-Schalter aus → keine Auto-Doses
   if (cachedPlanJson.length() == 0) return;
   if (isPlanCacheStale()) {
     Serial.println("[Plan] Cache zu alt (>25h) — keine Auto-Doses");
