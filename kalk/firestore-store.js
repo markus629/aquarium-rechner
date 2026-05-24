@@ -93,6 +93,18 @@ export async function addDosing({ pump, ml, timestamp, isAutomatic, factor, dosa
     isAutomatic: !!isAutomatic, factor: factor || 1, dosageType, success: success !== false,
     createdAt: serverTimestamp()
   });
+  // Container-Level dekrementieren (clamped bei 0). Nur Info-Tracking — wenn 0,
+  // wird trotzdem weiter dosiert (User hat evtl. nachgefüllt aber nicht geklickt).
+  if (pump != null && ml > 0 && success !== false) {
+    try {
+      const settings = await getSettings();
+      const levels = [...(settings.containerLevel || [5000, 5000, 5000, 5000])];
+      if (pump >= 0 && pump < levels.length) {
+        levels[pump] = Math.max(0, levels[pump] - ml);
+        await saveSettings({ containerLevel: levels });
+      }
+    } catch (e) { console.warn("Container-Decrement:", e); }
+  }
 }
 
 export async function listDosings(maxItems = 200) {

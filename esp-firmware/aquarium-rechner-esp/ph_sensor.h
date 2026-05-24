@@ -61,7 +61,11 @@ float getPH() {
   float v = getVoltage();
   if (isnan(v) || !calibrated) return NAN;
   // Linear-Interpolation zwischen pH 4 (saurer = höhere Spannung typischerweise) und pH 7
-  return 7.0f + (voltagePH7 - v) / (voltagePH4 - voltagePH7) * 3.0f;
+  float ph = 7.0f + (voltagePH7 - v) / (voltagePH4 - voltagePH7) * 3.0f;
+  // Plausibility-Check: aquaristisch realistisch 5..10. Werte außerhalb
+  // deuten auf defekte Sonde, lose Kabel oder Sonde nicht im Wasser hin.
+  if (isnan(ph) || ph < 5.0f || ph > 10.0f) return NAN;
+  return ph;
 }
 
 int getSampleCount() { return sampleCount; }

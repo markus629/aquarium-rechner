@@ -31,6 +31,35 @@ unsigned long lastPumpConfigSyncMs = 0;
 unsigned long lastPlanFetchMs = 0;
 unsigned long lastSequenceCheckMs = 0;
 time_t lastPhSampleAt = 0;  // letzter pH-Sample-Zeitpunkt (für 2h-Raster)
+
+// ---------- Statistiken (für Heartbeat) ----------
+unsigned long dosesTotal = 0;
+unsigned long dosesFailedTotal = 0;
+// Ring-Buffer der letzten 100 Dose-Timestamps für "letzte 24h"-Statistik
+static const int DOSE_TIMES_SIZE = 100;
+time_t doseTimestamps[DOSE_TIMES_SIZE] = {0};
+bool doseSuccess[DOSE_TIMES_SIZE] = {0};
+int doseTimesHead = 0;
+
+void recordDose(time_t ts, bool success) {
+  doseTimestamps[doseTimesHead] = ts;
+  doseSuccess[doseTimesHead] = success;
+  doseTimesHead = (doseTimesHead + 1) % DOSE_TIMES_SIZE;
+  dosesTotal++;
+  if (!success) dosesFailedTotal++;
+}
+
+void countDosesLast24h(int &okCount, int &failCount) {
+  okCount = 0; failCount = 0;
+  time_t now; time(&now);
+  if (now < 1700000000) return;
+  for (int i = 0; i < DOSE_TIMES_SIZE; i++) {
+    if (doseTimestamps[i] > 0 && now - doseTimestamps[i] <= 24L * 3600) {
+      if (doseSuccess[i]) okCount++;
+      else failCount++;
+    }
+  }
+}
 const unsigned long PLAN_FETCH_INTERVAL_MS = 30UL * 1000;       // 30s = Quasi-Push
 const unsigned long SEQUENCE_CHECK_INTERVAL_MS = 30UL * 1000;   // jede 30s in Trigger-Fenster gucken
 
@@ -358,6 +387,12 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
   if (!current.active) return;
   unsigned long duration = millis() - current.startMs;
 
+  // Statistik: jede Dose (auch manuell, auch failed) zählen
+  if (current.action == "dose") {
+    time_t now; time(&now);
+    if (now > 1700000000) recordDose(now, success);
+  }
+
   if (current.fromPlan) {
     // Plan-Dose: dosings-Subcollection + lastDosageTimeCache aktualisieren
     if (success) {
@@ -369,6 +404,7 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     }
     firebase_sync::addDosing(current.pump, current.ml,
                               DT_LABELS[current.dosageType], true, 1.0f, success);
+    if (success) firebase_sync::decrementContainerLevel(current.pump, current.ml);
     Serial.printf("[Plan] DOSE %s %s (%lums)\n",
                   DT_LABELS[current.dosageType],
                   success ? "done" : "FAILED", duration);
@@ -381,6 +417,7 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     firebase_sync::updateCommand(current.docPath, success ? "done" : "failed", &result);
     if (current.action == "dose" && success) {
       firebase_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
+      firebase_sync::decrementContainerLevel(current.pump, current.ml);
     }
     Serial.printf("[Cmd] %s (%lums)\n", success ? "done" : "FAILED", duration);
   }

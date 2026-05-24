@@ -112,8 +112,19 @@ void loop() {
     lastHeartbeatMs = now;
     float ph = ph_sensor::getPH();
     long uptime = (now - bootMs) / 1000;
-    if (firebase_sync::sendHeartbeat(ph, ph_sensor::getSampleCount(), uptime, 0)) {
-      Serial.printf("[HB] OK  uptime=%lds  pH=%.2f  RSSI=%d\n", uptime, ph, WiFi.RSSI());
+    firebase_sync::HeartbeatStats stats;
+    stats.dosesTotal = plan_executor::dosesTotal;
+    stats.dosesFailedTotal = plan_executor::dosesFailedTotal;
+    plan_executor::countDosesLast24h(stats.dosesOk24h, stats.dosesFail24h);
+    stats.bufferQueueSize = upload_buffer::size();
+    for (int i = 0; i < 4; i++) {
+      stats.pumpsCalibrated[i] = pumps::mlPerStep[i] > 0.0f;
+    }
+    if (firebase_sync::sendHeartbeat(ph, ph_sensor::getSampleCount(), uptime, stats)) {
+      Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
+                    uptime, ph, WiFi.RSSI(),
+                    stats.dosesOk24h, stats.dosesOk24h + stats.dosesFail24h,
+                    stats.bufferQueueSize);
     } else {
       Serial.println("[HB] FAIL");
     }

@@ -71,17 +71,24 @@ String pathMeasurements() { return "users/" + currentUid + "/aquarium/measuremen
 String pathDosings()   { return "users/" + currentUid + "/aquarium/dosings/items"; }
 
 // ---------- Heartbeat schreiben ----------
-bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, long pendingDoses) {
+// Erweiterter Heartbeat mit Statistiken und Pumpen-Kalibrierstatus.
+struct HeartbeatStats {
+  unsigned long dosesTotal;
+  unsigned long dosesFailedTotal;
+  int dosesOk24h;
+  int dosesFail24h;
+  bool pumpsCalibrated[4];  // mlPerStep > 0 ?
+  int bufferQueueSize;       // wie viele Uploads noch in Queue
+};
+
+bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, const HeartbeatStats &stats) {
   if (!isReady()) return false;
   FirebaseJson content;
   content.set("fields/online/booleanValue", true);
   content.set("fields/firmware/stringValue", FW_VERSION);
-  content.set("fields/lastSeen/timestampValue", "");  // serverTimestamp wird nicht direkt unterstützt → wir setzen es manuell
-  // Wir umgehen serverTimestamp: speichern UTC ISO-String von ESP-Uhr.
-  // Genauigkeit reicht für lastSeen-Anzeige.
   time_t now;
   time(&now);
-  if (now > 1700000000) {  // Plausibility-Check
+  if (now > 1700000000) {
     char buf[32];
     strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     content.set("fields/lastSeen/timestampValue", buf);
@@ -90,14 +97,25 @@ bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, long pendingDos
   content.set("fields/rssi/integerValue", (int)WiFi.RSSI());
   content.set("fields/ip/stringValue", WiFi.localIP().toString().c_str());
   content.set("fields/uptimeSec/integerValue", (int)uptimeSec);
-  content.set("fields/pendingDoses/integerValue", (int)pendingDoses);
   if (!isnan(phValue)) {
     content.set("fields/lastPh/doubleValue", phValue);
     content.set("fields/lastPhSamples/integerValue", phSamples);
   }
+  // Statistiken
+  content.set("fields/dosesTotal/integerValue", (int)stats.dosesTotal);
+  content.set("fields/dosesFailedTotal/integerValue", (int)stats.dosesFailedTotal);
+  content.set("fields/dosesOk24h/integerValue", stats.dosesOk24h);
+  content.set("fields/dosesFail24h/integerValue", stats.dosesFail24h);
+  content.set("fields/bufferQueueSize/integerValue", stats.bufferQueueSize);
+  // Pumpen-Kalibrier-Array
+  for (int i = 0; i < 4; i++) {
+    String key = String("fields/pumpsCalibrated/arrayValue/values/[") + i + "]/booleanValue";
+    content.set(key.c_str(), stats.pumpsCalibrated[i]);
+  }
 
-  // PATCH (Merge) — vorhandene Felder bleiben erhalten
-  String mask = "online,firmware,lastSeen,freeHeap,rssi,ip,uptimeSec,pendingDoses,lastPh,lastPhSamples";
+  String mask = "online,firmware,lastSeen,freeHeap,rssi,ip,uptimeSec,"
+                "lastPh,lastPhSamples,dosesTotal,dosesFailedTotal,"
+                "dosesOk24h,dosesFail24h,bufferQueueSize,pumpsCalibrated";
   return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathInfo().c_str(),
                                           content.raw(), mask.c_str());
 }
@@ -149,6 +167,41 @@ void addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, 
   time_t now; time(&now);
   if (now > 1700000000) content.set("fields/timestamp/integerValue", (int)now);
   upload_buffer::enqueue(pathDosings(), content.raw());
+}
+
+// ---------- Container-Level dekrementieren ----------
+// Schreibt nur das eine Array-Feld zurück (PATCH mit mask).
+// ESP hat lokal keinen Cache der Levels — wir holen sie kurz aus Firestore.
+// Falls offline: Web macht das eh auch separat bei Re-Sync.
+void decrementContainerLevel(int pumpIdx, float ml) {
+  if (!isReady() || pumpIdx < 0 || pumpIdx > 3 || ml <= 0) return;
+  // Settings-Doc holen
+  String settingsPath = "users/" + currentUid + "/aquarium/settings";
+  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", settingsPath.c_str())) return;
+  FirebaseJson doc;
+  doc.setJsonData(fbdo.payload());
+  // Aktuelle Levels lesen
+  float levels[4] = { 5000, 5000, 5000, 5000 };
+  for (int i = 0; i < 4; i++) {
+    FirebaseJsonData v;
+    String path = String("fields/containerLevel/arrayValue/values/[") + i + "]/doubleValue";
+    if (doc.get(v, path.c_str()) && v.success) levels[i] = v.floatValue;
+    else {
+      String pathInt = String("fields/containerLevel/arrayValue/values/[") + i + "]/integerValue";
+      if (doc.get(v, pathInt.c_str()) && v.success) levels[i] = (float)v.intValue;
+    }
+  }
+  // Dekrementieren
+  levels[pumpIdx] -= ml;
+  if (levels[pumpIdx] < 0) levels[pumpIdx] = 0;
+  // Zurückschreiben via PATCH mit mask
+  FirebaseJson content;
+  for (int i = 0; i < 4; i++) {
+    String key = String("fields/containerLevel/arrayValue/values/[") + i + "]/doubleValue";
+    content.set(key.c_str(), levels[i]);
+  }
+  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", settingsPath.c_str(),
+                                   content.raw(), "containerLevel");
 }
 
 // ---------- pH-Kalibrierung schreiben (gepuffert) ----------

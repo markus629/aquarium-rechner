@@ -90,6 +90,14 @@
   .inline-form .form-row { margin-bottom:0; flex:1 1 140px; }
   .inline-form button { padding:0.6rem 1.2rem; height:fit-content; }
 
+  /* Chart-Container */
+  .chart-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:0.8rem 1rem; margin-bottom:1rem; }
+  .chart-box svg { width:100%; height:auto; display:block; }
+  .chart-title { font-size:0.85rem; font-weight:600; color:var(--text-light); margin-bottom:0.4rem; display:flex; justify-content:space-between; align-items:center; }
+  .chart-legend { display:flex; gap:1rem; font-size:0.78rem; color:var(--text-light); }
+  .chart-legend-item { display:flex; align-items:center; gap:0.35rem; }
+  .chart-legend-swatch { width:14px; height:3px; border-radius:2px; }
+
   /* Dashboard Stats */
   .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; }
   .stat-box { background:var(--bg); border-radius:10px; padding:1rem; text-align:center; }
@@ -203,6 +211,7 @@
     </div>
 
     <div id="tab-dashboard" class="tab-content active">
+      <div id="dash-warnings"></div>
       <div class="card">
         <h2>Aktueller Stand</h2>
         <div class="stat-grid">
@@ -257,6 +266,8 @@
 
       <div class="card">
         <h2>Verlauf</h2>
+
+        <div class="chart-box" id="chart-box-kh-ca"></div>
 
         <div class="collapsible open" id="coll-kh">
           <div class="collapsible-head" data-coll="coll-kh">
@@ -354,10 +365,19 @@
       </div>
 
       <div class="card">
-        <h2>Letzte Dosierungen</h2>
+        <h2>
+          <span>Dosierungsverlauf</span>
+          <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:400">
+            <button class="btn btn-ghost" id="hist-prev" style="padding:0.3rem 0.6rem">←</button>
+            <span id="hist-day-label" style="min-width:120px;text-align:center">Heute</span>
+            <button class="btn btn-ghost" id="hist-next" style="padding:0.3rem 0.6rem">→</button>
+          </div>
+        </h2>
         <table class="data-table">
-          <thead><tr><th>Zeit</th><th>Pumpe</th><th class="num">ml</th><th>Art</th></tr></thead>
-          <tbody id="dosings-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
+          <thead><tr>
+            <th>Zeit</th><th>Pumpe</th><th class="num">Menge</th><th>Typ</th><th>Modus</th><th class="act">Löschen</th>
+          </tr></thead>
+          <tbody id="dosings-tbody"><tr><td class="empty" colspan="6">Lade …</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -403,6 +423,7 @@
 
       <div class="card">
         <h2>pH-Verlauf</h2>
+        <div class="chart-box" id="chart-box-ph"></div>
         <table class="data-table">
           <thead><tr><th>Zeit</th><th class="num">pH</th><th>Quelle</th><th class="act">Löschen</th></tr></thead>
           <tbody id="ph-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
@@ -549,6 +570,22 @@
           <label for="autoDosing">Automatische Dosierung aktivieren <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP führt den Dosierplan selbständig aus</span></label>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Backup &amp; Wiederherstellung</h2>
+        <p style="color:var(--text-light);margin-bottom:1rem">
+          Exportiert/importiert alle Daten dieses Aquariums (Settings, Pumpen, pH-Kalibrierung,
+          Messungen, Dosierungen) als JSON-Datei.
+        </p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="kalk-export">⬇️ Export JSON</button>
+          <button class="btn btn-ghost" id="kalk-import">⬆️ Import JSON</button>
+          <input type="file" id="kalk-import-file" accept="application/json" style="display:none">
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.6rem">
+          Import überschreibt die aktuellen Daten in der Cloud. Empfohlen vorher Export!
+        </p>
+      </div>
     </div>
   </div>
 </main>
@@ -669,6 +706,88 @@
     });
   });
 
+  // ---------- Wiederverwendbare SVG-Line-Charts (vanilla, ohne Lib) ----------
+  // Inspiriert vom Original-ESP-UI: trend-line + Datenpunkte + Hover-Tooltip
+  // series: [{ label, color, values: [{ ts, v }] }, ...]
+  function renderLineChart(container, series, opts = {}) {
+    if (!container) return;
+    const W = 800, H = 220, padL = 50, padR = 20, padT = 15, padB = 30;
+    const cw = W - padL - padR, ch = H - padT - padB;
+    const allPoints = series.flatMap(s => s.values).filter(p => p && !isNaN(p.v));
+    if (allPoints.length === 0) {
+      container.innerHTML = `<div class="chart-title">${opts.title || ""}</div>
+        <div style="padding:2rem;text-align:center;color:var(--text-light)">Keine Daten verfügbar</div>`;
+      return;
+    }
+    const tsMin = Math.min(...allPoints.map(p => p.ts));
+    const tsMax = Math.max(...allPoints.map(p => p.ts));
+    const tsSpan = Math.max(tsMax - tsMin, 1);
+    // Pro Serie eigene Y-Achse wenn nötig
+    series.forEach(s => {
+      const vals = s.values.filter(p => !isNaN(p.v)).map(p => p.v);
+      s._min = vals.length ? Math.min(...vals) : 0;
+      s._max = vals.length ? Math.max(...vals) : 1;
+      if (s._min === s._max) { s._min -= 0.5; s._max += 0.5; }
+      const margin = (s._max - s._min) * 0.1;
+      s._min -= margin; s._max += margin;
+    });
+    const xOf = ts => padL + ((ts - tsMin) / tsSpan) * cw;
+    const yOf = (v, s) => padT + ch - ((v - s._min) / (s._max - s._min)) * ch;
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+    // Y-Grid (3 Linien, Werte der ersten Serie)
+    const primary = series[0];
+    if (primary) {
+      for (let i = 0; i <= 3; i++) {
+        const y = padT + (ch / 3) * i;
+        const v = primary._max - (primary._max - primary._min) * (i / 3);
+        svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e1e8ed" stroke-width="1"/>`;
+        svg += `<text x="${padL - 5}" y="${y + 3}" font-size="10" fill="${primary.color}" text-anchor="end">${v.toFixed(opts.fract ?? 1)}</text>`;
+      }
+    }
+    // X-Achse (Datums-Labels)
+    const dateOf = ts => new Date(ts * 1000).toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit" });
+    svg += `<text x="${padL}" y="${H-8}" font-size="10" fill="var(--text-light)">${dateOf(tsMin)}</text>`;
+    svg += `<text x="${W-padR}" y="${H-8}" font-size="10" fill="var(--text-light)" text-anchor="end">${dateOf(tsMax)}</text>`;
+
+    // Pro Serie: Trendlinie + Datenpunkte + Linie
+    series.forEach(s => {
+      const pts = s.values.filter(p => !isNaN(p.v)).sort((a, b) => a.ts - b.ts);
+      if (pts.length < 1) return;
+      // Trendlinie (lineare Regression)
+      if (pts.length >= 3) {
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        pts.forEach((p, i) => { sumX += i; sumY += p.v; sumXY += i * p.v; sumXX += i * i; });
+        const n = pts.length;
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+        const y0 = yOf(intercept, s);
+        const y1 = yOf(intercept + slope * (n - 1), s);
+        svg += `<line x1="${xOf(pts[0].ts)}" y1="${y0}" x2="${xOf(pts[n-1].ts)}" y2="${y1}" stroke="${s.color}" stroke-width="1" stroke-dasharray="4 4" opacity="0.5"/>`;
+      }
+      // Linie
+      const path = pts.map((p, i) => (i === 0 ? "M" : "L") + xOf(p.ts) + " " + yOf(p.v, s)).join(" ");
+      svg += `<path d="${path}" stroke="${s.color}" stroke-width="2" fill="none"/>`;
+      // Datenpunkte
+      pts.forEach(p => {
+        svg += `<circle cx="${xOf(p.ts)}" cy="${yOf(p.v, s)}" r="3" fill="${s.color}"><title>${s.label}: ${Number(p.v).toFixed(opts.fract ?? 2)} am ${new Date(p.ts*1000).toLocaleString("de-DE")}</title></circle>`;
+      });
+    });
+    svg += `</svg>`;
+
+    const legendHtml = series.map(s => `
+      <span class="chart-legend-item">
+        <span class="chart-legend-swatch" style="background:${s.color}"></span>${s.label}
+      </span>`).join("");
+    container.innerHTML = `
+      <div class="chart-title">
+        <span>${opts.title || ""}</span>
+        <span class="chart-legend">${legendHtml}</span>
+      </div>
+      ${svg}
+    `;
+  }
+
   // ---------- Kalkhaushalt: Messungen erfassen & verlauf ----------
   function fmtDateTime(ts) {
     if (!ts) return "—";
@@ -715,16 +834,23 @@
 
   async function refreshMeasurements(typeFilter) {
     try {
+      // Beide Typen laden — auch für Chart
+      const kh = await listMeasurements("kh", 200);
+      const ca = await listMeasurements("ca", 200);
       if (!typeFilter || typeFilter === "kh") {
-        const kh = await listMeasurements("kh", 200);
         renderMeasurementTable("kalk-kh-tbody", kh, 1, "kh");
         document.getElementById("kalk-kh-count").textContent = kh.length;
       }
       if (!typeFilter || typeFilter === "ca") {
-        const ca = await listMeasurements("ca", 200);
         renderMeasurementTable("kalk-ca-tbody", ca, 0, "ca");
         document.getElementById("kalk-ca-count").textContent = ca.length;
       }
+      // Chart aktualisieren
+      const chartBox = document.getElementById("chart-box-kh-ca");
+      renderLineChart(chartBox, [
+        { label: "KH (°dKH)", color: "#3498db", values: kh.map(m => ({ ts: m.timestamp, v: m.value })) },
+        { label: "Ca (mg/L)", color: "#e8732a", values: ca.map(m => ({ ts: m.timestamp, v: m.value })) }
+      ], { title: "KH + Calcium Verlauf", fract: 1 });
     } catch (e) {
       console.warn("Messungen laden:", e);
     }
@@ -870,7 +996,13 @@
 
   async function refreshPh() {
     try {
-      const items = await listMeasurements("ph", 100);
+      const items = await listMeasurements("ph", 200);
+      // Chart
+      const chartBox = document.getElementById("chart-box-ph");
+      renderLineChart(chartBox, [
+        { label: "pH", color: "#27ae60", values: items.map(m => ({ ts: m.timestamp, v: m.value })) }
+      ], { title: "pH-Verlauf", fract: 2 });
+
       const tbody = document.getElementById("ph-tbody");
       if (!items.length) {
         tbody.innerHTML = `<tr><td class="empty" colspan="4">Keine pH-Messungen erfasst</td></tr>`;
@@ -1099,23 +1231,202 @@
     }
   }
 
+  // ---------- Dosier-Verlauf mit Tagesnavigation ----------
+  let _dosingsCache = [];
+  let _histDayOffset = 0;  // 0 = heute, -1 = gestern, etc.
+
+  function dayBucketOf(ts) {
+    const d = new Date(ts * 1000);
+    d.setHours(0, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
+  }
+
+  function describeDayBucket(bucket) {
+    const today = dayBucketOf(Math.floor(Date.now() / 1000));
+    const diff = Math.round((today - bucket) / 86400);
+    if (diff === 0) return "Heute";
+    if (diff === 1) return "Gestern";
+    if (diff > 1) return `vor ${diff} Tagen`;
+    return new Date(bucket * 1000).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+  }
+
+  function renderDosingsForCurrentDay() {
+    const tbody = document.getElementById("dosings-tbody");
+    if (!_dosingsCache.length) {
+      tbody.innerHTML = `<tr><td class="empty" colspan="6">Noch keine Dosierungen</td></tr>`;
+      document.getElementById("hist-day-label").textContent = "Heute";
+      return;
+    }
+    // Eindeutige Tage extrahieren (sortiert, neueste zuerst)
+    const buckets = [...new Set(_dosingsCache.map(d => dayBucketOf(d.timestamp)))].sort((a, b) => b - a);
+    // Offset clampen
+    if (_histDayOffset < -(buckets.length - 1)) _histDayOffset = -(buckets.length - 1);
+    if (_histDayOffset > 0) _histDayOffset = 0;
+    // Aktuell gewählter Tag (index)
+    const wantBucket = buckets[Math.abs(_histDayOffset)] ?? buckets[0];
+    const items = _dosingsCache.filter(d => dayBucketOf(d.timestamp) === wantBucket);
+
+    document.getElementById("hist-day-label").textContent =
+      `${describeDayBucket(wantBucket)} (${items.length})`;
+    document.getElementById("hist-prev").disabled = Math.abs(_histDayOffset) >= buckets.length - 1;
+    document.getElementById("hist-next").disabled = _histDayOffset >= 0;
+
+    const TYPE_LABEL = {
+      "kh-day": "KH-Tag", "kh-night": "KH-Nacht", "ca": "Calcium", "mg": "Magnesium",
+      "manual": "Manuell"
+    };
+    tbody.innerHTML = items.map(d => `
+      <tr>
+        <td>${new Date(d.timestamp * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</td>
+        <td>${PUMP_NAMES[d.pump] || `Pumpe ${d.pump}`}</td>
+        <td class="num">${Number(d.ml).toFixed(2)} ml</td>
+        <td>${TYPE_LABEL[d.dosageType] || d.dosageType || "—"}</td>
+        <td>${d.isAutomatic ? "Auto" : "Manuell"}${d.success === false ? " ⚠️" : ""}</td>
+        <td class="act"><button class="row-del" data-del-dos="${d.id}" title="Löschen">✕</button></td>
+      </tr>`).join("");
+    tbody.querySelectorAll("[data-del-dos]").forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm("Dosierung löschen? Dies beeinflusst auch die Verbrauchs-Berechnung.")) return;
+        try {
+          const uid = getAuthInstance().currentUser?.uid;
+          if (!uid) return;
+          const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+          const { getFirestore, doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+          const app = getApps()[0];
+          const db = getFirestore(app);
+          await deleteDoc(doc(db, `users/${uid}/aquarium/dosings/items/${btn.dataset.delDos}`));
+          await refreshDosings();
+          await refreshPlan();  // Verbrauch neu rechnen
+        } catch (e) { alert("Fehler: " + e.message); }
+      };
+    });
+  }
+
   async function refreshDosings() {
     try {
-      const items = await listDosings(50);
-      const tbody = document.getElementById("dosings-tbody");
-      if (!items.length) {
-        tbody.innerHTML = `<tr><td class="empty" colspan="4">Noch keine Dosierungen</td></tr>`;
-      } else {
-        tbody.innerHTML = items.map(d => `
-          <tr>
-            <td>${fmtDateTime(d.timestamp)}</td>
-            <td>${PUMP_NAMES[d.pump] || `Pumpe ${d.pump}`}</td>
-            <td class="num">${Number(d.ml).toFixed(2)}</td>
-            <td>${d.isAutomatic ? "Auto" : "Manuell"}</td>
-          </tr>`).join("");
-      }
+      _dosingsCache = await listDosings(500);
+      renderDosingsForCurrentDay();
     } catch (e) { console.warn("Dosierungen laden:", e); }
   }
+
+  // Day-Navigation
+  document.getElementById("hist-prev").onclick = () => { _histDayOffset--; renderDosingsForCurrentDay(); };
+  document.getElementById("hist-next").onclick = () => { _histDayOffset++; renderDosingsForCurrentDay(); };
+
+  // ---------- JSON Backup/Restore ----------
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  document.getElementById("kalk-export").onclick = async () => {
+    try {
+      const uid = getAuthInstance().currentUser?.uid;
+      if (!uid) { alert("Nicht eingeloggt"); return; }
+      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+      const { getFirestore, doc, getDoc, collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+      const app = getApps()[0];
+      const db = getFirestore(app);
+
+      // Settings + Pumpen + pH-Kalibrierung + Plan
+      const settings = (await getDoc(doc(db, `users/${uid}/aquarium/settings`))).data() || {};
+      const pumps = [];
+      for (let i = 0; i < 4; i++) {
+        const s = (await getDoc(doc(db, `users/${uid}/aquarium/pump-${i}`))).data();
+        if (s) pumps.push({ index: i, ...s });
+      }
+      const phCal = (await getDoc(doc(db, `users/${uid}/aquarium/ph-calibration`))).data() || null;
+      const planCur = (await getDoc(doc(db, `users/${uid}/aquarium/plan-current`))).data() || null;
+
+      // Subcollections
+      const measurements = [];
+      const measSnap = await getDocs(collection(db, `users/${uid}/aquarium/measurements/items`));
+      measSnap.forEach(d => measurements.push({ id: d.id, ...d.data() }));
+
+      const dosings = [];
+      const dosSnap = await getDocs(collection(db, `users/${uid}/aquarium/dosings/items`));
+      dosSnap.forEach(d => dosings.push({ id: d.id, ...d.data() }));
+
+      const data = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        settings, pumps, phCalibration: phCal, planCurrent: planCur,
+        measurements, dosings
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kalkmanagement-${todayStr()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert("Export fehlgeschlagen: " + e.message); }
+  };
+
+  document.getElementById("kalk-import").onclick = () => {
+    document.getElementById("kalk-import-file").click();
+  };
+
+  document.getElementById("kalk-import-file").onchange = async (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!data || typeof data !== "object") throw new Error("Ungültige JSON-Datei");
+      if (!confirm("Aktuelle Cloud-Daten werden mit Import überschrieben (Settings, Pumpen, Messungen, Dosierungen). Fortfahren?")) {
+        ev.target.value = "";
+        return;
+      }
+      const uid = getAuthInstance().currentUser?.uid;
+      if (!uid) throw new Error("Nicht eingeloggt");
+      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+      const { getFirestore, doc, setDoc, collection, addDoc, getDocs, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+      const app = getApps()[0];
+      const db = getFirestore(app);
+
+      // 1. Settings + Pumpen + pH-Calibration
+      if (data.settings) await setDoc(doc(db, `users/${uid}/aquarium/settings`), data.settings);
+      if (Array.isArray(data.pumps)) {
+        for (const p of data.pumps) {
+          if (p.index != null && p.index >= 0 && p.index < 4) {
+            const { index, ...pdata } = p;
+            await setDoc(doc(db, `users/${uid}/aquarium/pump-${index}`), pdata);
+          }
+        }
+      }
+      if (data.phCalibration) await setDoc(doc(db, `users/${uid}/aquarium/ph-calibration`), data.phCalibration);
+      if (data.planCurrent) await setDoc(doc(db, `users/${uid}/aquarium/plan-current`), data.planCurrent);
+
+      // 2. Messungen + Dosierungen: erst alte löschen
+      for (const coll of ["measurements/items", "dosings/items"]) {
+        const snap = await getDocs(collection(db, `users/${uid}/aquarium/${coll}`));
+        const toDelete = [];
+        snap.forEach(d => toDelete.push(d.ref));
+        for (const ref of toDelete) await deleteDoc(ref);
+      }
+
+      // 3. Neue einfügen
+      if (Array.isArray(data.measurements)) {
+        for (const m of data.measurements) {
+          const { id, ...mdata } = m;
+          await addDoc(collection(db, `users/${uid}/aquarium/measurements/items`), mdata);
+        }
+      }
+      if (Array.isArray(data.dosings)) {
+        for (const d of data.dosings) {
+          const { id, ...ddata } = d;
+          await addDoc(collection(db, `users/${uid}/aquarium/dosings/items`), ddata);
+        }
+      }
+
+      alert(`Import erfolgreich: ${data.measurements?.length || 0} Messungen, ${data.dosings?.length || 0} Dosierungen, ${data.pumps?.length || 0} Pumpen.`);
+      await refreshAll();
+    } catch (e) {
+      alert("Import fehlgeschlagen: " + e.message);
+    } finally {
+      ev.target.value = "";
+    }
+  };
 
   // ---------- Kanister / Pumpen Tab ----------
   async function refreshContainers() {
@@ -1252,12 +1563,16 @@
           generatedAtClient: now
         }
       };
-      try {
-        await savePlan(planDoc);
-        // dezenter Status — kein lauter Toast bei jedem Refresh
-      } catch (e) { console.warn("Plan-Save zu Firestore:", e); }
+      // Debounce: bei vielen schnellen Setting-Änderungen nur 1× nach 500ms speichern
+      // Verhindert spam von Firestore-Writes
+      clearTimeout(_planSaveTimer);
+      _planSaveTimer = setTimeout(async () => {
+        try { await savePlan(planDoc); }
+        catch (e) { console.warn("Plan-Save zu Firestore:", e); }
+      }, 500);
     } catch (e) { console.warn("Plan rechnen:", e); }
   }
+  let _planSaveTimer = null;
 
   function renderKHPlan(plan, currentKH, dailyCons) {
     const summary = document.getElementById("kh-plan-summary");
@@ -1312,10 +1627,11 @@
   // ---------- Dashboard ----------
   async function refreshDashboard() {
     try {
-      const [kh, ca, ph] = await Promise.all([
+      const [kh, ca, ph, pumps] = await Promise.all([
         listMeasurements("kh", 1),
         listMeasurements("ca", 1),
-        listMeasurements("ph", 1)
+        listMeasurements("ph", 1),
+        getPumps()
       ]);
       const setStat = (idVal, idMeta, items, unit, fract) => {
         const v = document.getElementById(idVal);
@@ -1327,6 +1643,23 @@
       setStat("dash-kh", "dash-kh-meta", kh, "°dKH", 1);
       setStat("dash-ca", "dash-ca-meta", ca, "mg/L", 0);
       setStat("dash-ph", "dash-ph-meta", ph, "", 2);
+
+      // Pumpen-Kalibrier-Warnung
+      const uncalibrated = pumps.filter(p => !p.mlPerStep || p.mlPerStep <= 0);
+      const warnEl = document.getElementById("dash-warnings");
+      if (warnEl) {
+        if (uncalibrated.length > 0) {
+          warnEl.innerHTML = `
+            <div class="info-banner" style="background:#fdf2f0;border-color:var(--red);color:#7a3030">
+              ⚠️ <strong>${uncalibrated.length} Pumpe${uncalibrated.length>1?'n':''} nicht kalibriert</strong>:
+              ${uncalibrated.map(p => p.name).join(", ")} —
+              Auto-Dosierung läuft für diese Pumpen <strong>nicht</strong>.
+              Im Tab <strong>Manuell</strong> kalibrieren.
+            </div>`;
+        } else {
+          warnEl.innerHTML = "";
+        }
+      }
 
       // Nächste Dosierungen aus aktuellem Plan
       const settings = await getSettings();
@@ -1413,6 +1746,9 @@
       const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
       const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
       const dotColor = isOnlineRecent ? "var(--green)" : "#aabbcc";
+      const pumpsCal = Array.isArray(d.pumpsCalibrated) ? d.pumpsCalibrated : [];
+      const okCount = pumpsCal.filter(x => x).length;
+      const PUMP_NAMES2 = ["Calcium", "Magnesium", "KH-Tag", "KH-Nacht"];
       statusEl.innerHTML = `
         <div class="stat-grid">
           <div class="stat-box">
@@ -1436,7 +1772,22 @@
           <div class="stat-box">
             <div class="stat-label">Freier RAM</div>
             <div class="stat-value" style="font-size:1.05rem">${d.freeHeap ? Math.round(d.freeHeap / 1024) + " kB" : "—"}</div>
-            <div class="stat-meta">${d.pendingDoses != null ? d.pendingDoses + " offene Doses" : ""}</div>
+            <div class="stat-meta">${d.bufferQueueSize != null ? d.bufferQueueSize + " in Upload-Queue" : ""}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Letzte 24 h</div>
+            <div class="stat-value" style="font-size:1.05rem">${(d.dosesOk24h || 0)} <span style="color:var(--text-light);font-size:0.85rem">/ ${(d.dosesOk24h || 0) + (d.dosesFail24h || 0)}</span></div>
+            <div class="stat-meta">${d.dosesFail24h ? `${d.dosesFail24h} fehlgeschlagen` : "alle erfolgreich"}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Pumpen kalibriert</div>
+            <div class="stat-value" style="font-size:1.05rem">${okCount}/4</div>
+            <div class="stat-meta">${pumpsCal.map((c,i) => `${PUMP_NAMES2[i]}: ${c ? "✓" : "✗"}`).join(", ")}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Gesamt-Doses</div>
+            <div class="stat-value" style="font-size:1.05rem">${d.dosesTotal || 0}</div>
+            <div class="stat-meta">${d.dosesFailedTotal ? `${d.dosesFailedTotal} fehlgeschlagen` : ""}</div>
           </div>
         </div>
       `;
