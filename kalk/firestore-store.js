@@ -211,9 +211,9 @@ function defaultSettings(volume) {
     enableAntiDrip: true,
     antiDripML: 0.015,
     antiDripSpeedML: 3.6,
-    // Globale Pumpen-Geschwindigkeit (ESP nutzt für alle 4 Pumpen)
-    speedML: 3.6,           // ml/min
-    accelerationML: 1.8,    // ml/min² (0 = quasi sofort)
+    // Globale Pumpen-Geschwindigkeit (Schritte/sec direkt — unabhängig von Kalibrierung)
+    stepsPerSec: 400,           // Hz
+    accelStepsPerSec2: 200,     // Hz/sec (0 = quasi sofort)
     containerCapacity: [5000, 5000, 5000, 5000],
     containerLevel: [5000, 5000, 5000, 5000]
   };

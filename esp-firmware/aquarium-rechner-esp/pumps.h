@@ -23,8 +23,10 @@ FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = nullptr;
 
 float mlPerStep[NUM_PUMPS] = { 0.0f, 0.0f, 0.0f, 0.0f };  // wird aus Firestore geladen
-float speedML = DEFAULT_SPEED_ML;          // ml/Min
-float accelML = DEFAULT_ACCELERATION_ML;   // ml/Min²
+// Schritt-Geschwindigkeit/Beschleunigung direkt in Hz — funktioniert
+// auch ohne Kalibrierung (für Kalibrier-Lauf selbst).
+uint32_t stepsPerSec  = 400;   // Default: 400 Hz (2.5s für 1000 Schritte)
+uint32_t accelPerSec2 = 200;   // Default: 200 Hz/s (sanfter Anlauf)
 
 int activePump = -1;
 unsigned long doseStartMs = 0;
@@ -98,46 +100,25 @@ bool isBusy() {
   return stepper && stepper->isRunning();
 }
 
-// ---------- Umrechnung ml/min ↔ Steps/sec (1:1 aus Original-ESP-Code) ----------
-// Setzt voraus dass mlPerStep[pumpIdx] > 0 (Pumpe kalibriert).
-uint32_t mlPerMinToStepsPerSec(float mlPerMin, int pumpIdx) {
-  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return 0;
-  if (mlPerStep[pumpIdx] <= 0.0f) return 0;
-  float mlPerSec = mlPerMin / 60.0f;
-  return (uint32_t)roundf(mlPerSec / mlPerStep[pumpIdx]);
-}
-
-uint32_t mlPerMin2ToStepsPerSec2(float mlPerMin2, int pumpIdx) {
-  if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS) return 0;
-  if (mlPerStep[pumpIdx] <= 0.0f) return 0;
-  float mlPerSec2 = mlPerMin2 / 3600.0f;
-  return (uint32_t)roundf(mlPerSec2 / mlPerStep[pumpIdx]);
-}
-
 // ---------- Schritte fahren (für Kalibrierung & Dosierung) ----------
+// Verwendet stepsPerSec + accelPerSec2 direkt — keine ml-Konvertierung,
+// funktioniert auch bei unkalibrierten Pumpen (für die Kalibrierung selbst).
 bool runSteps(int pumpIdx, long steps) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS || !stepper) return false;
   if (isBusy()) return false;
   enablePump(pumpIdx);
-  // Speed/Accel: ml/min → Steps/sec über die Kalibrierung der Pumpe
-  uint32_t stepsPerSec = mlPerMinToStepsPerSec(speedML, pumpIdx);
-  if (stepsPerSec < 10) stepsPerSec = 10;  // Minimum-Speed (sicher fahrbar)
-  // Beschleunigung: 0 = "quasi sofort" wie im Original (sehr hohe Accel)
-  uint32_t accelSteps;
-  if (accelML > 0) {
-    accelSteps = mlPerMin2ToStepsPerSec2(accelML, pumpIdx);
-    if (accelSteps < 10) accelSteps = 10;
-  } else {
-    accelSteps = 10000;
-  }
-  stepper->setSpeedInHz(stepsPerSec);
-  stepper->setAcceleration(accelSteps);
+  uint32_t spd = stepsPerSec;
+  if (spd < 10) spd = 10;
+  // Beschleunigung 0 = quasi sofort (sehr hohe Accel)
+  uint32_t accel = (accelPerSec2 == 0) ? 10000 : accelPerSec2;
+  stepper->setSpeedInHz(spd);
+  stepper->setAcceleration(accel);
   long target = steps;  // signed: negative = rückwärts (Anti-Drip)
   stepper->move(target);
   doseStartMs = millis();
-  doseExpectedMs = (uint32_t)((labs(steps) * 1000UL) / stepsPerSec);
-  Serial.printf("[Pumps] %s: %ld Schritte @ %u steps/sec (accel %u) (~%lu ms)\n",
-                PUMP_NAMES[pumpIdx], steps, stepsPerSec, accelSteps,
+  doseExpectedMs = (uint32_t)((labs(steps) * 1000UL) / spd);
+  Serial.printf("[Pumps] %s: %ld Schritte @ %u Hz (accel %u Hz/s) (~%lu ms)\n",
+                PUMP_NAMES[pumpIdx], steps, spd, accel,
                 (unsigned long)doseExpectedMs);
   return true;
 }
