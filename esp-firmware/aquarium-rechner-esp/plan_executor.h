@@ -76,7 +76,7 @@ time_t lastDosageTimeCache[DT_COUNT] = { 0, 0, 0, 0 };
 
 // ---------- Aktive Dose / Command ----------
 struct ActiveCmd {
-  String docPath;     // Web-Command-Doc (leer wenn Plan-Dose)
+  String cmdId;       // Web-Command ID (leer wenn Plan-Dose)
   String action;
   int pump = -1;
   float ml = NAN;
@@ -87,6 +87,7 @@ struct ActiveCmd {
   DosageType dosageType = DT_KH_DAY;
 };
 ActiveCmd current;
+String lastProcessedCmdId = "";  // verhindert Doppelausführung gleicher Web-Command
 
 // ---------- Dose-Queue (für Sequenz: KH → Ca → Mg) ----------
 struct QueuedDose {
@@ -212,7 +213,7 @@ bool startNextQueuedDose() {
 // Sampelt 10 Sekunden lang, mittelt die Voltage, speichert für gewählten pH-Wert.
 struct PhCalibrationCmd {
   bool active = false;
-  String docPath;
+  String cmdId;
   float targetPh = 0;
   unsigned long startMs = 0;
   float voltageSum = 0;
@@ -220,24 +221,24 @@ struct PhCalibrationCmd {
 };
 PhCalibrationCmd phCal;
 
-bool startPhCalibration(const String &docPath, float targetPh) {
+bool startPhCalibration(const String &cmdId, float targetPh) {
   if (phCal.active) {
     FirebaseJson r; r.set("error/stringValue", "Kalibrierung bereits aktiv");
-    firebase_sync::updateCommand(docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (targetPh != 4.0f && targetPh != 7.0f) {
     FirebaseJson r; r.set("error/stringValue", "phValue muss 4.0 oder 7.0 sein");
-    firebase_sync::updateCommand(docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
   phCal.active = true;
-  phCal.docPath = docPath;
+  phCal.cmdId = cmdId;
   phCal.targetPh = targetPh;
   phCal.startMs = millis();
   phCal.voltageSum = 0;
   phCal.sampleCount = 0;
-  firebase_sync::updateCommand(docPath, "running");
+  firebase_sync::updateCommandStatus("running");
   Serial.printf("[PhCal] starte pH-%g Kalibrierung (10s sampling)\n", targetPh);
   return true;
 }
@@ -257,7 +258,7 @@ void tickPhCalibration() {
   // Kalibrierung abgeschlossen
   if (phCal.sampleCount == 0) {
     FirebaseJson r; r.set("error/stringValue", "Keine Voltage-Samples");
-    firebase_sync::updateCommand(phCal.docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     phCal.active = false;
     return;
   }
@@ -287,7 +288,7 @@ void tickPhCalibration() {
   result.set("phValue/doubleValue", phCal.targetPh);
   result.set("durationMs/integerValue", (int)elapsed);
   result.set("isFullyCalibrated/booleanValue", ph_sensor::calibrated);
-  firebase_sync::updateCommand(phCal.docPath, "done", &result);
+  firebase_sync::updateCommandStatus("done", &result);
   phCal.active = false;
 }
 
@@ -322,22 +323,22 @@ void checkPhSampleSchedule() {
 }
 
 // ---------- Command-Dispatch (Web-Commands) ----------
-bool startCommand(const String &docPath, const String &action, int pump, float ml, long steps, float phValue) {
+bool startCommand(const String &cmdId, const String &action, int pump, float ml, long steps, float phValue) {
   if (current.active || phCal.active) {
     Serial.println("[Cmd] bereits aktiv");
     return false;
   }
   if (action == "stop") {
     pumps::emergencyStop();
-    firebase_sync::updateCommand(docPath, "done");
+    firebase_sync::updateCommandStatus("done");
     return true;
   }
   if (action == "calibratePh") {
-    return startPhCalibration(docPath, phValue);
+    return startPhCalibration(cmdId, phValue);
   }
   if (pump < 0 || pump >= pumps::NUM_PUMPS) {
     FirebaseJson r; r.set("error/stringValue", "ungültige Pumpe");
-    firebase_sync::updateCommand(docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
 
@@ -345,30 +346,30 @@ bool startCommand(const String &docPath, const String &action, int pump, float m
   if (action == "calibrate") {
     if (steps <= 0) {
       FirebaseJson r; r.set("error/stringValue", "steps fehlt");
-      firebase_sync::updateCommand(docPath, "failed", &r);
+      firebase_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runSteps(pump, steps);
   } else if (action == "dose") {
     if (isnan(ml) || ml <= 0) {
       FirebaseJson r; r.set("error/stringValue", "ml fehlt");
-      firebase_sync::updateCommand(docPath, "failed", &r);
+      firebase_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runMl(pump, ml);
   } else {
     FirebaseJson r; r.set("error/stringValue", "unbekannte action");
-    firebase_sync::updateCommand(docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (!ok) {
     FirebaseJson r; r.set("error/stringValue", "Pumpe nicht startbar");
-    firebase_sync::updateCommand(docPath, "failed", &r);
+    firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
 
   current = {};
-  current.docPath = docPath;
+  current.cmdId = cmdId;
   current.action = action;
   current.pump = pump;
   current.ml = ml;
@@ -376,10 +377,11 @@ bool startCommand(const String &docPath, const String &action, int pump, float m
   current.startMs = millis();
   current.active = true;
   current.fromPlan = false;
-  firebase_sync::updateCommand(docPath, "running");
-  Serial.printf("[Cmd] %s pump=%d %s\n", action.c_str(), pump,
+  firebase_sync::updateCommandStatus("running");
+  Serial.printf("[Cmd] %s pump=%d %s (id=%s)\n", action.c_str(), pump,
                 action == "dose" ? (String("ml=") + ml).c_str()
-                                 : (String("steps=") + steps).c_str());
+                                 : (String("steps=") + steps).c_str(),
+                cmdId.c_str());
   return true;
 }
 
@@ -414,7 +416,7 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     if (current.action == "calibrate") result.set("actualSteps/integerValue", (int)current.steps);
     else if (current.action == "dose") result.set("actualMl/doubleValue", current.ml);
     if (!success && errorMsg) result.set("error/stringValue", errorMsg);
-    firebase_sync::updateCommand(current.docPath, success ? "done" : "failed", &result);
+    firebase_sync::updateCommandStatus(success ? "done" : "failed", &result);
     if (current.action == "dose" && success) {
       firebase_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
       firebase_sync::decrementContainerLevel(current.pump, current.ml);
@@ -430,34 +432,33 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
 // ---------- Command-Polling (adaptive) ----------
 void pollCommands() {
   unsigned long now = millis();
-  unsigned long interval = (current.active || !queueEmpty()) ? COMMAND_POLL_FAST_MS : COMMAND_POLL_NORMAL_MS;
+  unsigned long interval = (current.active || !queueEmpty() || phCal.active) ? COMMAND_POLL_FAST_MS : COMMAND_POLL_NORMAL_MS;
   if (lastCommandPollMs != 0 && now - lastCommandPollMs < interval) return;
   lastCommandPollMs = now;
-  if (current.active) return;
+  if (current.active || phCal.active) return;
 
-  FirebaseJsonArray pending;
-  if (!firebase_sync::fetchPendingCommands(pending)) return;
-  if (pending.size() == 0) return;
+  FirebaseJson doc;
+  if (!firebase_sync::fetchActiveCommand(doc)) return;
 
-  FirebaseJsonData item;
-  pending.get(item, 0);
-  FirebaseJson cmd;
-  cmd.setJsonData(item.stringValue);
+  FirebaseJsonData fId, fStatus, fAction, fPump, fMl, fSteps, fPhValue;
+  doc.get(fId,      "fields/id/stringValue");
+  doc.get(fStatus,  "fields/status/stringValue");
+  doc.get(fAction,  "fields/action/stringValue");
+  doc.get(fPump,    "fields/pump/integerValue");
+  doc.get(fMl,      "fields/ml/doubleValue");
+  doc.get(fSteps,   "fields/steps/integerValue");
+  doc.get(fPhValue, "fields/phValue/doubleValue");
 
-  FirebaseJsonData fName, fAction, fPump, fMl, fSteps, fPhValue;
-  cmd.get(fName, "document/name");
-  cmd.get(fAction, "document/fields/action/stringValue");
-  cmd.get(fPump, "document/fields/pump/integerValue");
-  cmd.get(fMl, "document/fields/ml/doubleValue");
-  cmd.get(fSteps, "document/fields/steps/integerValue");
-  cmd.get(fPhValue, "document/fields/phValue/doubleValue");
-  if (!fName.success || !fAction.success) return;
+  if (!fStatus.success || !fAction.success || !fId.success) return;
+  if (fStatus.stringValue != "pending") return;
+  // Schon abgearbeitet?
+  if (fId.stringValue == lastProcessedCmdId) return;
 
-  String fullName = fName.stringValue;
-  int idx = fullName.indexOf("/documents/");
-  String docPath = idx >= 0 ? fullName.substring(idx + 11) : fullName;
+  String cmdId = fId.stringValue;
+  lastProcessedCmdId = cmdId;
+  Serial.printf("[Cmd] Pending entdeckt: action=%s id=%s\n", fAction.stringValue.c_str(), cmdId.c_str());
 
-  startCommand(docPath, fAction.stringValue,
+  startCommand(cmdId, fAction.stringValue,
                fPump.success ? (int)fPump.intValue : -1,
                fMl.success ? fMl.floatValue : NAN,
                fSteps.success ? (long)fSteps.intValue : 0,

@@ -121,60 +121,61 @@ export async function listDosings(maxItems = 200) {
 }
 
 // ---------- Commands (ESP-Steuerung) ----------
-// Pfad: users/{uid}/aquarium-commands/{auto-id}
-// Wir verwenden eine separate Subcollection auf User-Ebene, damit
-// die Pumpen-Config-Docs aquarium/pump-N und die Commands sich nicht
-// auf gleichem "aquarium" Pfad mischen.
-function commandsPath() {
-  return `users/${requireUid()}/aquarium-commands`;
+// EIN einzelnes Dokument auf bekannten Pfad — vermeidet runQuery (das in
+// der Firebase-ESP-Lib zickig ist). Pfad: users/{uid}/aquarium/cmd
+// Inhalt: { id, action, status, pump?, ml?, steps?, phValue?, createdAt,
+//           startedAt?, completedAt?, result? }
+//
+// Race-Condition: Neue Commands überschreiben das alte. UI sorgt dafür
+// dass nur ein Wizard zur Zeit läuft.
+function commandPath() {
+  return `users/${requireUid()}/aquarium/cmd`;
 }
 
-// Sendet einen Command an den ESP. Liefert command-ID zurück.
-//   action: "calibrate" → braucht pump + steps
-//   action: "dose"      → braucht pump + ml
-//   action: "stop"      → stoppt aktuelle Pumpenaktion
-export async function sendCommand({ action, pump, ml, steps }) {
-  const uid = requireUid();
+function genCmdId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+export async function sendCommand({ action, pump, ml, steps, phValue }) {
+  const cmdId = genCmdId();
   const cmd = {
+    id: cmdId,
     action,
     status: "pending",
     createdAt: serverTimestamp()
   };
-  if (pump != null) cmd.pump = pump;
-  if (ml != null) cmd.ml = ml;
-  if (steps != null) cmd.steps = steps;
-  const ref = await addDoc(collection(db, commandsPath()), cmd);
-  return ref.id;
+  if (pump != null)    cmd.pump = pump;
+  if (ml != null)      cmd.ml = ml;
+  if (steps != null)   cmd.steps = steps;
+  if (phValue != null) cmd.phValue = phValue;
+  await setDoc(doc(db, commandPath()), cmd);
+  return cmdId;
 }
 
-// onSnapshot auf einen bestimmten Command-Doc. callback bekommt das aktuelle data oder null wenn gelöscht.
-// Liefert die Unsubscribe-Funktion.
+// onSnapshot auf das EINE Command-Dokument. Filtert auf unsere ID —
+// wenn jemand anders ein neueres Command schreibt, kriegen wir's nicht.
+// Liefert Unsubscribe-Funktion.
 export function watchCommand(commandId, callback) {
-  const uid = requireUid();
-  const ref = doc(db, `${commandsPath()}/${commandId}`);
-  return onSnapshot(ref, snap => {
-    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  return onSnapshot(doc(db, commandPath()), snap => {
+    if (!snap.exists()) { callback(null); return; }
+    const data = snap.data();
+    if (data.id !== commandId) return;  // nicht unser Command
+    callback(data);
   }, err => {
     console.warn("watchCommand error:", err);
     callback(null);
   });
 }
 
+// Command-Doc löschen (z. B. bei Abbruch)
 export async function deleteCommand(commandId) {
-  await deleteDoc(doc(db, `${commandsPath()}/${commandId}`));
-}
-
-// Letzte Commands (für Debug/Verlauf)
-export async function listRecentCommands(maxItems = 20) {
-  const q = query(
-    collection(db, commandsPath()),
-    orderBy("createdAt", "desc"),
-    limit(maxItems)
-  );
-  const snap = await getDocs(q);
-  const out = [];
-  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
-  return out;
+  // Nur löschen wenn ID matched (kein Race-Risiko)
+  try {
+    const snap = await getDoc(doc(db, commandPath()));
+    if (snap.exists() && snap.data().id === commandId) {
+      await deleteDoc(doc(db, commandPath()));
+    }
+  } catch (e) { console.warn("deleteCommand:", e); }
 }
 
 // ---------- Pläne ----------

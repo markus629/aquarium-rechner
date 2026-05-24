@@ -65,7 +65,7 @@ const String& uid() { return currentUid; }
 String pathInfo()      { return "users/" + currentUid + "/aquarium/info"; }
 String pathSettings()  { return "users/" + currentUid + "/aquarium/settings"; }
 String pathPlan()      { return "users/" + currentUid + "/aquarium/plan-current"; }
-String pathCommands()  { return "users/" + currentUid + "/aquarium-commands"; }
+String pathCommand()   { return "users/" + currentUid + "/aquarium/cmd"; }
 String pathPump(int i) { return "users/" + currentUid + "/aquarium/pump-" + String(i); }
 String pathMeasurements() { return "users/" + currentUid + "/aquarium/measurements/items"; }
 String pathDosings()   { return "users/" + currentUid + "/aquarium/dosings/items"; }
@@ -292,49 +292,24 @@ bool fetchPumpMlPerStep(int pumpIdx, float &outMlPerStep) {
   return false;
 }
 
-// ---------- Command-Queue lesen ----------
-// Liefert via runQuery alle pending commands. Bis zu 5 werden zurückgegeben.
-// out: FirebaseJsonArray mit den Doc-Inhalten (jeweils mit "name" für ID-Extraktion)
-// KEIN orderBy — vermeidet Composite-Index-Requirement.
-bool fetchPendingCommands(FirebaseJsonArray &out) {
-  out.clear();
+// ---------- Aktuelles Command lesen (einzelnes Doc) ----------
+// Liest users/{uid}/aquarium/cmd. Returns true wenn Doc existiert.
+bool fetchActiveCommand(FirebaseJson &out) {
   if (!isReady()) return false;
-  FirebaseJson queryJson;
-  queryJson.set("structuredQuery/from/[0]/collectionId", "aquarium-commands");
-  queryJson.set("structuredQuery/where/fieldFilter/field/fieldPath", "status");
-  queryJson.set("structuredQuery/where/fieldFilter/op", "EQUAL");
-  queryJson.set("structuredQuery/where/fieldFilter/value/stringValue", "pending");
-  queryJson.set("structuredQuery/limit", 5);
-
-  // Parent: users/{uid} (Subcollection drunter)
-  String parent = "users/" + currentUid;
-  if (!Firebase.Firestore.runQuery(&fbdo, FIREBASE_PROJECT_ID, "", parent.c_str(), &queryJson)) {
-    Serial.printf("[Cmd] runQuery FAIL: %s | payload: %s\n",
-                  fbdo.errorReason().c_str(), fbdo.payload().c_str());
+  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathCommand().c_str())) {
+    // Doc existiert nicht ist OK (kein pending command), nicht spammen
+    String err = fbdo.errorReason();
+    if (err.length() > 0 && err.indexOf("Not Found") < 0 && err.indexOf("not found") < 0) {
+      Serial.printf("[Cmd] getDocument FAIL: %s\n", err.c_str());
+    }
     return false;
   }
-  // fbdo.payload() ist Array [{document:{...}}, ...]
-  FirebaseJsonArray arr;
-  arr.setJsonArrayData(fbdo.payload());
-  for (size_t i = 0; i < arr.size(); i++) {
-    FirebaseJsonData item;
-    arr.get(item, i);
-    FirebaseJson el;
-    el.setJsonData(item.stringValue);
-    FirebaseJsonData docPath;
-    if (el.get(docPath, "document/name") && docPath.success) {
-      out.add(el);
-    }
-  }
-  if (out.size() > 0) Serial.printf("[Cmd] %d pending commands\n", (int)out.size());
+  out.setJsonData(fbdo.payload());
   return true;
 }
 
 // ---------- Command-Status aktualisieren ----------
-// Schreibt status + optional result-Felder via PATCH.
-// commandPath: vollständiger Pfad (so wie er aus dem document/name kommt, ohne
-// das "projects/.../documents/" Prefix)
-bool updateCommand(const String &commandPath, const String &status, FirebaseJson *resultJson = nullptr) {
+bool updateCommandStatus(const String &status, FirebaseJson *resultJson = nullptr) {
   if (!isReady()) return false;
   FirebaseJson content;
   content.set("fields/status/stringValue", status);
@@ -348,14 +323,14 @@ bool updateCommand(const String &commandPath, const String &status, FirebaseJson
   String mask = "status";
   if (status == "running") mask += ",startedAt";
   if (status == "done" || status == "failed") mask += ",completedAt";
-
   if (resultJson) {
-    // result ist ein Map-Field. Wir setzen es als komplettes Objekt.
     content.set("fields/result/mapValue/fields", *resultJson);
     mask += ",result";
   }
-  return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", commandPath.c_str(),
-                                          content.raw(), mask.c_str());
+  bool ok = Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathCommand().c_str(),
+                                              content.raw(), mask.c_str());
+  if (!ok) Serial.printf("[Cmd] update FAIL: %s\n", fbdo.errorReason().c_str());
+  return ok;
 }
 
 } // namespace firebase_sync
