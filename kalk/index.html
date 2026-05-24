@@ -543,13 +543,18 @@
             <input type="number" data-setting="khNightEnd" step="1" min="0" max="23">
           </div>
         </div>
-        <div class="form-toggle">
-          <input type="checkbox" id="usePhBasedKHDosing" data-setting="usePhBasedKHDosing">
-          <label for="usePhBasedKHDosing">pH-basierte KH-Tag/Nacht-Schaltung verwenden</label>
-        </div>
-        <div class="form-row" style="max-width:300px">
-          <label>pH-Schwellwert für Nacht-Pumpe <span class="hint">Wenn pH darunter → Nacht-Lösung</span></label>
-          <input type="number" data-setting="phThresholdForKHNight" step="0.1" min="6.0" max="9.0">
+        <div id="ph-based-section" style="transition:opacity 0.2s">
+          <div class="form-toggle">
+            <input type="checkbox" id="usePhBasedKHDosing" data-setting="usePhBasedKHDosing">
+            <label for="usePhBasedKHDosing">pH-basierte KH-Tag/Nacht-Schaltung verwenden</label>
+          </div>
+          <div class="form-row" style="max-width:300px">
+            <label>pH-Schwellwert für Nacht-Pumpe <span class="hint">Wenn pH darunter → Nacht-Lösung</span></label>
+            <input type="number" data-setting="phThresholdForKHNight" step="0.1" min="6.0" max="9.0">
+          </div>
+          <div id="ph-based-disabled-note" style="display:none;font-size:0.82rem;color:var(--orange);margin-top:0.4rem">
+            ⚠️ Erst <a href="#" id="ph-cal-jump" style="color:var(--blue)">pH-Sensor kalibrieren</a> — sonst greift die Uhrzeit-Logik.
+          </div>
         </div>
 
         <div class="section-title">Verbrauchsraten</div>
@@ -994,7 +999,18 @@
   }
 
   // Status der pH-Kalibrierung beim Tab-Öffnen anzeigen
+  function setPhBasedSectionEnabled(enabled) {
+    const section = document.getElementById("ph-based-section");
+    const note    = document.getElementById("ph-based-disabled-note");
+    if (!section) return;
+    const inputs = section.querySelectorAll("input");
+    inputs.forEach(i => { i.disabled = !enabled; });
+    section.style.opacity = enabled ? "1" : "0.55";
+    if (note) note.style.display = enabled ? "none" : "block";
+  }
+
   async function refreshPhCalStatus() {
+    let isFullyCalibrated = false;
     try {
       const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
       const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
@@ -1007,19 +1023,27 @@
       if (!el) return;
       if (!snap.exists()) {
         el.innerHTML = `<div class="info-banner">⚠️ <strong>Noch nicht kalibriert.</strong> Ohne Kalibrierung liefert der Sensor keine pH-Werte und die KH-Tag/Nacht-Entscheidung nutzt die Uhrzeit-Logik.</div>`;
-        return;
-      }
-      const d = snap.data();
-      const v4 = d.voltage_pH4, v7 = d.voltage_pH7, cal = d.isCalibrated;
-      const when = d.lastCalibratedAt ? new Date(d.lastCalibratedAt * 1000).toLocaleString("de-DE") : "—";
-      if (cal) {
-        el.innerHTML = `<div class="info-banner" style="background:#e8f8ec;border-color:var(--green);color:#1d6a3a">✅ <strong>Voll kalibriert</strong> &middot; pH-4: <code>${v4?.toFixed(4)} V</code> &middot; pH-7: <code>${v7?.toFixed(4)} V</code> &middot; ${when}</div>`;
       } else {
-        const missing = isNaN(v4) ? "pH-4" : "pH-7";
-        el.innerHTML = `<div class="info-banner">⚠️ <strong>Teilweise kalibriert</strong> — ${missing} fehlt noch. Bitte beide Punkte kalibrieren.</div>`;
+        const d = snap.data();
+        const v4 = d.voltage_pH4, v7 = d.voltage_pH7, cal = d.isCalibrated;
+        const when = d.lastCalibratedAt ? new Date(d.lastCalibratedAt * 1000).toLocaleString("de-DE") : "—";
+        if (cal) {
+          isFullyCalibrated = true;
+          el.innerHTML = `<div class="info-banner" style="background:#e8f8ec;border-color:var(--green);color:#1d6a3a">✅ <strong>Voll kalibriert</strong> &middot; pH-4: <code>${v4?.toFixed(4)} V</code> &middot; pH-7: <code>${v7?.toFixed(4)} V</code> &middot; ${when}</div>`;
+        } else {
+          const missing = isNaN(v4) ? "pH-4" : "pH-7";
+          el.innerHTML = `<div class="info-banner">⚠️ <strong>Teilweise kalibriert</strong> — ${missing} fehlt noch. Bitte beide Punkte kalibrieren.</div>`;
+        }
       }
     } catch (e) { console.warn("pH-Cal-Status:", e); }
+    setPhBasedSectionEnabled(isFullyCalibrated);
   }
+
+  // Link „pH-Sensor kalibrieren" → springt zum pH-Tab
+  document.getElementById("ph-cal-jump")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.querySelector('[data-tab="tab-ph"]')?.click();
+  });
 
   document.getElementById("ph-cal-4").onclick = () => runPhCalibration(4);
   document.getElementById("ph-cal-7").onclick = () => runPhCalibration(7);
