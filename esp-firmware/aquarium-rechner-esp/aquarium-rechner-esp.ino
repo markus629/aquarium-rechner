@@ -31,6 +31,7 @@
 #include "firebase_sync.h"
 #include "ph_sensor.h"
 #include "pumps.h"
+#include "rtc_sync.h"
 #include "settings_cache.h"
 #include "upload_buffer.h"
 #include "plan_executor.h"
@@ -54,6 +55,7 @@ void setup() {
   // Hardware-Init zuerst (Pumpen sicher in disabled state)
   pumps::begin();
   ph_sensor::begin();
+  rtc_sync::begin();   // DS3231 lesen → System-Zeit setzen (falls vorhanden + batteriegepuffert)
   upload_buffer::begin();   // lädt offline-gepufferte Doses/pH aus NVS
   plan_executor::begin();   // lädt Plan-Cache + Settings + pH-Kalib aus NVS
 
@@ -76,7 +78,8 @@ void setup() {
     return;
   }
 
-  // NTP für Zeitstempel (Berlin-Zeitzone)
+  // NTP für Zeitstempel (UTC — DS3231 hält ebenfalls UTC, Zeitzone via configTzTime
+  // wirkt nur auf localtime_r-Ausgabe, time() bleibt UTC)
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
 
   // Boot-Count zurücksetzen sobald wir stabil 4 s laufen
@@ -147,6 +150,9 @@ void loop() {
 
   // OTA-Check alle 6 h
   ota_update::tick();
+
+  // DS3231 mit NTP-Stand updaten (max 1× pro Tag intern)
+  rtc_sync::syncToRtcIfDue();
 
   // WLAN-Watchdog: wenn wir die Verbindung verlieren, retry
   if (WiFi.status() != WL_CONNECTED) {
