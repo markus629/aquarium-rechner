@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.1.5"
+#define FW_VERSION "0.1.6"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -20,16 +20,17 @@
 #define FIREBASE_DATABASE_URL ""  // wir verwenden nur Firestore + Storage
 
 // ---------- Hardware-Pins ----------
-// Schritt-Motoren (gemeinsame STEP/DIR, separate ENABLE pro Pumpe)
-#define PIN_STEP        4
-#define PIN_DIR         5
-#define PIN_ENABLE_P0  14  // Calcium
-#define PIN_ENABLE_P1   6  // Magnesium
-#define PIN_ENABLE_P2  13  // KH-Tag
+// Schritt-Motoren — alle Signale als Block GPIO 1-2 + 4-7
+// (STEP/DIR gemeinsam, ENABLE pro Pumpe getrennt)
+#define PIN_STEP        1
+#define PIN_DIR         2
+#define PIN_ENABLE_P0   4  // Calcium
+#define PIN_ENABLE_P1   5  // Magnesium
+#define PIN_ENABLE_P2   6  // KH-Tag
 #define PIN_ENABLE_P3   7  // KH-Nacht
 
-// pH-Sensor
-#define PIN_PH_ADC      1  // ADC1_CHANNEL_0 auf ESP32-S3
+// pH-Sensor — ADC1_CH9 auf ESP32-S3 (frei, sauberer ADC1-Pin)
+#define PIN_PH_ADC     10
 
 // I²C (DS3231 RTC)
 #define PIN_I2C_SDA     8
