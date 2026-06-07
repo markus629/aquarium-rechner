@@ -232,8 +232,8 @@
           </div>
           <div class="stat-box">
             <div class="stat-label">ESP-Status</div>
-            <div class="stat-value" id="dash-esp" style="font-size:1.1rem">offline</div>
-            <div class="stat-meta">noch nicht verbunden</div>
+            <div class="stat-value" id="dash-esp" style="font-size:1.1rem">—</div>
+            <div class="stat-meta" id="dash-esp-meta">lade …</div>
           </div>
         </div>
       </div>
@@ -1792,6 +1792,31 @@
       setStat("dash-kh", "dash-kh-meta", kh, "°dKH", 1);
       setStat("dash-ca", "dash-ca-meta", ca, "mg/L", 0);
       setStat("dash-ph", "dash-ph-meta", ph, "", 2);
+
+      // ESP-Status (gleiche Logik wie im Gerät-Tab: lastSeen < 120 s = online)
+      try {
+        const { getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
+        const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
+        const user = getAuthInstance().currentUser;
+        const espEl = document.getElementById("dash-esp");
+        const espMeta = document.getElementById("dash-esp-meta");
+        if (user) {
+          const db = getFirestore(getApps()[0]);
+          const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/info`));
+          if (!snap.exists()) {
+            espEl.textContent = "offline";
+            espEl.style.color = "var(--text-light)";
+            espMeta.textContent = "noch nie verbunden";
+          } else {
+            const d = snap.data();
+            const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
+            const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
+            espEl.textContent = isOnlineRecent ? "online" : "offline";
+            espEl.style.color = isOnlineRecent ? "var(--green)" : "var(--text-light)";
+            espMeta.textContent = lastSeenTs ? lastSeenTs.toLocaleString("de-DE") : "—";
+          }
+        }
+      } catch (e) { console.warn("Dashboard ESP-Status:", e); }
 
       // Pumpen-Kalibrier-Warnung
       const uncalibrated = pumps.filter(p => !p.stepsPerML || p.stepsPerML <= 0);
