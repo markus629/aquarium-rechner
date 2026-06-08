@@ -303,7 +303,9 @@ void checkPhSampleSchedule() {
   struct tm t; localtime_r(&now, &t);
 
   // Trigger: Minute 5 jeder geraden Stunde
-  if (t.tm_hour % 2 != 0) return;
+  // Dosier-Intervall aus Settings (12/Tag = 2h, 6/Tag = 4h, etc.)
+  if (settings_cache::intervalHours() <= 0) return;
+  if (t.tm_hour % settings_cache::intervalHours() != 0) return;
   if (t.tm_min < 5 || t.tm_min > 8) return;
 
   // Schon in dieser Stunde geschrieben?
@@ -575,7 +577,9 @@ void checkAutoDosingSequence() {
   localtime_r(&now, &t);
 
   // Trigger-Fenster: Minute 10-15 in gerader Stunde
-  if (t.tm_hour % 2 != 0 || t.tm_min < 10 || t.tm_min > 15) return;
+  if (settings_cache::intervalHours() <= 0) return;
+  if (t.tm_hour % settings_cache::intervalHours() != 0 ||
+      t.tm_min < 10 || t.tm_min > 15) return;
 
   FirebaseJson doc;
   doc.setJsonData(cachedPlanJson);

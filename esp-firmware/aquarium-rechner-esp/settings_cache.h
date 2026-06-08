@@ -14,6 +14,7 @@
 namespace settings_cache {
 
 bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
+int dosingsPerDay = 12;           // 2, 3, 4, 6, 8, 12 — Anzahl Dosier-Intervalle pro Tag
 bool otaAutoUpdate = false;       // Master-Schalter: ESP installiert neuere GitHub-Releases automatisch
 String healthcheckUrl = "";       // optionale URL (z.B. healthchecks.io) die bei jedem Heartbeat angepingt wird
 bool usePhBasedKHDosing = false;
@@ -28,6 +29,7 @@ void loadFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
   autoDosing = p.getBool("autoDose", false);
+  dosingsPerDay = p.getInt("dosPerDay", 12);
   otaAutoUpdate = p.getBool("otaAuto", false);
   healthcheckUrl = p.getString("hcUrl", "");
   usePhBasedKHDosing = p.getBool("phMode", false);
@@ -48,6 +50,7 @@ void saveToNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
   p.putBool("autoDose", autoDosing);
+  p.putInt("dosPerDay", dosingsPerDay);
   p.putBool("otaAuto", otaAutoUpdate);
   p.putString("hcUrl", healthcheckUrl);
   p.putBool("phMode", usePhBasedKHDosing);
@@ -81,6 +84,12 @@ void sync() {
   if (doc.get(v, "fields/autoDosing/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
     if (nv != autoDosing) { autoDosing = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/dosingsPerDay/integerValue") && v.success) {
+    int nv = (int)v.intValue;
+    if (nv != dosingsPerDay && nv > 0 && nv <= 24 && (24 % nv == 0)) {
+      dosingsPerDay = nv; changed = true;
+    }
   }
   if (doc.get(v, "fields/otaAutoUpdate/booleanValue") && v.success) {
     bool nv = (v.stringValue == "true");
@@ -154,6 +163,12 @@ void sync() {
                   autoDosing, usePhBasedKHDosing, phThresholdForKHNight, khNightStart, khNightEnd, magnesiumRatio,
                   (unsigned)pumps::stepsPerSec, (unsigned)pumps::accelPerSec2);
   }
+}
+
+// Intervall in Stunden = 24 / dosingsPerDay. Bei ungültigem Wert: 2 (= 12/Tag).
+int intervalHours() {
+  if (dosingsPerDay <= 0 || dosingsPerDay > 24 || (24 % dosingsPerDay != 0)) return 2;
+  return 24 / dosingsPerDay;
 }
 
 // ---------- Tag/Nacht-Entscheidung ----------

@@ -120,14 +120,14 @@ void loop() {
   status_led::tick();
 
   // LED-State an Pumpen-Aktivität koppeln
-  if (pumps::ds.phase == pumps::PHASE_PRIMING || pumps::ds.phase == pumps::PHASE_RETRACTING) {
-    status_led::set(status_led::S_ANTIDRIP);     // cyan
-  } else if (pumps::isBusy()) {
-    status_led::set(status_led::S_DOSING);       // gelb
+  // Komplette Pumpen-Sequenz (Prime + Dose + Retract) = blau,
+  // erst nach Phase IDLE und nicht-busy zurück auf grün.
+  if (pumps::ds.phase != pumps::PHASE_IDLE || pumps::isBusy()) {
+    status_led::set(status_led::S_DOSING);       // blau für komplette Sequenz
   } else if (WiFi.status() == WL_CONNECTED) {
     status_led::set(status_led::S_IDLE);         // grün
   } else {
-    status_led::set(status_led::S_CONNECTING);   // blau pulsierend
+    status_led::set(status_led::S_CONNECTING);   // blau pulsierend (kein WLAN)
   }
 
   // Plan + Commands (adaptives Polling intern, übernimmt auch Pump-Check + finishCommand)

@@ -617,6 +617,17 @@
           <input type="checkbox" id="autoDosing" data-setting="autoDosing">
           <label for="autoDosing">Automatische Dosierung aktivieren <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP führt den Dosierplan selbständig aus</span></label>
         </div>
+        <div class="form-row" style="max-width:300px;margin-top:0.8rem">
+          <label>Dosierungen pro Tag <span class="hint">verteilt sich gleichmäßig auf 24 h</span></label>
+          <select data-setting="dosingsPerDay" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+            <option value="12">12× pro Tag (alle 2 h)</option>
+            <option value="8">8× pro Tag (alle 3 h)</option>
+            <option value="6">6× pro Tag (alle 4 h)</option>
+            <option value="4">4× pro Tag (alle 6 h)</option>
+            <option value="3">3× pro Tag (alle 8 h)</option>
+            <option value="2">2× pro Tag (alle 12 h)</option>
+          </select>
+        </div>
       </div>
 
       <div class="card">
@@ -709,6 +720,11 @@
     if (inp.type === "number") {
       const v = parseFloat(inp.value);
       return isNaN(v) ? null : v;
+    }
+    // Select mit numerischen Optionen → als Zahl persistieren
+    if (inp.tagName === "SELECT") {
+      const v = parseInt(inp.value, 10);
+      return isNaN(v) ? inp.value : v;
     }
     return inp.value;
   }

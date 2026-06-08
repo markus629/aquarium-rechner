@@ -26,15 +26,25 @@ export function caPerML(aquariumVolume) {
 }
 
 // ---------- Hilfsfunktionen ----------
-function getNextEvenHour(now) {
-  // Nächste gerade Stunde mit Minute 10 als Anker (wie im ESP)
+// Liefert das Intervall (Stunden) zwischen Dosierungen aus den Settings.
+// Default 2 h (= 12×/Tag). Erlaubte Werte: alle Teiler von 24 → 1,2,3,4,6,8,12,24.
+function intervalHours(settings) {
+  const n = parseInt(settings?.dosingsPerDay, 10);
+  if (!n || n <= 0 || n > 24) return 2;
+  return Math.floor(24 / n);
+}
+
+function getNextDosageHour(now, settings) {
+  const intH = intervalHours(settings);
+  // Nächste Stunde die durch intH teilbar ist, Minute 10 als Anker (wie im ESP)
   const d = new Date(now * 1000);
   let h = d.getHours();
   let plus = 0;
-  if (h % 2 === 0) {
-    if (d.getMinutes() >= 10) plus = 2;
+  const onMark = (h % intH === 0);
+  if (onMark) {
+    if (d.getMinutes() >= 10) plus = intH;
   } else {
-    plus = 1;
+    plus = intH - (h % intH);
   }
   d.setHours(h + plus, 10, 0, 0);
   return Math.floor(d.getTime() / 1000);
@@ -57,8 +67,12 @@ export function calculateKHPlan({
   const startKH = (currentKH != null && !isNaN(currentKH)) ? currentKH : targetKH;
   const KpM = khPerML(V);
 
-  // Maintenance pro Intervall (12 Intervalle pro Tag)
-  const maintenanceML = dailyCons / 12.0;
+  // Anzahl Dosierungen pro Tag aus Settings (default 12)
+  const dosesPerDay = parseInt(settings.dosingsPerDay, 10) || 12;
+  const intH = intervalHours(settings);
+
+  // Maintenance pro Intervall — Tages-Verbrauch / Anzahl Dosen
+  const maintenanceML = dailyCons / dosesPerDay;
 
   // Bereits am Ziel?
   const diff = Math.abs(targetKH - startKH);
@@ -72,7 +86,7 @@ export function calculateKHPlan({
 
   const isIncrease = targetKH > startKH;
   const naturalConsumptionDKH = maintenanceML * KpM; // °dKH pro Intervall, der "von selbst" verloren geht
-  const settingsMaxPerInterval = maxDailyChange / 12.0;
+  const settingsMaxPerInterval = maxDailyChange / dosesPerDay;
 
   let maxChangePerInterval, warning = null;
   if (isIncrease) {
@@ -81,7 +95,7 @@ export function calculateKHPlan({
     // Senkung: durch natürlichen Verbrauch begrenzt
     maxChangePerInterval = Math.min(settingsMaxPerInterval, naturalConsumptionDKH);
     if (naturalConsumptionDKH < settingsMaxPerInterval) {
-      warning = `KH-Senkung durch natürlichen Verbrauch begrenzt: max ${(naturalConsumptionDKH * 12).toFixed(2)} °dKH/Tag (statt eingestellte ${maxDailyChange})`;
+      warning = `KH-Senkung durch natürlichen Verbrauch begrenzt: max ${(naturalConsumptionDKH * dosesPerDay).toFixed(2)} °dKH/Tag (statt eingestellte ${maxDailyChange})`;
     }
   }
 
@@ -98,7 +112,8 @@ export function calculateKHPlan({
 
   // Plan-Einträge erstellen
   const entries = [];
-  let currentTime = getNextEvenHour(now);
+  let currentTime = getNextDosageHour(now, settings);
+  const intSec = intH * 3600;
 
   if (isIncrease) {
     const adjustmentML = changePerDosage / KpM;
@@ -112,7 +127,7 @@ export function calculateKHPlan({
         isNightDosage: false,    // Tag/Nacht wird zur Laufzeit vom ESP entschieden
         isMaintenanceDose: false
       });
-      currentTime += 2 * 3600;
+      currentTime += intSec;
     }
   } else {
     let remaining = diff;
@@ -135,7 +150,7 @@ export function calculateKHPlan({
         isNightDosage: false,
         isMaintenanceDose: false
       });
-      currentTime += 2 * 3600;
+      currentTime += intSec;
       if (remaining <= 0.001) break;
     }
   }
@@ -149,7 +164,7 @@ export function calculateKHPlan({
     isMaintenanceDose: true
   });
 
-  return { entries, maintenance: maintenanceML, warning, isIncrease, numDosages, durationDays: numDosages * 2 / 24 };
+  return { entries, maintenance: maintenanceML, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
 }
 
 // ---------- Ca-Plan (analog) ----------
@@ -169,7 +184,9 @@ export function calculateCaPlan({
   const mgRatio = (settings.magnesiumRatio || 50) / 100;
   const startCa = (currentCa != null && !isNaN(currentCa)) ? currentCa : targetCa;
   const CpM = caPerML(V);
-  const maintenanceCa = dailyCons / 12.0;
+  const dosesPerDay = parseInt(settings.dosingsPerDay, 10) || 12;
+  const intH = intervalHours(settings);
+  const maintenanceCa = dailyCons / dosesPerDay;
 
   const diff = Math.abs(targetCa - startCa);
   if (diff < 0.5) {
@@ -182,7 +199,7 @@ export function calculateCaPlan({
 
   const isIncrease = targetCa > startCa;
   const naturalConsumptionMgL = maintenanceCa * CpM;
-  const settingsMaxPerInterval = maxDailyChange / 12.0;
+  const settingsMaxPerInterval = maxDailyChange / dosesPerDay;
 
   let maxChangePerInterval, warning = null;
   if (isIncrease) {
@@ -190,7 +207,7 @@ export function calculateCaPlan({
   } else {
     maxChangePerInterval = Math.min(settingsMaxPerInterval, naturalConsumptionMgL);
     if (naturalConsumptionMgL < settingsMaxPerInterval) {
-      warning = `Ca-Senkung durch natürlichen Verbrauch begrenzt: max ${(naturalConsumptionMgL * 12).toFixed(1)} mg/L/Tag (statt eingestellte ${maxDailyChange})`;
+      warning = `Ca-Senkung durch natürlichen Verbrauch begrenzt: max ${(naturalConsumptionMgL * dosesPerDay).toFixed(1)} mg/L/Tag (statt eingestellte ${maxDailyChange})`;
     }
   }
 
@@ -206,7 +223,8 @@ export function calculateCaPlan({
   }
 
   const entries = [];
-  let currentTime = getNextEvenHour(now);
+  let currentTime = getNextDosageHour(now, settings);
+  const intSec = intH * 3600;
 
   if (isIncrease) {
     const adjustmentML = changePerDosage / CpM;
@@ -220,7 +238,7 @@ export function calculateCaPlan({
         projectedValue: projectedCa,
         isMaintenanceDose: false
       });
-      currentTime += 2 * 3600;
+      currentTime += intSec;
     }
   } else {
     let remaining = diff;
@@ -243,7 +261,7 @@ export function calculateCaPlan({
         projectedValue: projectedCa,
         isMaintenanceDose: false
       });
-      currentTime += 2 * 3600;
+      currentTime += intSec;
       if (remaining <= 0.001) break;
     }
   }
@@ -256,7 +274,7 @@ export function calculateCaPlan({
     isMaintenanceDose: true
   });
 
-  return { entries, maintenance: maintenanceCa, warning, isIncrease, numDosages, durationDays: numDosages * 2 / 24 };
+  return { entries, maintenance: maintenanceCa, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
 }
 
 // ---------- Verbrauchs-Schätzung aus Messhistorie ----------

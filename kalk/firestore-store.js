@@ -193,6 +193,7 @@ function defaultSettings(volume) {
     targetCalcium: 420,
     historyCount: 5,
     autoDosing: false,
+    dosingsPerDay: 12,    // wählbar: 2, 3, 4, 6, 8, 12 (alle teilen 24 sauber)
     healthcheckUrl: "",
     maxDailyChangeKH: 2.0,
     maxDailyChangeCalcium: 20.0,
