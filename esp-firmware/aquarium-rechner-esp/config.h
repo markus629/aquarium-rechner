@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.0.1"
+#define FW_VERSION "0.3.0"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
