@@ -42,13 +42,18 @@ int compareVersions(const String &a, const String &b) {
   return 0;
 }
 
-// Schutzfenster: NICHT zwischen :08 und :20 in gerader Stunde aktualisieren
-// (Dosier-Sequenz feuert in Minute :10..:15 gerader Stunden — Reboot würde sie killen)
+// Schutzfenster: NICHT zwischen :05 und :20 in einer Dosier-Stunde aktualisieren.
+// Dosier-Stunde = jede Stunde wo (hour % intervalHours == 0).
+// Bei 12×/Tag → gerade Stunden, bei 6×/Tag → 0,4,8,12,16,20, etc.
+// pH-Sample feuert in :05-:08, Dosier-Sequenz in :10-:15 — Reboot in dem
+// Zeitraum würde sie killen.
 bool isProtectedWindow() {
   time_t now; time(&now);
   if (now < 1700000000) return true;  // Zeit noch nicht synced → safer not to update
   struct tm t; localtime_r(&now, &t);
-  if (t.tm_hour % 2 == 0 && t.tm_min >= 8 && t.tm_min <= 20) return true;
+  int intH = settings_cache::intervalHours();
+  if (intH <= 0) return true;  // ungültig → konservativ schützen
+  if (t.tm_hour % intH == 0 && t.tm_min >= 5 && t.tm_min <= 20) return true;
   return false;
 }
 
@@ -135,28 +140,36 @@ bool fetchLatestRelease() {
 
 // Prüft + updated wenn neuere Version verfügbar.
 // forceCheck überspringt Auto-Update-Gate und Intervall (manueller Button).
-void checkAndUpdate(bool forceCheck = false) {
-  if (inProgress) return;
-  if (!forceCheck && !settings_cache::otaAutoUpdate) return;  // Auto aus → nur Manual
+// Returns: true wenn ein vollständiger Check (inkl. Schutzfenster-OK) durchlief,
+//          false wenn das Schutzfenster getriggert hat (= bitte bald nochmal versuchen).
+bool checkAndUpdate(bool forceCheck = false) {
+  if (inProgress) return true;
+  if (!forceCheck && !settings_cache::otaAutoUpdate) return true;  // Auto aus → nur Manual
 
-  if (!fetchLatestRelease()) return;
+  if (!fetchLatestRelease()) return true;  // Netz-Fehler → erst beim nächsten Tick erneut
   if (compareVersions(FW_VERSION, availableVersion) >= 0) {
     Serial.printf("[OTA] keine neuere Version (lokal %s, remote %s)\n", FW_VERSION, availableVersion.c_str());
-    return;
+    return true;
   }
   if (isProtectedWindow()) {
-    Serial.println("[OTA] Schutzfenster (Dosier-Zeit) — Update verschoben");
-    return;
+    Serial.println("[OTA] Schutzfenster (Dosier-Zeit) — Update verschoben, retry in ~25 Min");
+    return false;
   }
   Serial.printf("[OTA] Neue Version %s → starte Update\n", availableVersion.c_str());
   performUpdate(availableUrl);
+  return true;
 }
 
 void tick() {
   unsigned long now = millis();
   if (now - lastCheckMs < OTA_CHECK_INTERVAL_MS && lastCheckMs != 0) return;
-  lastCheckMs = now;
-  checkAndUpdate(false);
+  bool fullCheck = checkAndUpdate(false);
+  if (fullCheck) {
+    lastCheckMs = now;   // normal: warte 6 h bis nächsten Check
+  } else {
+    // Schutzfenster aktiv — in ~25 Min nochmal probieren (dann sicher außerhalb)
+    lastCheckMs = now - (OTA_CHECK_INTERVAL_MS - 25UL * 60UL * 1000UL);
+  }
 }
 
 // Manueller Trigger (Command "otaCheck" aus dem Web)
