@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.2.2"
+#define FW_VERSION "0.0.1"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -46,8 +46,8 @@ const float DEFAULT_ACCELERATION_ML = 1.8f;   // ml/Minute²
 
 // ---------- Intervalle ----------
 const unsigned long HEARTBEAT_INTERVAL_MS    = 30 * 1000UL;
-const unsigned long COMMAND_POLL_NORMAL_MS   = 30 * 1000UL;
-const unsigned long COMMAND_POLL_FAST_MS     =  2 * 1000UL;
+const unsigned long COMMAND_POLL_NORMAL_MS   =  3 * 1000UL;  // 3s — Web-Commands fühlen sich live an
+const unsigned long COMMAND_POLL_FAST_MS     =  1 * 1000UL;  // 1s während laufender Aktion
 const unsigned long PLAN_CHECK_INTERVAL_MS   = 60 * 1000UL;
 const unsigned long PH_SAMPLE_INTERVAL_MS    =       100UL;  // ADC-Sampling
 const unsigned long OTA_CHECK_INTERVAL_MS    =  6 * 3600UL * 1000UL; // alle 6 h

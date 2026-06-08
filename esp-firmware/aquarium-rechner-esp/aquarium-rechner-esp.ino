@@ -37,6 +37,7 @@
 #include "plan_executor.h"
 #include "ota_update.h"
 #include "healthcheck.h"
+#include "status_led.h"
 
 unsigned long lastHeartbeatMs = 0;
 unsigned long bootMs = 0;
@@ -50,26 +51,29 @@ void setup() {
   Serial.println("==========================================");
   bootMs = millis();
 
+  // Status-LED ganz früh
+  status_led::begin();
+  status_led::set(status_led::S_CONNECTING);  // blau
+
   // 3× Power-Cycle erkennen → Setup-Reset
   setup_portal::checkBootCount();
 
   // Settings ZUERST aus NVS laden, damit pumps::begin() bereits mit den
   // korrekten stepsPerSec/accelPerSec2 Werten den Stepper initialisiert
-  // (statt mit hardcoded Defaults — siehe Audit).
   settings_cache::loadFromNVS();
 
-  // Hardware-Init (Pumpen sicher in disabled state)
+  // Hardware-Init
   pumps::begin();
   ph_sensor::begin();
-  rtc_sync::begin();   // DS3231 lesen → System-Zeit setzen (falls vorhanden + batteriegepuffert)
-  upload_buffer::begin();   // lädt offline-gepufferte Doses/pH aus NVS
-  plan_executor::begin();   // lädt Plan-Cache + pH-Kalib aus NVS
+  rtc_sync::begin();
+  upload_buffer::begin();
+  plan_executor::begin();
 
   // Keine gespeicherte Config? → Setup-Portal
   if (!setup_portal::hasStoredConfig()) {
     Serial.println("[Boot] Keine Config — Setup-Portal startet");
+    status_led::set(status_led::S_SETUP_PORTAL);
     setup_portal::runSetupPortal();
-    // runSetupPortal blockiert bis Reboot
     return;
   }
 
@@ -84,8 +88,6 @@ void setup() {
     return;
   }
 
-  // NTP für Zeitstempel (UTC — DS3231 hält ebenfalls UTC, Zeitzone via configTzTime
-  // wirkt nur auf localtime_r-Ausgabe, time() bleibt UTC)
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
 
   // Boot-Count zurücksetzen sobald wir stabil 4 s laufen
@@ -94,22 +96,39 @@ void setup() {
   // Firebase einloggen
   if (!firebase_sync::begin(fbEmail, fbPass)) {
     Serial.println("[Boot] Firebase-Login fehlgeschlagen — bleibe trotzdem online, retry später");
-    // Wir machen weiter — Heartbeat schlägt fehl, aber wenigstens nicht im Setup gefangen
   }
 
+  // Boot-Count sofort zurücksetzen — verhindert ungewollten Setup-Portal-Trigger
+  // wenn der User mehrfach hintereinander flasht/resetet während Tests.
+  setup_portal::resetBootCount();
+
+  status_led::set(status_led::S_IDLE);
   Serial.println("[Boot] Setup fertig — Loop startet");
 }
 
 void loop() {
   // Boot-Count reset nach 4 s stabiler Uptime
-  static bool bootCountReset = false;
-  if (!bootCountReset && millis() - bootMs > 4000) {
-    setup_portal::resetBootCount();
-    bootCountReset = true;
+  // Boot-Count wird jetzt schon in setup() nach erfolgreichem Init resetted
+  static bool bootCountReset = true;
+  if (false && !bootCountReset && millis() - bootMs > 4000) {
   }
 
   // pH-Sampling (alle 100 ms)
   ph_sensor::tick();
+
+  // Status-LED Animationen (z.B. Pulsieren während Connect)
+  status_led::tick();
+
+  // LED-State an Pumpen-Aktivität koppeln
+  if (pumps::ds.phase == pumps::PHASE_PRIMING || pumps::ds.phase == pumps::PHASE_RETRACTING) {
+    status_led::set(status_led::S_ANTIDRIP);     // cyan
+  } else if (pumps::isBusy()) {
+    status_led::set(status_led::S_DOSING);       // gelb
+  } else if (WiFi.status() == WL_CONNECTED) {
+    status_led::set(status_led::S_IDLE);         // grün
+  } else {
+    status_led::set(status_led::S_CONNECTING);   // blau pulsierend
+  }
 
   // Plan + Commands (adaptives Polling intern, übernimmt auch Pump-Check + finishCommand)
   plan_executor::tick();

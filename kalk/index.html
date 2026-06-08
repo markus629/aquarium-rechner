@@ -603,19 +603,13 @@
           <input type="checkbox" id="enableAntiDrip" data-setting="enableAntiDrip">
           <label for="enableAntiDrip">Anti-Tropf-Rückzug aktivieren <span class="hint" style="font-weight:400;display:block">Pumpe zieht nach Dosierung kurz zurück um Nachtropfen zu verhindern</span></label>
         </div>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Rückzugsmenge (ml)</label>
-            <input type="number" data-setting="antiDripML" step="0.005" min="0" max="1">
-          </div>
-          <div class="form-row">
-            <label>Rückzugsgeschwindigkeit (Schritte/sec) <span class="hint">Default: 400</span></label>
-            <input type="number" data-setting="antiDripStepsPerSec" step="10" min="10" max="5000">
-          </div>
-          <div class="form-row">
-            <label>Rückzugs-Beschleunigung (Schritte/sec²) <span class="hint">Default: 1000 — höher = schneller auf Tempo</span></label>
-            <input type="number" data-setting="antiDripAccelStepsPerSec2" step="100" min="0" max="50000">
-          </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));grid-auto-rows:auto;gap:0.4rem 1.2rem;">
+          <label style="font-size:0.8rem;font-weight:600;color:#5a6776;align-self:end">Rückzugsmenge (ml)</label>
+          <label style="font-size:0.8rem;font-weight:600;color:#5a6776;align-self:end">Rückzugsgeschwindigkeit (Schritte/sec) <span class="hint">Default: 400</span></label>
+          <label style="font-size:0.8rem;font-weight:600;color:#5a6776;align-self:end">Rückzugs-Beschleunigung (Schritte/sec²) <span class="hint">Default: 1000</span></label>
+          <input type="number" data-setting="antiDripML" step="0.005" min="0" max="1" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+          <input type="number" data-setting="antiDripStepsPerSec" step="10" min="10" max="5000" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+          <input type="number" data-setting="antiDripAccelStepsPerSec2" step="100" min="0" max="50000" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
         </div>
 
         <div class="section-title">Automatik</div>
