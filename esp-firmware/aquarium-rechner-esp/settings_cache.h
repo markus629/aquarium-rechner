@@ -40,6 +40,7 @@ void loadFromNVS() {
   pumps::antiDripEnabled = p.getBool("adEn", true);
   pumps::antiDripML = p.getFloat("adML", 0.015f);
   pumps::antiDripStepsPerSec = (uint32_t)p.getULong("adHz", 400);
+  pumps::antiDripAccelPerSec2 = (uint32_t)p.getULong("adAcc", 1000);
   p.end();
 }
 
@@ -59,6 +60,7 @@ void saveToNVS() {
   p.putBool("adEn", pumps::antiDripEnabled);
   p.putFloat("adML", pumps::antiDripML);
   p.putULong("adHz", (unsigned long)pumps::antiDripStepsPerSec);
+  p.putULong("adAcc", (unsigned long)pumps::antiDripAccelPerSec2);
   p.end();
 }
 
@@ -141,6 +143,10 @@ void sync() {
   if (doc.get(v, "fields/antiDripStepsPerSec/integerValue") && v.success) {
     uint32_t nv = (uint32_t)v.intValue;
     if (nv != pumps::antiDripStepsPerSec) { pumps::antiDripStepsPerSec = nv; changed = true; }
+  }
+  if (doc.get(v, "fields/antiDripAccelStepsPerSec2/integerValue") && v.success) {
+    uint32_t nv = (uint32_t)v.intValue;
+    if (nv != pumps::antiDripAccelPerSec2) { pumps::antiDripAccelPerSec2 = nv; changed = true; }
   }
   if (changed) {
     saveToNVS();

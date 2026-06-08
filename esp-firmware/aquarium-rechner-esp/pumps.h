@@ -33,6 +33,7 @@ uint32_t accelPerSec2 = 200;   // Default: 200 Hz/s
 bool antiDripEnabled = true;
 float antiDripML = 0.015f;
 uint32_t antiDripStepsPerSec = 400;
+uint32_t antiDripAccelPerSec2 = 1000;  // eigene Beschleunigung für Prime/Retract
 
 // ---------- Anti-Drip State-Machine ----------
 // Eine Dose wird zu einer Sequenz: PRIME → DOSE → RETRACT
@@ -82,18 +83,26 @@ void setStepsPerML(int pumpIdx, float v) {
 }
 
 // ---------- Init ----------
+// Nach bewährtem User-Beispiel: setEnablePin(PIN_UNDEFINED) + setAutoEnable(false)
+// + Speed/Accel EINMAL im Init, dann nur noch bei Bedarf updaten.
 void begin() {
-  // ENABLE-Pins als Outputs, alle HIGH (= disabled bei den meisten Treibern)
+  Serial.println("[Pumps] Konfiguriere Pins …");
   for (int i = 0; i < NUM_PUMPS; i++) {
     pinMode(ENABLE_PINS[i], OUTPUT);
-    digitalWrite(ENABLE_PINS[i], HIGH);
+    digitalWrite(ENABLE_PINS[i], HIGH);  // HIGH = deaktiviert
+    Serial.printf("[Pumps] ENABLE_PIN %d (GPIO %d) konfiguriert\n", i, ENABLE_PINS[i]);
   }
+
+  Serial.println("[Pumps] Initialisiere Stepper-Engine …");
   engine.init();
   stepper = engine.stepperConnectToPin(PIN_STEP);
   if (stepper) {
     stepper->setDirectionPin(PIN_DIR);
-    stepper->setAutoEnable(false);  // wir steuern ENABLE selbst
-    Serial.println("[Pumps] Stepper-Engine bereit");
+    stepper->setEnablePin(PIN_UNDEFINED);   // explizit: kein Library-managed EN
+    stepper->setAutoEnable(false);
+    stepper->setSpeedInHz(stepsPerSec);
+    stepper->setAcceleration(accelPerSec2 == 0 ? 10000 : accelPerSec2);
+    Serial.printf("[Pumps] Stepper-Engine bereit (STEP=GPIO%d, DIR=GPIO%d)\n", PIN_STEP, PIN_DIR);
   } else {
     Serial.println("[Pumps] FEHLER: stepperConnectToPin fehlgeschlagen");
   }
@@ -101,6 +110,7 @@ void begin() {
 }
 
 void enablePump(int idx) {
+  // Direktes Switching wie im funktionierenden User-Beispiel — keine Delays
   for (int i = 0; i < NUM_PUMPS; i++) {
     digitalWrite(ENABLE_PINS[i], (i == idx) ? LOW : HIGH);
   }
@@ -127,12 +137,10 @@ bool runSteps(int pumpIdx, long steps) {
   enablePump(pumpIdx);
   uint32_t spd = stepsPerSec;
   if (spd < 10) spd = 10;
-  // Beschleunigung 0 = quasi sofort (sehr hohe Accel)
   uint32_t accel = (accelPerSec2 == 0) ? 10000 : accelPerSec2;
   stepper->setSpeedInHz(spd);
   stepper->setAcceleration(accel);
-  long target = steps;  // signed: negative = rückwärts (Anti-Drip)
-  stepper->move(target);
+  stepper->move(steps);   // relativ — Lib setzt DIR aus dem Vorzeichen
   doseStartMs = millis();
   doseExpectedMs = (uint32_t)((labs(steps) * 1000UL) / spd);
   Serial.printf("[Pumps] %s: %ld Schritte @ %u Hz (accel %u Hz/s) (~%lu ms)\n",
@@ -142,12 +150,14 @@ bool runSteps(int pumpIdx, long steps) {
 }
 
 // ---------- Internal: Bewegung mit eigener Geschwindigkeit starten ----------
-bool _runStepsAtSpeed(int pumpIdx, long steps, uint32_t hz) {
+// hz_accel = 0 → nutzt globale accelPerSec2; sonst die übergebene Beschleunigung
+bool _runStepsAtSpeed(int pumpIdx, long steps, uint32_t hz, uint32_t hz_accel = 0) {
   if (pumpIdx < 0 || pumpIdx >= NUM_PUMPS || !stepper) return false;
   if (isBusy()) return false;
   enablePump(pumpIdx);
   if (hz < 10) hz = 10;
-  uint32_t accel = (accelPerSec2 == 0) ? 10000 : accelPerSec2;
+  uint32_t accel = hz_accel > 0 ? hz_accel
+                                : ((accelPerSec2 == 0) ? 10000 : accelPerSec2);
   stepper->setSpeedInHz(hz);
   stepper->setAcceleration(accel);
   stepper->move(steps);
@@ -180,7 +190,7 @@ bool runMl(int pumpIdx, float ml) {
     ds.phase = PHASE_PRIMING;
     Serial.printf("[Pumps] %s SEQ: prime %ld + dose %ld + retract %ld\n",
                   PUMP_NAMES[pumpIdx], ds.antiDripSteps, ds.doseSteps, ds.antiDripSteps);
-    return _runStepsAtSpeed(pumpIdx, ds.antiDripSteps, antiDripStepsPerSec);
+    return _runStepsAtSpeed(pumpIdx, ds.antiDripSteps, antiDripStepsPerSec, antiDripAccelPerSec2);
   } else {
     // Kein Anti-Drip: direkt dose
     ds.phase = PHASE_DOSING;
@@ -210,7 +220,7 @@ int checkAndDisable() {
       // Dose fertig → Retract starten
       ds.phase = PHASE_RETRACTING;
       Serial.printf("[Pumps] %s: dose fertig → retract %ld\n", PUMP_NAMES[ds.pumpIdx], ds.antiDripSteps);
-      _runStepsAtSpeed(ds.pumpIdx, -ds.antiDripSteps, antiDripStepsPerSec);
+      _runStepsAtSpeed(ds.pumpIdx, -ds.antiDripSteps, antiDripStepsPerSec, antiDripAccelPerSec2);
       return -2;
     }
     // Kein Anti-Drip: Sequenz fertig

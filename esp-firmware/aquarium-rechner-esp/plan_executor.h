@@ -686,7 +686,8 @@ void checkPumpFinished() {
 // ---------- Init & Tick ----------
 void begin() {
   loadFromNVS();
-  settings_cache::begin();
+  // settings_cache::loadFromNVS() wird jetzt schon in setup() VOR pumps::begin()
+  // aufgerufen — hier nichts mehr nötig.
   // pH-Kalibrierung aus NVS laden
   Preferences p;
   p.begin(NVS_NAMESPACE, true);

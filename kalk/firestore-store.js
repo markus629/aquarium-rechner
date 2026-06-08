@@ -206,7 +206,8 @@ function defaultSettings(volume) {
     phThresholdForKHNight: 8.0,
     enableAntiDrip: true,
     antiDripML: 0.015,
-    antiDripStepsPerSec: 400,   // Rückzugsgeschwindigkeit in Hz (default = wie global)
+    antiDripStepsPerSec: 400,   // Rückzugsgeschwindigkeit in Hz
+    antiDripAccelStepsPerSec2: 1000,   // Rückzugs-Beschleunigung in Hz/s
     // Globale Pumpen-Geschwindigkeit (Schritte/sec direkt — unabhängig von Kalibrierung)
     stepsPerSec: 400,           // Hz
     accelStepsPerSec2: 200,     // Hz/sec (0 = quasi sofort)

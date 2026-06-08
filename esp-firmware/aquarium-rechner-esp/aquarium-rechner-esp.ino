@@ -53,12 +53,17 @@ void setup() {
   // 3× Power-Cycle erkennen → Setup-Reset
   setup_portal::checkBootCount();
 
-  // Hardware-Init zuerst (Pumpen sicher in disabled state)
+  // Settings ZUERST aus NVS laden, damit pumps::begin() bereits mit den
+  // korrekten stepsPerSec/accelPerSec2 Werten den Stepper initialisiert
+  // (statt mit hardcoded Defaults — siehe Audit).
+  settings_cache::loadFromNVS();
+
+  // Hardware-Init (Pumpen sicher in disabled state)
   pumps::begin();
   ph_sensor::begin();
   rtc_sync::begin();   // DS3231 lesen → System-Zeit setzen (falls vorhanden + batteriegepuffert)
   upload_buffer::begin();   // lädt offline-gepufferte Doses/pH aus NVS
-  plan_executor::begin();   // lädt Plan-Cache + Settings + pH-Kalib aus NVS
+  plan_executor::begin();   // lädt Plan-Cache + pH-Kalib aus NVS
 
   // Keine gespeicherte Config? → Setup-Portal
   if (!setup_portal::hasStoredConfig()) {

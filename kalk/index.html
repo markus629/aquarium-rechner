@@ -612,6 +612,10 @@
             <label>Rückzugsgeschwindigkeit (Schritte/sec) <span class="hint">Default: 400</span></label>
             <input type="number" data-setting="antiDripStepsPerSec" step="10" min="10" max="5000">
           </div>
+          <div class="form-row">
+            <label>Rückzugs-Beschleunigung (Schritte/sec²) <span class="hint">Default: 1000 — höher = schneller auf Tempo</span></label>
+            <input type="number" data-setting="antiDripAccelStepsPerSec2" step="100" min="0" max="50000">
+          </div>
         </div>
 
         <div class="section-title">Automatik</div>
