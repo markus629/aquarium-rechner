@@ -244,6 +244,22 @@
           <div class="center-state"><p>Keine Messung — erst KH/Ca im Tab „Kalkhaushalt" eintragen.</p></div>
         </div>
       </div>
+
+      <div class="card">
+        <h2 id="dash-consumption-title">Verbrauchsanalyse</h2>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-bottom:0.6rem">
+          Täglicher Verbrauch aus den tatsächlich gefahrenen Dosierungen (KH in °dKH/Tag, Ca in mg/L/Tag). Heute wird ausgelassen, da noch nicht abgeschlossen.
+        </p>
+        <div class="chart-box" id="chart-box-consumption"></div>
+      </div>
+
+      <div class="card">
+        <h2>pH-Trend-Analyse</h2>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-bottom:0.6rem">
+          pH-Messungen über die Zeit. Ausreißer-Tage werden automatisch herausgefiltert (IQR-Methode), die letzten beiden Tage bleiben immer erhalten.
+        </p>
+        <div class="chart-box" id="chart-box-ph-trend"></div>
+      </div>
     </div>
     <div id="tab-kalk" class="tab-content">
       <div class="card">
@@ -1801,6 +1817,75 @@
       </tr>`).join("");
   }
 
+  // ---------- Verbrauchsanalyse: täglicher Verbrauch aus Dosierungen ----------
+  // KH-Verbrauch (°dKH) = (KH-Tag-ml + KH-Nacht-ml × 2) × khPerML
+  // Ca-Verbrauch (mg/L)  = Ca-ml × caPerML
+  // Heute wird ausgelassen (noch nicht abgeschlossen). Nur Tage mit Doses.
+  function computeDailyConsumption(dosings, settings) {
+    const V = settings.aquariumVolume || 450;
+    const kpm = khPerML(V), cpm = caPerML(V);
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayTs = Math.floor(todayStart.getTime() / 1000);
+
+    const dayMap = {};  // dayStartTs → { khML, caML }
+    for (const d of dosings) {
+      if (d.success === false) continue;
+      const day = new Date(d.timestamp * 1000); day.setHours(0, 0, 0, 0);
+      const dayTs = Math.floor(day.getTime() / 1000);
+      if (dayTs >= todayTs) continue;  // heute auslassen
+      if (!dayMap[dayTs]) dayMap[dayTs] = { khML: 0, caML: 0 };
+      const ml = Number(d.ml) || 0;
+      if (d.pump === 2) dayMap[dayTs].khML += ml;            // KH-Tag
+      else if (d.pump === 3) dayMap[dayTs].khML += ml * 2;   // KH-Nacht (2× konzentriert)
+      else if (d.pump === 0) dayMap[dayTs].caML += ml;       // Calcium
+    }
+    const days = Object.keys(dayMap).map(Number).sort((a, b) => a - b);
+    const khSeries = [], caSeries = [];
+    for (const dayTs of days) {
+      const m = dayMap[dayTs];
+      const mid = dayTs + 43200;  // Mittag des Tages für sauberen X-Punkt
+      if (m.khML > 0) khSeries.push({ ts: mid, v: m.khML * kpm });
+      if (m.caML > 0) caSeries.push({ ts: mid, v: m.caML * cpm });
+    }
+    return { khSeries, caSeries, dayCount: days.length };
+  }
+
+  // ---------- pH-Trend mit IQR-Ausreißer-Filterung (1:1 aus Original) ----------
+  function filterPhOutliers(phItems) {
+    if (phItems.length < 4) return phItems.slice();
+    // nach Tagen gruppieren
+    const dayGroups = {};  // dayKey → [items]
+    for (const it of phItems) {
+      const key = new Date(it.timestamp * 1000).toLocaleDateString("de-DE");
+      (dayGroups[key] = dayGroups[key] || []).push(it);
+    }
+    const dayKeys = Object.keys(dayGroups);
+    // Tages-Mittelwerte
+    const avgs = dayKeys.map(k => {
+      const arr = dayGroups[k];
+      return arr.reduce((s, x) => s + x.value, 0) / arr.length;
+    });
+    // jüngste 2 Tage schützen (nach Datum sortiert)
+    const dayKeyTs = dayKeys.map(k => Math.max(...dayGroups[k].map(x => x.timestamp)));
+    const order = dayKeys.map((_, i) => i).sort((a, b) => dayKeyTs[a] - dayKeyTs[b]);
+    const protectedSet = new Set(order.slice(-2));
+    // IQR
+    const sorted = [...avgs].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length / 4)];
+    const q3 = sorted[Math.floor(3 * sorted.length / 4)];
+    const iqr = q3 - q1;
+    const lo = q1 - 1.5 * iqr, hi = q3 + 1.5 * iqr;
+    const outlierDays = new Set();
+    avgs.forEach((avg, i) => {
+      if (protectedSet.has(i)) return;
+      if (avg < lo || avg > hi) outlierDays.add(dayKeys[i]);
+    });
+    return phItems.filter(it => {
+      const key = new Date(it.timestamp * 1000).toLocaleDateString("de-DE");
+      return !outlierDays.has(key);
+    });
+  }
+
   // ---------- Dashboard ----------
   async function refreshDashboard() {
     try {
@@ -1889,6 +1974,31 @@
       }
       if (lines.length) next.innerHTML = `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`;
       else next.innerHTML = `<div class="center-state"><p>Keine Messung — erst KH/Ca im Tab „Kalkhaushalt" eintragen.</p></div>`;
+
+      // ---------- Verbrauchsanalyse-Chart ----------
+      const dosings = await listDosings(1000);
+      const { khSeries, caSeries, dayCount } = computeDailyConsumption(dosings, settings);
+      const titleEl = document.getElementById("dash-consumption-title");
+      if (titleEl) {
+        let span = "Verbrauchsanalyse";
+        if (dayCount === 1) span = "Verbrauchsanalyse (1 Tag)";
+        else if (dayCount > 1 && dayCount < 14) span = `Verbrauchsanalyse (${dayCount} Tage)`;
+        else if (dayCount >= 14) span = `Verbrauchsanalyse (${Math.round(dayCount / 7)} Wochen)`;
+        titleEl.textContent = span;
+      }
+      renderLineChart(document.getElementById("chart-box-consumption"), [
+        { label: "KH-Verbrauch (°dKH/Tag)", color: "#3498db", values: khSeries, fract: 2, unit: "°dKH" },
+        { label: "Ca-Verbrauch (mg/L/Tag)", color: "#e67e22", values: caSeries, fract: 1, unit: "mg/L" }
+      ], { title: "" });
+
+      // ---------- pH-Trend-Chart ----------
+      const phAll = await listMeasurements("ph", 200);
+      // chronologisch aufsteigend für den Chart
+      const phAsc = [...phAll].sort((a, b) => a.timestamp - b.timestamp);
+      const phFiltered = filterPhOutliers(phAsc);
+      renderLineChart(document.getElementById("chart-box-ph-trend"), [
+        { label: "pH", color: "#16a085", values: phFiltered.map(p => ({ ts: p.timestamp, v: p.value })), fract: 2 }
+      ], { title: "", fract: 2 });
     } catch (e) { console.warn("Dashboard refresh:", e); }
   }
 
