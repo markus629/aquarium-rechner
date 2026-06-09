@@ -1,14 +1,15 @@
 // =============================================================
-// Dosierplan-Berechnung — portiert aus ESP-Code (.ino)
+// Dosierplan-Berechnung
 // =============================================================
-// Vereinfachte aber korrekte Implementierung der Plan-Logik.
-// Quelle: 088_sketch_sep3a_01.ino Zeilen 3774-5660
+// Implementierung der Plan-Logik (portiert + erweitert aus dem
+// Original-Sketch 088_sketch_sep3a_01.ino).
 //
-// Annahmen:
-// - Plan beginnt bei der nächsten "geraden Stunde" nach jetzt
-// - Pro Tag 12 Intervalle (alle 2 Stunden)
-// - Verbrauchsrate kommt aus den Initialwerten in Settings
-//   (dynamische Verbrauchs-Schätzung aus Historie folgt später)
+// - Plan-Frequenz wählbar via settings.dosingsPerDay (2,3,4,6,8,12)
+//   → Intervall = 24 / dosingsPerDay Stunden
+// - Plan beginnt bei der nächsten "Dosier-Stunde" nach jetzt
+// - Maintenance-Dose = dailyConsumption / dosingsPerDay
+// - Verbrauchs-Schätzung dynamisch aus Mess- + Dosierungs-Historie
+//   (estimateDailyConsumption) mit Fallback auf initialKH/CaConsumption
 // =============================================================
 
 const KH_ML_PER_DKH_100L = 20.0;  // 20 ml KH-Lösung erhöhen 1°dKH in 100 L

@@ -17,7 +17,7 @@
 // ---------- Firebase Projekt ----------
 #define FIREBASE_API_KEY "AIzaSyAsQ9yj2ZrT6KBzffarsFDpov4787ON-00"
 #define FIREBASE_PROJECT_ID "aquarium-rechner"
-#define FIREBASE_DATABASE_URL ""  // wir verwenden nur Firestore + Storage
+#define FIREBASE_DATABASE_URL ""  // wir verwenden nur Firestore (kein RTDB, kein Storage)
 
 // ---------- Hardware-Pins ----------
 // Schritt-Motoren — alle Signale als Block GPIO 1-2 + 4-7
@@ -40,9 +40,9 @@
 #define PIN_STATUS_LED  48  // ESP32-S3 N16R8: WS2812 RGB an IO48
 #define USE_RGB_LED     1
 
-// ---------- Stepper-Defaults ----------
-const float DEFAULT_SPEED_ML        = 3.6f;   // ml/Minute
-const float DEFAULT_ACCELERATION_ML = 1.8f;   // ml/Minute²
+// Stepper-Defaults (stepsPerSec, accelPerSec2) liegen in pumps.h.
+// Anti-Drip-Defaults ebenfalls in pumps.h.
+// Werte werden aus Firestore-Settings gesynct und in NVS persistiert.
 
 // ---------- Intervalle ----------
 const unsigned long HEARTBEAT_INTERVAL_MS    = 30 * 1000UL;

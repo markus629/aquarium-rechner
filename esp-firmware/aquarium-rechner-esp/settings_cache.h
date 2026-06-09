@@ -2,7 +2,17 @@
 // Settings-Cache (Firestore → ESP)
 // =============================================================
 // Hält System-Settings im RAM und persistiert sie in NVS.
-// Wird für Tag/Nacht-Entscheidung, Mg-Ratio etc. gebraucht.
+// Sync von Firestore alle 2 Minuten + initiales Laden aus NVS.
+//
+// Felder:
+//   autoDosing          - Master-Schalter Auto-Dosierung
+//   otaAutoUpdate       - Auto-Install neuer GitHub-Releases
+//   dosingsPerDay       - 2/3/4/6/8/12 (Anzahl Dosier-Intervalle/Tag)
+//   healthcheckUrl      - externer Healthcheck-Ping (z.B. healthchecks.io)
+//   usePhBasedKHDosing  - Tag/Nacht-Schaltung via pH (statt Uhrzeit)
+//   phThresholdForKHNight, khNightStart, khNightEnd
+//   magnesiumRatio      - Mg-Dosis in % der Ca-Dosis
+//   Stepper-Konfig wird in pumps:: gehalten, hier nur gesynct
 // =============================================================
 #pragma once
 

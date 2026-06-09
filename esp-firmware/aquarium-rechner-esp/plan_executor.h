@@ -1,10 +1,12 @@
 // =============================================================
 // Plan-Executor + Command-Dispatcher
 // =============================================================
-// Portiert die bewährte Logik aus 088_sketch_sep3a_01.ino:
+// Portiert + erweitert die Logik aus 088_sketch_sep3a_01.ino:
 //
-// - Trigger-Fenster: NUR in Minute 10-15 jeder GERADEN Stunde
-//   (0:10, 2:10, 4:10, ..., 22:10) — deterministisches 2-h-Raster
+// - Trigger-Fenster: NUR in Minute 10-15 einer "Dosier-Stunde".
+//   Dosier-Stunde = Stunde wo (hour % intervalHours == 0)
+//   bei 12×/Tag: 0,2,4,…,22 / bei 6×/Tag: 0,4,8,12,16,20 / etc.
+// - Frequenz wählbar via settings_cache::dosingsPerDay
 // - Pro Stunde dedupliziert via lastDosageTimeCache[] pro Typ
 // - Pro Typ wird geprüft: gibt es eine spezifische Plan-Dose in dieser
 //   Stunde (AUSGLEICH-Phase) oder nicht (ERHALTUNG-Phase)
@@ -12,6 +14,10 @@
 //   gepackt → laufen sequentiell ab via Queue
 // - KH-Tag/Nacht-Entscheidung zur Laufzeit (pH-basiert oder Uhrzeit)
 // - KH-Nacht: ml × 0.5 (Konzentrat ist doppelt konzentriert)
+//
+// pH-Probe wird in Minute :05-:08 derselben Dosier-Stunden geschrieben
+// (5 Min vor der eigentlichen Dosis, sodass Tag/Nacht-Entscheidung
+// einen frischen pH-Wert hat).
 //
 // Cached Plan + Settings + Kalibrierung + Maintenance-Timestamps im NVS.
 // =============================================================
@@ -293,7 +299,7 @@ void tickPhCalibration() {
   phCal.active = false;
 }
 
-// ---------- pH-Probe schreiben — :05 jeder geraden Stunde ----------
+// ---------- pH-Probe schreiben — :05 jeder Dosier-Stunde ----------
 // 5 Minuten vor Dosis-Trigger, sodass aktueller pH-Wert in dosings/items
 // landet UND beim Trigger um :10 für die Tag/Nacht-Entscheidung verfügbar ist.
 void checkPhSampleSchedule() {
@@ -302,7 +308,7 @@ void checkPhSampleSchedule() {
   if (now < 1700000000) return;
   struct tm t; localtime_r(&now, &t);
 
-  // Trigger: Minute 5 jeder geraden Stunde
+  // Trigger: Minute 5 jeder Dosier-Stunde (hour % intervalHours == 0)
   // Dosier-Intervall aus Settings (12/Tag = 2h, 6/Tag = 4h, etc.)
   if (settings_cache::intervalHours() <= 0) return;
   if (t.tm_hour % settings_cache::intervalHours() != 0) return;
@@ -557,7 +563,7 @@ bool getPlanArray(FirebaseJson &doc, const char* fieldKey, FirebaseJsonArray &ou
 }
 
 // ---------- Auto-Dosing-Sequenz prüfen ----------
-// Wird alle 30s aufgerufen, fired aber nur in Minute 10-15 gerader Stunden.
+// Wird alle 30s aufgerufen, fired aber nur in Minute 10-15 einer Dosier-Stunde.
 void checkAutoDosingSequence() {
   unsigned long ms = millis();
   if (lastSequenceCheckMs != 0 && ms - lastSequenceCheckMs < SEQUENCE_CHECK_INTERVAL_MS) return;
@@ -576,7 +582,7 @@ void checkAutoDosingSequence() {
   struct tm t;
   localtime_r(&now, &t);
 
-  // Trigger-Fenster: Minute 10-15 in gerader Stunde
+  // Trigger-Fenster: Minute 10-15 in einer Dosier-Stunde (hour % intervalHours == 0)
   if (settings_cache::intervalHours() <= 0) return;
   if (t.tm_hour % settings_cache::intervalHours() != 0 ||
       t.tm_min < 10 || t.tm_min > 15) return;

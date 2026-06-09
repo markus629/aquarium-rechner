@@ -1,26 +1,32 @@
 // =============================================================
 //   Aquarium-Rechner ESP-Firmware
 //   ===============================
-//   Board:      ESP32-S3 N16R8 (16 MB Flash, 8 MB PSRAM)
-//   IDE:        Arduino 2.x mit "ESP32 by Espressif Systems" Boards
-//   Libraries:  Firebase ESP Client (Mobizt), FastAccelStepper, ArduinoJson v7
+//   Board:      ESP32-S3 N16R8 (16 MB Flash, 8 MB OPI PSRAM)
+//   IDE:        Arduino 2.x mit "ESP32 by Espressif Systems" Boards (Core 3.x)
+//   Partition:  16M Flash (3MB APP/9.9MB FATFS)
 //
-//   Session A (jetzt):
-//     - WiFi-Setup-Portal (Captive Portal)
-//     - Firebase Auth (E-Mail + Passwort)
-//     - Heartbeat alle 30 s
-//     - Command-Polling-Struktur (adaptive Geschwindigkeit)
-//     - pH-Sensor mit Mittelwert
-//     - Stepper-Init (4 Pumpen)
-//     - OTA-Update-Check (alle 6 h)
-//     - 3× Power-Cycle = Setup-Reset
+//   Libraries:
+//     - Firebase Arduino Client (Mobizt)
+//     - FastAccelStepper
+//     - ArduinoJson v7
+//     - RTClib (DS3231)
+//     - Adafruit_NeoPixel (Status-LED WS2812)
 //
-//   Session B (folgt):
-//     - Dosier-Plan ausführen
-//     - Live-Kalibrierung
-//     - Manuelle Commands abarbeiten
-//     - NTP + DS3231 RTC-Sync
-//     - LittleFS Plan-Cache (Offline-Fallback)
+//   Funktionsumfang:
+//     - WiFi-Setup-Portal (Captive Portal, 3× Power-Cycle = Reset)
+//     - Firebase Auth (E-Mail + Passwort) + Firestore-Sync
+//     - 4-Pumpen-Dosier-Anlage (Ca, Mg, KH-Tag, KH-Nacht) mit Anti-Drip
+//     - Live-Pumpen-Kalibrierung + Manual-Dosing via Web-Command
+//     - pH-Sensor mit gleitendem Mittelwert + 2-Punkt-Kalibrierung
+//     - DS3231 RTC + NTP-Sync (überlebt Stromausfall ohne Internet)
+//     - Plan-Cache in NVS (25 h Offline-Fallback)
+//     - Auto-Dosierung mit wählbarer Frequenz (2/3/4/6/8/12 pro Tag)
+//     - KH-Tag/Nacht-Umschaltung anhand pH oder Uhrzeit
+//     - Heartbeat alle 30 s mit Doses-Statistik + WLAN-Status
+//     - Healthcheck-Ping (z.B. healthchecks.io) für Ausfall-Alarm
+//     - OTA-Update aus GitHub Releases (mit Schutzfenster zur Dosier-Zeit)
+//     - WS2812 Status-LED (GPIO 48) — zeigt System-Zustand
+//     - Upload-Buffer (NVS, 50 Items) für Offline-Resilienz bei Doses + pH
 // =============================================================
 
 #include <Arduino.h>

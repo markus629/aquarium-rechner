@@ -1,11 +1,19 @@
 // =============================================================
 // Stepper-Pumpen-Steuerung
 // =============================================================
-// Vier Pumpen mit gemeinsamem STEP/DIR, separater ENABLE-Leitung.
-// Zur Dosis-Zeit wird die ENABLE-Leitung der gewählten Pumpe LOW gezogen,
-// nach Beendigung wieder HIGH.
+// Vier Pumpen mit gemeinsamem STEP/DIR, separater ENABLE-Leitung
+// pro Pumpe. Zur Dosis-Zeit wird die ENABLE-Leitung der gewählten
+// Pumpe LOW gezogen, nach Beendigung wieder HIGH.
 //
-// Verwendet FastAccelStepper-Lib.
+// FastAccelStepper-Setup: setEnablePin(PIN_UNDEFINED) + setAutoEnable(false)
+// → die Lib steuert KEIN EN, das machen wir per digitalWrite() selbst.
+// move() (relativ) für saubere Anti-Drip-Sequenzen ohne Position-Drift.
+//
+// Anti-Drip-State-Machine: PRIME (vorwärts +ml) → DOSE (vorwärts ml)
+//                          → RETRACT (rückwärts −ml).
+// Prime + Retract heben sich auf → effektives Fördervolumen = ml.
+//
+// Kalibrierung (stepsPerML) wird in NVS persistiert, geladen beim Boot.
 // =============================================================
 #pragma once
 
