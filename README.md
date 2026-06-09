@@ -32,7 +32,7 @@ Komplette Steuerung für eine selbstgebaute 4-Pumpen-Dosier-Anlage (Calcium, Mag
 - OTA-Firmware-Update mit einem Klick
 
 **ESP32-Firmware:**
-- Plan-Cache lokal (NVS) → läuft bis zu 25 h offline weiter
+- Plan-Cache lokal (NVS) → läuft offline beliebig lange weiter (Anpassungs-Doses anhand absoluter Timestamps, danach unbegrenzte Erhaltungs-Dose)
 - DS3231-RTC-Sync → Dosier-Plan läuft auch nach Stromausfall ohne Internet weiter
 - Auto-Dosierung (per Schalter im Web aktivierbar)
 - Anti-Drip-Sequenz (Prime → Dose → Retract) für sauberes Stop-Verhalten

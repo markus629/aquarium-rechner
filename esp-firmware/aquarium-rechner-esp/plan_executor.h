@@ -123,13 +123,11 @@ bool dequeueDose(QueuedDose &out) {
 
 // ---------- Plan-Cache (NVS) ----------
 String cachedPlanJson = "";
-unsigned long cachedPlanTimeMs = 0;
 
 void loadFromNVS() {
   Preferences p;
   p.begin(NVS_NAMESPACE, true);
   cachedPlanJson = p.getString("planJson", "");
-  cachedPlanTimeMs = (unsigned long)p.getULong("planTime", 0);
   for (int i = 0; i < DT_COUNT; i++) {
     String key = "lastD" + String(i);
     lastDosageTimeCache[i] = (time_t)p.getULong(key.c_str(), 0);
@@ -151,7 +149,6 @@ void savePlanCacheToNVS(const String &json) {
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
   p.putString("planJson", json);
-  p.putULong("planTime", (unsigned long)(millis()));
   p.end();
 }
 
@@ -184,15 +181,18 @@ void syncPlan() {
   doc.toString(json);
   if (json.length() > 0 && json != cachedPlanJson) {
     cachedPlanJson = json;
-    cachedPlanTimeMs = now;
     savePlanCacheToNVS(json);
     Serial.printf("[Plan] aktualisiert (%d Zeichen)\n", json.length());
   }
 }
 
+// Plan ist nur dann "stale" wenn gar keiner gecached ist.
+// Kein Zeit-Limit: Anpassungs-Doses haben absolute Timestamps und werden
+// nach Ablauf einfach übersprungen — übrig bleibt die Erhaltungsdose
+// (date: 0), die unbegrenzt gültig ist. Sobald der User wieder misst oder
+// Settings ändert, wird der Plan automatisch ersetzt.
 bool isPlanCacheStale() {
-  if (cachedPlanJson.length() == 0) return true;
-  return (millis() - cachedPlanTimeMs) > PLAN_CACHE_TTL_MS;
+  return cachedPlanJson.length() == 0;
 }
 
 // ---------- Dose-Sequenz aus Queue starten ----------
@@ -573,7 +573,7 @@ void checkAutoDosingSequence() {
   if (!settings_cache::autoDosing) return;  // Master-Schalter aus → keine Auto-Doses
   if (cachedPlanJson.length() == 0) return;
   if (isPlanCacheStale()) {
-    Serial.println("[Plan] Cache zu alt (>25h) — keine Auto-Doses");
+    Serial.println("[Plan] Kein Plan im Cache — keine Auto-Doses");
     return;
   }
 

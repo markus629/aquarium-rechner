@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.3.0"
+#define FW_VERSION "0.3.1"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -51,7 +51,6 @@ const unsigned long COMMAND_POLL_FAST_MS     =  1 * 1000UL;  // 1s während lauf
 const unsigned long PLAN_CHECK_INTERVAL_MS   = 60 * 1000UL;
 const unsigned long PH_SAMPLE_INTERVAL_MS    =       100UL;  // ADC-Sampling
 const unsigned long OTA_CHECK_INTERVAL_MS    =  6 * 3600UL * 1000UL; // alle 6 h
-const unsigned long PLAN_CACHE_TTL_MS        = 25 * 3600UL * 1000UL; // 25 h offline
 
 // ---------- WiFi-Setup ----------
 #define SETUP_AP_SSID   "AquariumRechner-Setup"
