@@ -89,7 +89,11 @@
   .meas-head { padding:0.6rem 1rem; background:var(--bg); display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.92rem; }
   .meas-toggle { background:none; border:none; color:var(--blue); cursor:pointer; font-size:0.82rem; font-weight:600; font-family:inherit; padding:0.2rem 0.4rem; }
   .meas-toggle:hover { text-decoration:underline; }
-  .meas-section:not(.expanded) tbody tr:nth-child(n+4) { display:none; }
+  /* KH/Ca: zugeklappt nur letzte 3 Zeilen */
+  #meas-kh:not(.expanded) tbody tr:nth-child(n+4),
+  #meas-ca:not(.expanded) tbody tr:nth-child(n+4) { display:none; }
+  /* pH: zugeklappt nur Zeilen der letzten 24 h (markiert via .ph-old) */
+  #meas-ph:not(.expanded) tbody tr.ph-old { display:none; }
 
   /* Input-Formular Kalkhaushalt */
   .inline-form { display:flex; gap:0.7rem; flex-wrap:wrap; align-items:flex-end; }
@@ -441,10 +445,16 @@
       <div class="card">
         <h2>pH-Verlauf</h2>
         <div class="chart-box" id="chart-box-ph"></div>
-        <table class="data-table">
-          <thead><tr><th>Zeit</th><th class="num">pH</th><th>Quelle</th><th class="act">Löschen</th></tr></thead>
-          <tbody id="ph-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
-        </table>
+        <div class="meas-section" id="meas-ph">
+          <div class="meas-head">
+            <span>pH-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(letzte 24 h sichtbar)</span></span>
+            <button class="meas-toggle" data-meas="meas-ph" style="display:none">Alle anzeigen ▾</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Zeit</th><th class="num">pH</th><th>Quelle</th><th class="act">Löschen</th></tr></thead>
+            <tbody id="ph-tbody"><tr><td class="empty" colspan="4">Lade …</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
     <div id="tab-device" class="tab-content">
@@ -1156,16 +1166,38 @@
       ], { title: "pH-Verlauf", fract: 2 });
 
       const tbody = document.getElementById("ph-tbody");
+      // Toggle-Button + 24h-Markierung
+      const sec = document.getElementById("meas-ph");
+      const toggle = sec?.querySelector(".meas-toggle");
+      const cutoff = Math.floor(Date.now() / 1000) - 24 * 3600;
+      // Anzahl "alte" (älter als 24h, aber nicht in den neuesten 3)
+      const recentCount = items.filter((m, i) => m.timestamp >= cutoff || i < 3).length;
+      const hiddenCount = items.length - recentCount;
+      if (toggle) {
+        if (hiddenCount > 0) {
+          toggle.style.display = "inline-block";
+          toggle.dataset.total = items.length;
+          toggle.textContent = sec.classList.contains("expanded")
+            ? "Weniger anzeigen ▴" : `Alle anzeigen (${items.length}) ▾`;
+        } else {
+          toggle.style.display = "none";
+          sec.classList.remove("expanded");
+        }
+      }
       if (!items.length) {
         tbody.innerHTML = `<tr><td class="empty" colspan="4">Keine pH-Messungen erfasst</td></tr>`;
       } else {
-        tbody.innerHTML = items.map(m => `
-          <tr>
+        tbody.innerHTML = items.map((m, i) => {
+          // Zeilen älter als 24h (außer den neuesten 3) zugeklappt ausblenden
+          const isOld = m.timestamp < cutoff && i >= 3;
+          return `
+          <tr class="${isOld ? "ph-old" : ""}">
             <td>${fmtDateTime(m.timestamp)}</td>
             <td class="num">${Number(m.value).toFixed(2)}</td>
             <td>${m.source === "esp" ? "ESP" : "Manuell"}</td>
             <td class="act"><button class="row-del" data-del-ph="${m.id}" title="Löschen">✕</button></td>
-          </tr>`).join("");
+          </tr>`;
+        }).join("");
         tbody.querySelectorAll("[data-del-ph]").forEach(btn => {
           btn.onclick = async () => {
             if (!confirm("pH-Messung löschen?")) return;
