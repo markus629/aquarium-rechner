@@ -84,6 +84,12 @@
   .collapsible-body { display:none; }
   .collapsible.open .collapsible-body { display:block; }
   .collapsible-body .data-table th, .collapsible-body .data-table td:first-child { padding-left:1rem; }
+  /* Mess-Sektion: zeigt standardmäßig nur die letzten 3 Zeilen */
+  .meas-section { border:1px solid var(--border); border-radius:8px; margin-bottom:0.8rem; overflow:hidden; }
+  .meas-head { padding:0.6rem 1rem; background:var(--bg); display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.92rem; }
+  .meas-toggle { background:none; border:none; color:var(--blue); cursor:pointer; font-size:0.82rem; font-weight:600; font-family:inherit; padding:0.2rem 0.4rem; }
+  .meas-toggle:hover { text-decoration:underline; }
+  .meas-section:not(.expanded) tbody tr:nth-child(n+4) { display:none; }
 
   /* Input-Formular Kalkhaushalt */
   .inline-form { display:flex; gap:0.7rem; flex-wrap:wrap; align-items:flex-end; }
@@ -285,30 +291,26 @@
 
         <div class="chart-box" id="chart-box-kh-ca"></div>
 
-        <div class="collapsible open" id="coll-kh">
-          <div class="collapsible-head" data-coll="coll-kh">
+        <div class="meas-section" id="meas-kh">
+          <div class="meas-head">
             <span>KH-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="kalk-kh-count">0</span>)</span></span>
-            <span class="arrow">▶</span>
+            <button class="meas-toggle" data-meas="meas-kh" style="display:none">Alle anzeigen ▾</button>
           </div>
-          <div class="collapsible-body">
-            <table class="data-table">
-              <thead><tr><th>Datum</th><th class="num">°dKH</th><th class="act">Löschen</th></tr></thead>
-              <tbody id="kalk-kh-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
-            </table>
-          </div>
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th class="num">°dKH</th><th class="act">Löschen</th></tr></thead>
+            <tbody id="kalk-kh-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+          </table>
         </div>
 
-        <div class="collapsible open" id="coll-ca">
-          <div class="collapsible-head" data-coll="coll-ca">
+        <div class="meas-section" id="meas-ca">
+          <div class="meas-head">
             <span>Calcium-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="kalk-ca-count">0</span>)</span></span>
-            <span class="arrow">▶</span>
+            <button class="meas-toggle" data-meas="meas-ca" style="display:none">Alle anzeigen ▾</button>
           </div>
-          <div class="collapsible-body">
-            <table class="data-table">
-              <thead><tr><th>Datum</th><th class="num">mg/L</th><th class="act">Löschen</th></tr></thead>
-              <tbody id="kalk-ca-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
-            </table>
-          </div>
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th class="num">mg/L</th><th class="act">Löschen</th></tr></thead>
+            <tbody id="kalk-ca-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -919,9 +921,35 @@
     };
   });
 
+  // Mess-Sektion ein-/ausklappen (zeigt mehr als die letzten 3)
+  document.querySelectorAll(".meas-toggle").forEach(btn => {
+    btn.onclick = () => {
+      const sec = document.getElementById(btn.dataset.meas);
+      if (!sec) return;
+      const expanded = sec.classList.toggle("expanded");
+      const total = btn.dataset.total || "";
+      btn.textContent = expanded ? "Weniger anzeigen ▴" : `Alle anzeigen (${total}) ▾`;
+    };
+  });
+
   function renderMeasurementTable(tbodyId, items, fractionDigits, type) {
     const tbody = document.getElementById(tbodyId);
     if (!tbody) return;
+    // Toggle-Button: nur zeigen wenn mehr als 3 Werte vorhanden
+    const sec = tbody.closest(".meas-section");
+    const toggle = sec?.querySelector(".meas-toggle");
+    if (toggle) {
+      if (items.length > 3) {
+        toggle.style.display = "inline-block";
+        toggle.dataset.total = items.length;
+        // Label an aktuellen Zustand anpassen (bleibt erhalten beim Re-Render)
+        toggle.textContent = sec.classList.contains("expanded")
+          ? "Weniger anzeigen ▴" : `Alle anzeigen (${items.length}) ▾`;
+      } else {
+        toggle.style.display = "none";
+        sec.classList.remove("expanded");
+      }
+    }
     if (!items.length) {
       tbody.innerHTML = `<tr><td class="empty" colspan="3">Keine Messungen erfasst</td></tr>`;
       return;
