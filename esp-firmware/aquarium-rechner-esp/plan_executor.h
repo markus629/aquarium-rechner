@@ -331,6 +331,27 @@ void checkPhSampleSchedule() {
   Serial.printf("[pH] :05-Sample: %.2f → measurements\n", ph);
 }
 
+// ---------- Abbruch: laufende Aktion + Queue stoppen ----------
+// Wird vom Stop-Command gerufen — funktioniert auch MITTEN in einer
+// laufenden Dose/Kalibrierung (pollCommands lässt stop immer durch).
+void abortAll() {
+  pumps::emergencyStop();
+  queueHead = queueTail;  // restliche Sequenz-Queue verwerfen
+  if (current.active) {
+    // Abgebrochene Dose als failed dokumentieren (Statistik + Verlauf)
+    if (current.action == "dose") {
+      time_t now; time(&now);
+      if (now > 1700000000) recordDose(now, false);
+      firebase_sync::addDosing(current.pump, current.ml,
+                               current.fromPlan ? DT_LABELS[current.dosageType] : "manual",
+                               current.fromPlan, 1.0f, false);
+    }
+    current.active = false;
+  }
+  phCal.active = false;
+  Serial.println("[Cmd] ABBRUCH — Aktion + Queue gestoppt");
+}
+
 // ---------- Command-Dispatch (Web-Commands) ----------
 bool startCommand(const String &cmdId, const String &action, int pump, float ml, long steps, float phValue) {
   if (current.active || phCal.active) {
@@ -338,7 +359,7 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
     return false;
   }
   if (action == "stop") {
-    pumps::emergencyStop();
+    abortAll();
     firebase_sync::updateCommandStatus("done");
     return true;
   }
@@ -450,9 +471,10 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
         saveLastDosageTime(current.dosageType);
       }
     }
+    // Kanister-Dekrement übernimmt flushBuffer beim Upload der Dose
+    // (offline-sicher — geht im Urlaubs-Puffer nicht verloren)
     firebase_sync::addDosing(current.pump, current.ml,
                               DT_LABELS[current.dosageType], true, 1.0f, success);
-    if (success) firebase_sync::decrementContainerLevel(current.pump, current.ml);
     Serial.printf("[Plan] DOSE %s %s (%lums)\n",
                   DT_LABELS[current.dosageType],
                   success ? "done" : "FAILED", duration);
@@ -464,8 +486,8 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     if (!success && errorMsg) result.set("error/stringValue", errorMsg);
     firebase_sync::updateCommandStatus(success ? "done" : "failed", &result);
     if (current.action == "dose" && success) {
+      // Kanister-Dekrement übernimmt flushBuffer beim Upload
       firebase_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
-      firebase_sync::decrementContainerLevel(current.pump, current.ml);
     }
     Serial.printf("[Cmd] %s (%lums)\n", success ? "done" : "FAILED", duration);
   }
@@ -481,7 +503,8 @@ void pollCommands() {
   unsigned long interval = (current.active || !queueEmpty() || phCal.active) ? COMMAND_POLL_FAST_MS : COMMAND_POLL_NORMAL_MS;
   if (lastCommandPollMs != 0 && now - lastCommandPollMs < interval) return;
   lastCommandPollMs = now;
-  if (current.active || phCal.active) return;
+  // WICHTIG: auch während laufender Aktion weiter pollen — sonst kommt
+  // ein Stop-Command nie an. Nicht-Stop-Commands warten unten einfach.
 
   FirebaseJson doc;
   if (!firebase_sync::fetchActiveCommand(doc)) return;
@@ -504,6 +527,18 @@ void pollCommands() {
   if (fId.stringValue == lastProcessedCmdId) return;
 
   String cmdId = fId.stringValue;
+
+  // Stop hat Vorrang und darf IMMER durch — auch während laufender Aktion
+  if (fAction.stringValue == "stop") {
+    lastProcessedCmdId = cmdId;
+    abortAll();
+    firebase_sync::updateCommandStatus("done");
+    return;
+  }
+
+  // Andere Commands warten bis nichts mehr läuft (bleiben pending)
+  if (current.active || phCal.active) return;
+
   lastProcessedCmdId = cmdId;
   Serial.printf("[Cmd] Pending entdeckt: action=%s id=%s\n", fAction.stringValue.c_str(), cmdId.c_str());
 
@@ -571,11 +606,7 @@ void checkAutoDosingSequence() {
 
   if (current.active || !queueEmpty()) return;
   if (!settings_cache::autoDosing) return;  // Master-Schalter aus → keine Auto-Doses
-  if (cachedPlanJson.length() == 0) return;
-  if (isPlanCacheStale()) {
-    Serial.println("[Plan] Kein Plan im Cache — keine Auto-Doses");
-    return;
-  }
+  if (isPlanCacheStale()) return;           // kein Plan im Cache
 
   time_t now; time(&now);
   if (now < 1700000000) return;
@@ -711,6 +742,24 @@ void begin() {
   }
 }
 
+// Einmalig nach Firebase-Login: pH-Kalibrierung aus Firestore übernehmen,
+// falls lokal (NVS) keine vorhanden ist. Deckt ESP-Tausch + JSON-Restore ab.
+void syncPhCalibrationOnce() {
+  static bool done = false;
+  if (done || ph_sensor::isCalibrated() || !firebase_sync::isReady()) return;
+  done = true;
+  float v4 = NAN, v7 = NAN; bool cal = false;
+  if (firebase_sync::fetchPhCalibration(v4, v7, cal) && cal) {
+    ph_sensor::setCalibration(v4, v7);
+    Preferences p;
+    p.begin(NVS_NAMESPACE, false);
+    p.putFloat("phV4", v4);
+    p.putFloat("phV7", v7);
+    p.end();
+    Serial.printf("[pH] Kalibrierung aus Firestore übernommen: V4=%.4f V7=%.4f\n", v4, v7);
+  }
+}
+
 void tick() {
   checkPumpFinished();
   tickPhCalibration();             // pH-Kalibrierungs-Sampling
@@ -718,6 +767,7 @@ void tick() {
   syncPumpConfigs();
   settings_cache::sync();
   syncPlan();
+  syncPhCalibrationOnce();         // pH-Kalib aus Cloud falls NVS leer
   checkPhSampleSchedule();         // pH-Probe um :05 schreiben
   checkAutoDosingSequence();       // Dosier-Sequenz um :10
   firebase_sync::flushBuffer();    // Backlog-Uploads versuchen

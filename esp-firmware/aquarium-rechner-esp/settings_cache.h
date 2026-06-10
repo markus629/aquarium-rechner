@@ -138,12 +138,15 @@ void sync() {
     if (nv != magnesiumRatio) { magnesiumRatio = nv; changed = true; }
   }
   // Schritt-Geschwindigkeit / -Beschleunigung
-  if (doc.get(v, "fields/stepsPerSec/integerValue") && v.success) {
-    uint32_t nv = (uint32_t)v.intValue;
-    if (nv != pumps::stepsPerSec) { pumps::stepsPerSec = nv; changed = true; }
+  // (integer + double Fallback — Firestore typisiert nach Eingabewert)
+  if ((doc.get(v, "fields/stepsPerSec/integerValue") && v.success) ||
+      (doc.get(v, "fields/stepsPerSec/doubleValue") && v.success)) {
+    uint32_t nv = (uint32_t)v.floatValue;
+    if (nv > 0 && nv != pumps::stepsPerSec) { pumps::stepsPerSec = nv; changed = true; }
   }
-  if (doc.get(v, "fields/accelStepsPerSec2/integerValue") && v.success) {
-    uint32_t nv = (uint32_t)v.intValue;
+  if ((doc.get(v, "fields/accelStepsPerSec2/integerValue") && v.success) ||
+      (doc.get(v, "fields/accelStepsPerSec2/doubleValue") && v.success)) {
+    uint32_t nv = (uint32_t)v.floatValue;
     if (nv != pumps::accelPerSec2) { pumps::accelPerSec2 = nv; changed = true; }
   }
   // Anti-Drip Settings
@@ -159,12 +162,14 @@ void sync() {
     float nv = v.floatValue;
     if (nv != pumps::antiDripML) { pumps::antiDripML = nv; changed = true; }
   }
-  if (doc.get(v, "fields/antiDripStepsPerSec/integerValue") && v.success) {
-    uint32_t nv = (uint32_t)v.intValue;
-    if (nv != pumps::antiDripStepsPerSec) { pumps::antiDripStepsPerSec = nv; changed = true; }
+  if ((doc.get(v, "fields/antiDripStepsPerSec/integerValue") && v.success) ||
+      (doc.get(v, "fields/antiDripStepsPerSec/doubleValue") && v.success)) {
+    uint32_t nv = (uint32_t)v.floatValue;
+    if (nv > 0 && nv != pumps::antiDripStepsPerSec) { pumps::antiDripStepsPerSec = nv; changed = true; }
   }
-  if (doc.get(v, "fields/antiDripAccelStepsPerSec2/integerValue") && v.success) {
-    uint32_t nv = (uint32_t)v.intValue;
+  if ((doc.get(v, "fields/antiDripAccelStepsPerSec2/integerValue") && v.success) ||
+      (doc.get(v, "fields/antiDripAccelStepsPerSec2/doubleValue") && v.success)) {
+    uint32_t nv = (uint32_t)v.floatValue;
     if (nv != pumps::antiDripAccelPerSec2) { pumps::antiDripAccelPerSec2 = nv; changed = true; }
   }
   if (changed) {

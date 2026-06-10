@@ -19,14 +19,14 @@
 //     - Live-Pumpen-Kalibrierung + Manual-Dosing via Web-Command
 //     - pH-Sensor mit gleitendem Mittelwert + 2-Punkt-Kalibrierung
 //     - DS3231 RTC + NTP-Sync (überlebt Stromausfall ohne Internet)
-//     - Plan-Cache in NVS (25 h Offline-Fallback)
+//     - Plan-Cache in NVS (läuft offline unbegrenzt weiter)
 //     - Auto-Dosierung mit wählbarer Frequenz (2/3/4/6/8/12 pro Tag)
 //     - KH-Tag/Nacht-Umschaltung anhand pH oder Uhrzeit
 //     - Heartbeat alle 30 s mit Doses-Statistik + WLAN-Status
 //     - Healthcheck-Ping (z.B. healthchecks.io) für Ausfall-Alarm
 //     - OTA-Update aus GitHub Releases (mit Schutzfenster zur Dosier-Zeit)
 //     - WS2812 Status-LED (GPIO 48) — zeigt System-Zustand
-//     - Upload-Buffer (NVS, 50 Items) für Offline-Resilienz bei Doses + pH
+//     - Upload-Buffer (FATFS, 800 Items ≈ 2,5 Wochen) für Doses + pH
 // =============================================================
 
 #include <Arduino.h>
@@ -87,36 +87,47 @@ void setup() {
   String ssid, wifiPass, fbEmail, fbPass;
   setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
 
-  // WLAN verbinden
+  // WLAN verbinden. WICHTIG: Bei Fehlschlag NICHT ins Setup-Portal!
+  // Szenario Stromausfall: Router bootet langsamer als der ESP → WLAN noch
+  // nicht da. Mit gespeicherter Config + Plan-Cache + RTC kann der ESP
+  // trotzdem dosieren — der WiFi-Watchdog im Loop verbindet später nach.
+  // (Vorher: Setup-Portal → 10-min-Reboot-Schleife → Boot-Count → Config
+  //  gelöscht → Aquarium unversorgt. Genau das darf nie passieren.)
   if (!setup_portal::connectWifi(ssid, wifiPass)) {
-    Serial.println("[Boot] WLAN fehlgeschlagen — Setup-Portal");
-    setup_portal::runSetupPortal();
-    return;
+    Serial.println("[Boot] WLAN (noch) nicht erreichbar — laufe offline weiter, Watchdog versucht Reconnect");
+  } else {
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
+    if (!firebase_sync::begin(fbEmail, fbPass)) {
+      Serial.println("[Boot] Firebase-Login fehlgeschlagen — retry über Loop");
+    }
   }
-
-  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
-
-  // Boot-Count zurücksetzen sobald wir stabil 4 s laufen
-  // → erfolgt im Loop nach 4 s
-
-  // Firebase einloggen
-  if (!firebase_sync::begin(fbEmail, fbPass)) {
-    Serial.println("[Boot] Firebase-Login fehlgeschlagen — bleibe trotzdem online, retry später");
-  }
-
-  // Boot-Count sofort zurücksetzen — verhindert ungewollten Setup-Portal-Trigger
-  // wenn der User mehrfach hintereinander flasht/resetet während Tests.
-  setup_portal::resetBootCount();
 
   status_led::set(status_led::S_IDLE);
   Serial.println("[Boot] Setup fertig — Loop startet");
 }
 
 void loop() {
-  // Boot-Count reset nach 4 s stabiler Uptime
-  // Boot-Count wird jetzt schon in setup() nach erfolgreichem Init resetted
-  static bool bootCountReset = true;
-  if (false && !bootCountReset && millis() - bootMs > 4000) {
+  // Boot-Count nach 8 s stabiler Uptime zurücksetzen.
+  // So zählt der 3×-Power-Cycle-Reset nur SCHNELLE Stromunterbrechungen
+  // (User kappt absichtlich <8 s nach Boot) — normale Stromausfälle oder
+  // Offline-Betrieb löschen die Config nie.
+  static bool bootCountReset = false;
+  if (!bootCountReset && millis() - bootMs > 8000) {
+    setup_portal::resetBootCount();
+    bootCountReset = true;
+  }
+
+  // Firebase-Lazy-Init: wenn WLAN erst nach dem Boot kam (Watchdog),
+  // NTP + Firebase-Login hier nachholen.
+  static unsigned long lastFbInitTryMs = 0;
+  if (WiFi.status() == WL_CONNECTED && !firebase_sync::ready
+      && millis() - lastFbInitTryMs > 60000) {
+    lastFbInitTryMs = millis();
+    Serial.println("[Boot] WLAN da — hole NTP + Firebase-Login nach");
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
+    String ssid, wifiPass, fbEmail, fbPass;
+    setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
+    firebase_sync::begin(fbEmail, fbPass);
   }
 
   // pH-Sampling (alle 100 ms)
@@ -189,11 +200,14 @@ void loop() {
   // DS3231 mit NTP-Stand updaten (max 1× pro Tag intern)
   rtc_sync::syncToRtcIfDue();
 
-  // WLAN-Watchdog: wenn wir die Verbindung verlieren, retry
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WiFi] verloren — versuche Reconnect");
+  // WLAN-Watchdog: nicht-blockierender Reconnect alle 30 s.
+  // WICHTIG: kein delay() hier — im Offline-Betrieb (Urlaub!) muss die
+  // Loop voll weiterlaufen (Pumpen-Sequenzen, pH-Sampling, Plan-Trigger).
+  static unsigned long lastReconnectMs = 0;
+  if (WiFi.status() != WL_CONNECTED && millis() - lastReconnectMs > 30000) {
+    lastReconnectMs = millis();
+    Serial.println("[WiFi] getrennt — Reconnect-Versuch (non-blocking)");
     WiFi.reconnect();
-    delay(5000);
   }
 
   delay(50);

@@ -97,7 +97,10 @@ bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, const Heartbeat
   content.set("fields/rssi/integerValue", (int)WiFi.RSSI());
   content.set("fields/ip/stringValue", WiFi.localIP().toString().c_str());
   content.set("fields/uptimeSec/integerValue", (int)uptimeSec);
-  if (!isnan(phValue)) {
+  // WICHTIG: lastPh nur in die Update-Mask aufnehmen wenn auch gesendet —
+  // Felder in der Mask OHNE Inhalt werden von Firestore GELÖSCHT.
+  bool sendPh = !isnan(phValue);
+  if (sendPh) {
     content.set("fields/lastPh/doubleValue", phValue);
     content.set("fields/lastPhSamples/integerValue", phSamples);
   }
@@ -114,8 +117,9 @@ bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, const Heartbeat
   }
 
   String mask = "online,firmware,lastSeen,freeHeap,rssi,ip,uptimeSec,"
-                "lastPh,lastPhSamples,dosesTotal,dosesFailedTotal,"
+                "dosesTotal,dosesFailedTotal,"
                 "dosesOk24h,dosesFail24h,bufferQueueSize,pumpsCalibrated";
+  if (sendPh) mask += ",lastPh,lastPhSamples";
   return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathInfo().c_str(),
                                           content.raw(), mask.c_str());
 }
@@ -257,10 +261,20 @@ bool flushBuffer() {
                                           "voltage_pH4,voltage_pH7,isCalibrated,lastCalibratedAt");
   }
   if (ok) {
+    // Kanister-Dekrement passiert hier (statt direkt beim Dosieren):
+    // so geht es auch im Offline-Betrieb nicht verloren — es wird einfach
+    // zusammen mit der gepufferten Dose nachgeholt.
+    if (first.kind == upload_buffer::KIND_DOSE && first.success) {
+      decrementContainerLevel(first.pump, first.ml);
+    }
     Serial.printf("[Buffer] flushed (%d remaining)\n", (int)upload_buffer::queue.size() - 1);
     upload_buffer::queue.erase(upload_buffer::queue.begin());
     upload_buffer::save();
     upload_buffer::nextRetryAtMs = 0;
+    // Erfolg → nächster Flush darf sofort kommen (schnelles Abarbeiten
+    // großer Backlogs, z.B. nach Urlaub). 15-s-Intervall gilt nur als
+    // Grundtakt, Backoff nur nach Fehlern.
+    upload_buffer::lastFlushAttemptMs = 0;
     return true;
   } else {
     Serial.printf("[Buffer] flush FAIL (attempts=%d, %d in queue): %s\n",

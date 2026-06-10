@@ -253,6 +253,7 @@ int checkAndDisable() {
 
 void emergencyStop() {
   if (stepper) stepper->forceStop();
+  ds = {};   // Sequenz-State zurücksetzen — sonst verweigert runMl() für immer
   disableAllPumps();
   Serial.println("[Pumps] NOT-AUS");
 }

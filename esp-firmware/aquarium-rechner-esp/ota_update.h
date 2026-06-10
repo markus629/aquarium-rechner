@@ -102,13 +102,13 @@ bool fetchLatestRelease() {
   }
 
   // Stream-Parsing: nur tag_name + assets[*].{name,browser_download_url}
-  StaticJsonDocument<256> filter;
+  // (ArduinoJson-v7-API: JsonDocument wächst dynamisch, kein Size-Template)
+  JsonDocument filter;
   filter["tag_name"] = true;
-  JsonObject a = filter["assets"].createNestedObject();
-  a["name"] = true;
-  a["browser_download_url"] = true;
+  filter["assets"][0]["name"] = true;
+  filter["assets"][0]["browser_download_url"] = true;
 
-  DynamicJsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
   http.end();
   if (err) { Serial.printf("[OTA] JSON-Fehler: %s\n", err.c_str()); return false; }
@@ -155,6 +155,12 @@ bool checkAndUpdate(bool forceCheck = false) {
     Serial.println("[OTA] Schutzfenster (Dosier-Zeit) — Update verschoben, retry in ~25 Min");
     return false;
   }
+  // NIE rebooten während eine Pumpe läuft (auch manuelle Doses/Kalibrierungen
+  // außerhalb des Plan-Schutzfensters!)
+  if (pumps::isBusy() || pumps::ds.phase != pumps::PHASE_IDLE) {
+    Serial.println("[OTA] Pumpe aktiv — Update verschoben, retry in ~25 Min");
+    return false;
+  }
   Serial.printf("[OTA] Neue Version %s → starte Update\n", availableVersion.c_str());
   performUpdate(availableUrl);
   return true;
@@ -170,12 +176,6 @@ void tick() {
     // Schutzfenster aktiv — in ~25 Min nochmal probieren (dann sicher außerhalb)
     lastCheckMs = now - (OTA_CHECK_INTERVAL_MS - 25UL * 60UL * 1000UL);
   }
-}
-
-// Manueller Trigger (Command "otaCheck" aus dem Web)
-void triggerManualCheck() {
-  Serial.println("[OTA] Manueller Check angefordert");
-  checkAndUpdate(true);
 }
 
 } // namespace ota_update
