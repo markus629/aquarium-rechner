@@ -397,6 +397,7 @@ const DEFAULTS = {
   min:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.min])),
   max:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.max])),
   initial: Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.initial])),
+  nwg:     {},   // Nachweisgrenze des ICP-Labors pro Element (optional)
   dailyMl: 5,
   icpIntervalDays: 30, safetyDays: 10,
   capPct: 0.25, chartMonths: 0,
@@ -443,6 +444,7 @@ function loadState() {
           min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
           max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
           initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
+          nwg:     { ...(ps.nwg || {}) },
         },
         measurements: Array.isArray(p.measurements) ? p.measurements : []
       };
@@ -469,6 +471,7 @@ function applyStateFromSync(data) {
       min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
       max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
       initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
+      nwg:     { ...(ps.nwg || {}) },
     },
     measurements: Array.isArray(data.measurements) ? data.measurements : []
   };
@@ -576,6 +579,7 @@ function buildLimitsTable() {
       <td class="num">${numTxt("ideal",   e.key)}</td>
       <td class="num">${numTxt("max",     e.key)}</td>
       <td class="num">${numTxt("initial", e.key)}</td>
+      <td class="num">${numTxt("nwg",     e.key)}</td>
       <td class="action-cell"><button type="button" class="row-action edit" data-action="edit" data-key="${e.key}" title="Bearbeiten">✎</button></td>
     </tr>`;
   const elementRowEditable = e => `
@@ -587,6 +591,7 @@ function buildLimitsTable() {
       <td class="num">${numIn("ideal",   e.key)}</td>
       <td class="num">${numIn("max",     e.key)}</td>
       <td class="num">${numIn("initial", e.key)}</td>
+      <td class="num">${numIn("nwg",     e.key)}</td>
       <td class="action-cell" style="white-space:nowrap;">
         <button type="button" class="row-action save" data-action="save-edit" data-key="${e.key}" title="Speichern">✓</button>
         <button type="button" class="row-action danger" data-action="delete" data-key="${e.key}" title="Element löschen" style="margin-left:0.2rem;">−</button>
@@ -612,6 +617,7 @@ function buildLimitsTable() {
       <td class="num"><input type="number" step="any"  data-new="ideal"   placeholder="Optimal"></td>
       <td class="num"><input type="number" step="any"  data-new="max"     placeholder="Max"></td>
       <td class="num"><input type="number" step="any"  data-new="initial" placeholder="Anf."></td>
+      <td class="num"><input type="number" step="any"  data-new="nwg"     placeholder="NWG"></td>
       <td class="action-cell"><button type="button" class="row-action save" data-action="save-new" title="Neues Element speichern">✓</button></td>
     </tr>`;
   t.innerHTML = `
@@ -619,6 +625,7 @@ function buildLimitsTable() {
       <th>Gruppe</th><th>Sym.</th><th>Name</th>
       <th class="num">Min</th><th class="num">Optimal</th><th class="num">Max</th>
       <th class="num" title="ml-Konzentrat in der ersten Mischung">Anfangsdosis</th>
+      <th class="num" title="Nachweisgrenze des ICP-Labors (optional). Bei Messwert 0 wird mit NWG/2 als angenommenem Wert gerechnet statt blind um den Cap zu erhöhen.">NWG</th>
       <th></th>
     </tr></thead>
     <tbody>${ALL_ELEMENTS.map(elementRow).join("")}${newRow}</tbody>`;
@@ -662,7 +669,7 @@ function buildLimitsTable() {
           input.value = e.key; return;
         }
         // Schlüssel umbenennen — Werte-Maps mitziehen
-        ["ideal","min","max","initial"].forEach(f => {
+        ["ideal","min","max","initial","nwg"].forEach(f => {
           if (state.settings[f][oldKey] != null) {
             state.settings[f][newKey] = state.settings[f][oldKey];
             delete state.settings[f][oldKey];
@@ -718,7 +725,7 @@ function buildLimitsTable() {
           if (m.measured) delete m.measured[key];
           if (m.dose)     delete m.dose[key];
         });
-        ["ideal","min","max","initial"].forEach(f => { if (state.settings[f]) delete state.settings[f][key]; });
+        ["ideal","min","max","initial","nwg"].forEach(f => { if (state.settings[f]) delete state.settings[f][key]; });
       }
       if (editingElementKey === key) editingElementKey = null;
       rebuildElementBindings();
@@ -758,11 +765,14 @@ function buildLimitsTable() {
     const min     = isNaN(getN("min"))     ? 0 : getN("min");
     const max     = isNaN(getN("max"))     ? 0 : getN("max");
     const initial = isNaN(getN("initial")) ? 0 : getN("initial");
+    const nwg     = isNaN(getN("nwg"))     ? 0 : getN("nwg");
     state.settings.elements.push({ key, name, group });
     state.settings.ideal[key]   = ideal;
     state.settings.min[key]     = min;
     state.settings.max[key]     = max;
     state.settings.initial[key] = initial;
+    if (!state.settings.nwg) state.settings.nwg = {};
+    state.settings.nwg[key]     = nwg;
     rebuildElementBindings();
     saveState();
     buildLimitsTable();
@@ -938,13 +948,33 @@ function calculateAll(measured, measureDate) {
     }
 
     // Messwert 0 (oder negativ) = unter der Nachweisgrenze. ICP kann keine
-    // echte Null messen — wir wissen nur "zu wenig", nicht wie viel.
-    // → kontrollierter Cap-Schritt nach oben (proportional unmöglich, Division
-    // durch 0). Konvergiert über mehrere ICP-Zyklen, kann nie überschießen.
-    // Totband + Glättung werden bewusst übersprungen (0 ist nie "nah dran",
-    // und mess/dose=0 würde das Ansprechverhalten verfälschen).
+    // echte Null messen — wir wissen nur "zu wenig".
+    // Mit hinterlegter Labor-NWG: Annahme Wert = NWG/2 (Analytik-Konvention)
+    // → normale Proportional-Rechnung mit dem angenommenen Wert.
+    // Ohne NWG: kontrollierter Cap-Schritt nach oben (Fallback).
+    // In beiden Fällen: Totband übersprungen, Glättungs-Paare bleiben sauber
+    // (Annahme ist keine Messung; mess/dose=0 würde das Ansprechverhalten verfälschen).
     if (m <= 0) {
       const lo = p * (1 - cap), hi = p * (1 + cap);
+      const nwg = state.settings.nwg?.[e.key];
+      if (nwg > 0 && p > 0) {
+        const assumed = nwg / 2;
+        const rawN = id / assumed * p;     // Proportional mit angenommenem Wert
+        let value, capped = false;
+        if (rawN < lo)      { value = lo; capped = true; }
+        else if (rawN > hi) { value = hi; capped = true; }
+        else                { value = rawN; }
+        out.perElement[e.key] = {
+          value, capped, unchanged: false, belowDetection: true,
+          assumedValue: assumed, nwg,
+          prev: p, ideal: id, measured: m,
+          smoothed: null, seriesPoints: 0,
+          pairs: [], response: null, raw: rawN,
+          capLo: lo, capHi: hi, windowN: N,
+          isFirst
+        };
+        return;
+      }
       out.perElement[e.key] = {
         value: hi, capped: true, unchanged: false, belowDetection: true,
         prev: p, ideal: id, measured: m,
@@ -1022,7 +1052,9 @@ function renderResults(measured, calc) {
     const r = calc.perElement[e.key];
     const delta = r.prev > 0 ? (r.value - r.prev)/r.prev*100 : 0;
     const arrow = r.belowDetection
-                ? `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze – ICP kann keine echte Null messen. Dosis wird kontrolliert um den Cap erhöht.">▲ ${fmt(delta,1)}% &lt;NWG</span>`
+                ? (r.assumedValue != null
+                    ? `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze (${fmt(r.nwg)}). Gerechnet mit NWG/2 = ${fmt(r.assumedValue)} als angenommenem Wert.">${delta > 0.5 ? "▲" : delta < -0.5 ? "▼" : "±"} ${fmt(Math.abs(delta),1)}% &lt;NWG</span>`
+                    : `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze – ICP kann keine echte Null messen. Keine NWG hinterlegt → Dosis wird kontrolliert um den Cap erhöht. Tipp: NWG des Labors in den Einstellungen eintragen für präzisere Rechnung.">▲ ${fmt(delta,1)}% &lt;NWG</span>`)
                 : r.inDeadband
                 ? `<span style="color:#1a73a7;" title="Messwert im Totband – Dosis unverändert">⊜ Totband</span>`
                 : r.unchanged
@@ -1392,6 +1424,21 @@ function buildCalcDetail(key, r) {
   const el = ALL_ELEMENTS.find(x => x.key === key);
   const name = el ? el.name : key;
   if (r.belowDetection) {
+    if (r.assumedValue != null) {
+      let capNote = `<div style="color:var(--text-light); font-size:0.72rem;">Roh-Dosis innerhalb der Cap-Grenzen (${fmt(r.capLo,3)} – ${fmt(r.capHi,3)} ml) → kein Cap.</div>`;
+      if (r.raw > r.capHi)      capNote = `<div class="cap-note">⚑ Roh-Dosis über oberer Cap-Grenze → auf ${fmt(r.capHi,3)} ml gekappt.</div>`;
+      else if (r.raw < r.capLo) capNote = `<div class="cap-note">⚑ Roh-Dosis unter unterer Cap-Grenze → auf ${fmt(r.capLo,3)} ml gekappt.</div>`;
+      return `<div class="calc-detail">
+        <h4>${name} (${key}) – unter Nachweisgrenze</h4>
+        <p>Messwert <strong>0</strong> = unter der Labor-NWG von <strong>${fmt(r.nwg)}</strong>.
+           Nach Analytik-Konvention wird mit <strong>NWG/2 = ${fmt(r.assumedValue)}</strong>
+           als wahrscheinlichstem Wert gerechnet.</p>
+        <div class="formula">Roh-Dosis = Ideal / Annahme × Vorher = ${fmt(r.ideal,3)} / ${fmt(r.assumedValue,3)} × ${fmt(r.prev,3)} = <strong>${fmt(r.raw,3)} ml</strong></div>
+        ${capNote}
+        <p style="font-size:0.72rem;color:var(--text-light);">Der angenommene Wert fließt nicht in die Glättung ein — sobald das Element messbar wird, übernimmt die normale Regelung mit echten Werten.</p>
+        <div class="result-line">→ Neue Menge: ${fmt(r.value,3)} ml</div>
+      </div>`;
+    }
     return `<div class="calc-detail">
       <h4>${name} (${key}) – unter Nachweisgrenze</h4>
       <p>Messwert <strong>0</strong> bedeutet: das Labor konnte das Element nicht
@@ -1400,7 +1447,7 @@ function buildCalcDetail(key, r) {
       <p>Eine proportionale Berechnung (Ideal / Mess) ist mit 0 unmöglich.
          Stattdessen: kontrollierter Schritt nach oben um den Cap.</p>
       <div class="formula">Neue Menge = Vorher × (1 + ${Math.round(state.settings.capPct*100)} %) = ${fmt(r.prev,3)} × ${fmt(1+state.settings.capPct,2)} = <strong>${fmt(r.value,3)} ml</strong></div>
-      <p style="font-size:0.72rem;color:var(--text-light);">Bleibt der Wert auch bei der nächsten ICP auf 0, wird erneut um den Cap erhöht — bis das Element messbar wird und die normale Regelung übernimmt.</p>
+      <p style="font-size:0.72rem;color:var(--text-light);">Tipp: Trage die Nachweisgrenze deines Labors in den Einstellungen (Spalte NWG) ein — dann wird stattdessen mit NWG/2 als angenommenem Wert proportional gerechnet.</p>
       <div class="result-line">→ Neue Menge: ${fmt(r.value,3)} ml</div>
     </div>`;
   }
