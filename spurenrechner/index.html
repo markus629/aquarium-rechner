@@ -872,21 +872,6 @@ function elementHasHistory(key) {
   );
 }
 
-function computeDose(prev, ideal, measured, capPct, isFirst) {
-  if (measured > 0) {
-    const raw = ideal / measured * prev;
-    if (isFirst) return { value: raw, capped: false };
-    const lo = prev * (1 - capPct);
-    const hi = prev * (1 + capPct);
-    if (raw < lo) return { value: lo, capped: true };
-    if (raw > hi) return { value: hi, capped: true };
-    return { value: raw, capped: false };
-  } else {
-    if (isFirst) return { value: prev, capped: false };
-    return { value: prev * (1 + capPct), capped: true };
-  }
-}
-
 // Returns sorted ascending series of {date,t,value} for one element,
 // optionally including a not-yet-saved "live" measurement.
 function getElementSeries(key, liveValue, liveDate) {
@@ -947,6 +932,25 @@ function calculateAll(measured, measureDate) {
         value: p, capped: false, unchanged: true,
         prev: p, ideal: id, measured: null,
         smoothed: null, seriesPoints: 0,
+        isFirst
+      };
+      return;
+    }
+
+    // Messwert 0 (oder negativ) = unter der Nachweisgrenze. ICP kann keine
+    // echte Null messen — wir wissen nur "zu wenig", nicht wie viel.
+    // → kontrollierter Cap-Schritt nach oben (proportional unmöglich, Division
+    // durch 0). Konvergiert über mehrere ICP-Zyklen, kann nie überschießen.
+    // Totband + Glättung werden bewusst übersprungen (0 ist nie "nah dran",
+    // und mess/dose=0 würde das Ansprechverhalten verfälschen).
+    if (m <= 0) {
+      const lo = p * (1 - cap), hi = p * (1 + cap);
+      out.perElement[e.key] = {
+        value: hi, capped: true, unchanged: false, belowDetection: true,
+        prev: p, ideal: id, measured: m,
+        smoothed: null, seriesPoints: 0,
+        pairs: [], response: null, raw: hi,
+        capLo: lo, capHi: hi, windowN: N,
         isFirst
       };
       return;
@@ -1017,7 +1021,9 @@ function renderResults(measured, calc) {
   const renderRow = (e) => {
     const r = calc.perElement[e.key];
     const delta = r.prev > 0 ? (r.value - r.prev)/r.prev*100 : 0;
-    const arrow = r.inDeadband
+    const arrow = r.belowDetection
+                ? `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze – ICP kann keine echte Null messen. Dosis wird kontrolliert um den Cap erhöht.">▲ ${fmt(delta,1)}% &lt;NWG</span>`
+                : r.inDeadband
                 ? `<span style="color:#1a73a7;" title="Messwert im Totband – Dosis unverändert">⊜ Totband</span>`
                 : r.unchanged
                 ? `<span style="color:var(--text-light);" title="kein Messwert eingegeben – Dosis unverändert">unverändert</span>`
@@ -1385,6 +1391,19 @@ function hideElementChart() {
 function buildCalcDetail(key, r) {
   const el = ALL_ELEMENTS.find(x => x.key === key);
   const name = el ? el.name : key;
+  if (r.belowDetection) {
+    return `<div class="calc-detail">
+      <h4>${name} (${key}) – unter Nachweisgrenze</h4>
+      <p>Messwert <strong>0</strong> bedeutet: das Labor konnte das Element nicht
+         mehr quantifizieren (eine echte Null gibt es bei ICP nicht).
+         Wir wissen nur <em>„zu wenig"</em> — nicht wie viel.</p>
+      <p>Eine proportionale Berechnung (Ideal / Mess) ist mit 0 unmöglich.
+         Stattdessen: kontrollierter Schritt nach oben um den Cap.</p>
+      <div class="formula">Neue Menge = Vorher × (1 + ${Math.round(state.settings.capPct*100)} %) = ${fmt(r.prev,3)} × ${fmt(1+state.settings.capPct,2)} = <strong>${fmt(r.value,3)} ml</strong></div>
+      <p style="font-size:0.72rem;color:var(--text-light);">Bleibt der Wert auch bei der nächsten ICP auf 0, wird erneut um den Cap erhöht — bis das Element messbar wird und die normale Regelung übernimmt.</p>
+      <div class="result-line">→ Neue Menge: ${fmt(r.value,3)} ml</div>
+    </div>`;
+  }
   if (r.inDeadband) {
     return `<div class="calc-detail">
       <h4>${name} (${key})</h4>
