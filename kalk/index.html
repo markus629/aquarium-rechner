@@ -1890,14 +1890,19 @@
     const dayMap = {};  // dayStartTs → { khML, caML }
     for (const d of dosings) {
       if (d.success === false) continue;
+      if (!d.timestamp) continue;  // Einträge ohne Zeitstempel überspringen
       const day = new Date(d.timestamp * 1000); day.setHours(0, 0, 0, 0);
       const dayTs = Math.floor(day.getTime() / 1000);
-      if (dayTs >= todayTs) continue;  // heute auslassen
+      if (dayTs >= todayTs) continue;  // heute auslassen (Tag nicht abgeschlossen)
       if (!dayMap[dayTs]) dayMap[dayTs] = { khML: 0, caML: 0 };
       const ml = Number(d.ml) || 0;
-      if (d.pump === 2) dayMap[dayTs].khML += ml;            // KH-Tag
-      else if (d.pump === 3) dayMap[dayTs].khML += ml * 2;   // KH-Nacht (2× konzentriert)
-      else if (d.pump === 0) dayMap[dayTs].caML += ml;       // Calcium
+      // Robust: pump kann je nach Quelle (ESP/Restore) Zahl oder String sein,
+      // dosageType als zweites Erkennungsmerkmal
+      const pump = Number(d.pump);
+      const type = d.dosageType;
+      if (pump === 2 || type === "kh-day") dayMap[dayTs].khML += ml;          // KH-Tag
+      else if (pump === 3 || type === "kh-night") dayMap[dayTs].khML += ml * 2; // KH-Nacht (2× konzentriert)
+      else if (pump === 0 || type === "ca") dayMap[dayTs].caML += ml;         // Calcium
     }
     const days = Object.keys(dayMap).map(Number).sort((a, b) => a - b);
     const khSeries = [], caSeries = [];
