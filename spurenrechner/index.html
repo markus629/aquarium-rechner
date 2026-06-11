@@ -363,19 +363,21 @@ const ICP_CATALOG = {
   "Zr":   { name:"Zirconium",       group:"cat" },
 };
 
+// nwg = Nachweisgrenze des ICP-Labors (Zn..Se in µg/l, F in mg/l —
+// gleiche Einheit wie die jeweiligen Zielwerte)
 const DEFAULT_ELEMENTS = [
-  { key:"Zn", name:"Zink",     group:"cat", ideal:4,    min:2,   max:8,   initial:1.8 },
-  { key:"Mn", name:"Mangan",   group:"cat", ideal:0.5,  min:0.1, max:1,   initial:0.45 },
-  { key:"Cu", name:"Kupfer",   group:"cat", ideal:4,    min:0.5, max:6,   initial:0.9 },
-  { key:"Fe", name:"Eisen",    group:"cat", ideal:1,    min:0,   max:2.5, initial:3.6 },
-  { key:"Cr", name:"Chrom",    group:"cat", ideal:1,    min:0.5, max:2.5, initial:0.27 },
-  { key:"Ni", name:"Nickel",   group:"cat", ideal:4,    min:0.5, max:6,   initial:13.5 },
-  { key:"Co", name:"Kobalt",   group:"cat", ideal:1,    min:0.3, max:2.5, initial:27 },
-  { key:"Mo", name:"Molybdän", group:"cat", ideal:12,   min:8,   max:20,  initial:0 },
-  { key:"F",  name:"Fluor",    group:"an",  ideal:1.3,  min:1,   max:1.8, initial:81 },
-  { key:"I",  name:"Iod",      group:"an",  ideal:65,   min:50,  max:90,  initial:1.08 },
-  { key:"V",  name:"Vanadium", group:"an",  ideal:4.5,  min:1,   max:8,   initial:0.72 },
-  { key:"Se", name:"Selen",    group:"an",  ideal:3.5,  min:1.5, max:8,   initial:1.35 },
+  { key:"Zn", name:"Zink",     group:"cat", ideal:4,    min:2,   max:8,   initial:1.8,  nwg:0.5 },
+  { key:"Mn", name:"Mangan",   group:"cat", ideal:0.5,  min:0.1, max:1,   initial:0.45, nwg:0.1 },
+  { key:"Cu", name:"Kupfer",   group:"cat", ideal:4,    min:0.5, max:6,   initial:0.9,  nwg:0.5 },
+  { key:"Fe", name:"Eisen",    group:"cat", ideal:1,    min:0,   max:2.5, initial:3.6,  nwg:0.5 },
+  { key:"Cr", name:"Chrom",    group:"cat", ideal:1,    min:0.5, max:2.5, initial:0.27, nwg:0.5 },
+  { key:"Ni", name:"Nickel",   group:"cat", ideal:4,    min:0.5, max:6,   initial:13.5, nwg:0.5 },
+  { key:"Co", name:"Kobalt",   group:"cat", ideal:1,    min:0.3, max:2.5, initial:27,   nwg:0.3 },
+  { key:"Mo", name:"Molybdän", group:"cat", ideal:12,   min:8,   max:20,  initial:0,    nwg:1.0 },
+  { key:"F",  name:"Fluor",    group:"an",  ideal:1.3,  min:1,   max:1.8, initial:81,   nwg:0.1 },
+  { key:"I",  name:"Iod",      group:"an",  ideal:65,   min:50,  max:90,  initial:1.08, nwg:2.0 },
+  { key:"V",  name:"Vanadium", group:"an",  ideal:4.5,  min:1,   max:8,   initial:0.72, nwg:0.5 },
+  { key:"Se", name:"Selen",    group:"an",  ideal:3.5,  min:1.5, max:8,   initial:1.35, nwg:0.5 },
 ];
 let ELEMENTS = { cat: [], an: [] };
 let ALL_ELEMENTS = [];
@@ -397,7 +399,7 @@ const DEFAULTS = {
   min:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.min])),
   max:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.max])),
   initial: Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.initial])),
-  nwg:     {},   // Nachweisgrenze des ICP-Labors pro Element (optional)
+  nwg:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.nwg])),   // Labor-Nachweisgrenze pro Element
   dailyMl: 5,
   icpIntervalDays: 30, safetyDays: 10,
   capPct: 0.25, chartMonths: 0,
@@ -444,7 +446,7 @@ function loadState() {
           min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
           max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
           initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
-          nwg:     { ...(ps.nwg || {}) },
+          nwg:     { ...DEFAULTS.nwg, ...(ps.nwg || {}) },
         },
         measurements: Array.isArray(p.measurements) ? p.measurements : []
       };
@@ -471,7 +473,7 @@ function applyStateFromSync(data) {
       min:     { ...DEFAULTS.min,     ...(ps.min     || {}) },
       max:     { ...DEFAULTS.max,     ...(ps.max     || {}) },
       initial: { ...DEFAULTS.initial, ...(ps.initial || {}) },
-      nwg:     { ...(ps.nwg || {}) },
+      nwg:     { ...DEFAULTS.nwg, ...(ps.nwg || {}) },
     },
     measurements: Array.isArray(data.measurements) ? data.measurements : []
   };
@@ -957,7 +959,10 @@ function calculateAll(measured, measureDate) {
     if (m <= 0) {
       const lo = p * (1 - cap), hi = p * (1 + cap);
       const nwg = state.settings.nwg?.[e.key];
-      if (nwg > 0 && p > 0) {
+      // Guard: NWG/2 muss unter dem Idealwert liegen — sonst würde eine
+      // 0-Messung die Dosis SENKEN (Fehlkonfiguration: Ziel unter halber
+      // Nachweisgrenze). Dann lieber Fallback auf den Cap-Schritt.
+      if (nwg > 0 && p > 0 && nwg / 2 < id) {
         const assumed = nwg / 2;
         const rawN = id / assumed * p;     // Proportional mit angenommenem Wert
         let value, capped = false;
