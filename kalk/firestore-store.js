@@ -1,188 +1,182 @@
 // =============================================================
-// Firestore-Wrapper für Kalkmanagement (1 User = 1 Aquarium)
+// Daten-Store für Kalkmanagement (1 User = 1 Aquarium)
+// Backend: PocketBase (früher Firestore)
+// =============================================================
+// Mapping der früheren Firestore-Pfade users/{uid}/aquarium/{key}:
+//   - Einzeldokumente (settings, pump-0..3, plan-current,
+//     ph-calibration, info)  -> Collection "aqua_docs" (user, key, data)
+//   - Messungen              -> Collection "aqua_measurements"
+//   - Dosierungen            -> Collection "aqua_dosings"
+//   - ESP-Command            -> Collection "aqua_command" (1 Doc pro User)
 // =============================================================
 
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import {
-  getFirestore, collection, doc,
-  getDoc, getDocs, setDoc, addDoc, deleteDoc, onSnapshot,
-  query, orderBy, limit, where,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { firebaseConfig } from "/assets/firebase-config.js";
-
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+import { pb } from "/assets/pb-client.js";
 
 function requireUid() {
-  const u = auth.currentUser;
-  if (!u) throw new Error("Nicht eingeloggt");
-  return u.uid;
+  if (!pb.authStore.isValid) throw new Error("Nicht eingeloggt");
+  return pb.authStore.record.id;
 }
 
-function aquaPath(docId) {
-  return `users/${requireUid()}/aquarium/${docId}`;
+// ---------- Generische Einzeldokumente (aqua_docs) ----------
+export async function getAquaDoc(key) {
+  const uid = requireUid();
+  try {
+    const r = await pb.collection("aqua_docs").getFirstListItem(`user="${uid}" && key="${key}"`);
+    return r;
+  } catch (_) {
+    return null; // 404 = nicht vorhanden
+  }
+}
+
+export async function setAquaDoc(key, data, merge = false) {
+  const uid = requireUid();
+  const existing = await getAquaDoc(key);
+  if (existing) {
+    const newData = merge ? { ...(existing.data || {}), ...data } : data;
+    await pb.collection("aqua_docs").update(existing.id, { data: newData });
+  } else {
+    await pb.collection("aqua_docs").create({ user: uid, key, data });
+  }
 }
 
 // ---------- Einstellungen ----------
 // Liefert Defaults + gespeicherte Settings darüber gemergt.
-// Wichtig: einzelne Felder werden mit merge:true gespeichert. Wenn nur
-// einzelne Felder im Doc sind, fallen die anderen auf Defaults zurück.
 export async function getSettings() {
-  const snap = await getDoc(doc(db, aquaPath("settings")));
-  const stored = snap.exists() ? snap.data() : {};
+  const doc = await getAquaDoc("settings");
+  const stored = (doc && doc.data) || {};
   return { ...defaultSettings(), ...stored };
 }
 
 export async function saveSettings(settings) {
-  await setDoc(doc(db, aquaPath("settings")), settings, { merge: true });
+  await setAquaDoc("settings", settings, true); // merge:true
 }
 
 // ---------- Pumpen ----------
-// Auch hier: Defaults pro Pumpe + gespeicherte Felder darüber.
 export async function getPumps() {
   const pumps = [];
   for (let i = 0; i < 4; i++) {
-    const snap = await getDoc(doc(db, aquaPath(`pump-${i}`)));
-    const stored = snap.exists() ? snap.data() : {};
+    const doc = await getAquaDoc(`pump-${i}`);
+    const stored = (doc && doc.data) || {};
     pumps.push({ index: i, ...defaultPump(i), ...stored });
   }
   return pumps;
 }
 
 export async function savePump(pumpIndex, pumpData) {
-  await setDoc(doc(db, aquaPath(`pump-${pumpIndex}`)), pumpData, { merge: true });
+  await setAquaDoc(`pump-${pumpIndex}`, pumpData, true); // merge:true
 }
 
 // ---------- Messungen ----------
 export async function addMeasurement({ type, value, timestamp, source }) {
   const uid = requireUid();
-  await addDoc(collection(db, `users/${uid}/aquarium/measurements/items`), {
-    type, value, timestamp: timestamp || Math.floor(Date.now() / 1000),
-    source: source || "manual",
-    createdAt: serverTimestamp()
+  await pb.collection("aqua_measurements").create({
+    user: uid, type, value,
+    timestamp: timestamp || Math.floor(Date.now() / 1000),
+    source: source || "manual"
   });
 }
 
 export async function listMeasurements(type, maxItems = 200) {
-  const uid = requireUid();
-  const q = query(
-    collection(db, `users/${uid}/aquarium/measurements/items`),
-    where("type", "==", type),
-    orderBy("timestamp", "desc"),
-    limit(maxItems)
-  );
-  const snap = await getDocs(q);
-  const out = [];
-  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
-  return out;
+  requireUid();
+  const res = await pb.collection("aqua_measurements").getList(1, maxItems, {
+    filter: `type="${type}"`,
+    sort: "-timestamp"
+  });
+  return res.items;
+}
+
+export async function listAllMeasurements(maxItems = 1000) {
+  requireUid();
+  const res = await pb.collection("aqua_measurements").getList(1, maxItems, {
+    sort: "-timestamp"
+  });
+  return res.items;
 }
 
 export async function deleteMeasurement(measurementId) {
-  const uid = requireUid();
-  await deleteDoc(doc(db, `users/${uid}/aquarium/measurements/items/${measurementId}`));
+  requireUid();
+  await pb.collection("aqua_measurements").delete(measurementId);
 }
 
 // ---------- Dosierungen ----------
 // HINWEIS: Web schreibt KEINE Dosen direkt — das macht ausschließlich der ESP.
 // Diese Funktion bleibt nur für Import/Restore aus JSON-Backups vorhanden.
-// Bei Manuell-Dosierungen über den Web-UI Tab Manuell wird stattdessen
-// sendCommand({action:"dose"}) verwendet, der ESP führt aus und schreibt
-// dann selbst nach dosings/items. So landen nur tatsächlich gefahrene
-// Doses in der DB — wichtig für korrekte Verbrauchs-Berechnung.
 export async function addDosing({ pump, ml, timestamp, isAutomatic, factor, dosageType, success }) {
   const uid = requireUid();
-  await addDoc(collection(db, `users/${uid}/aquarium/dosings/items`), {
-    pump, ml, timestamp: timestamp || Math.floor(Date.now() / 1000),
-    isAutomatic: !!isAutomatic, factor: factor || 1, dosageType, success: success !== false,
-    createdAt: serverTimestamp()
+  await pb.collection("aqua_dosings").create({
+    user: uid, pump, ml,
+    timestamp: timestamp || Math.floor(Date.now() / 1000),
+    isAutomatic: !!isAutomatic, factor: factor || 1, dosageType, success: success !== false
   });
 }
 
 export async function listDosings(maxItems = 200) {
-  const uid = requireUid();
-  const q = query(
-    collection(db, `users/${uid}/aquarium/dosings/items`),
-    orderBy("timestamp", "desc"),
-    limit(maxItems)
-  );
-  const snap = await getDocs(q);
-  const out = [];
-  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
-  return out;
+  requireUid();
+  const res = await pb.collection("aqua_dosings").getList(1, maxItems, {
+    sort: "-timestamp"
+  });
+  return res.items;
+}
+
+export async function deleteDosing(dosingId) {
+  requireUid();
+  await pb.collection("aqua_dosings").delete(dosingId);
 }
 
 // ---------- Commands (ESP-Steuerung) ----------
-// EIN einzelnes Dokument auf bekannten Pfad — vermeidet runQuery (das in
-// der Firebase-ESP-Lib zickig ist). Pfad: users/{uid}/aquarium/cmd
-// Inhalt: { id, action, status, pump?, ml?, steps?, phValue?, createdAt,
-//           startedAt?, completedAt?, result? }
-//
-// Race-Condition: Neue Commands überschreiben das alte. UI sorgt dafür
-// dass nur ein Wizard zur Zeit läuft.
-function commandPath() {
-  return `users/${requireUid()}/aquarium/cmd`;
-}
-
+// EIN Record pro User in "aqua_command". Web abonniert per Realtime,
+// der ESP pollt den Record. cmdId identifiziert das aktuelle Command.
 function genCmdId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
 export async function sendCommand({ action, pump, ml, steps, phValue }) {
+  const uid = requireUid();
   const cmdId = genCmdId();
-  const cmd = {
-    id: cmdId,
-    action,
-    status: "pending",
-    createdAt: serverTimestamp()
-  };
-  if (pump != null)    cmd.pump = pump;
-  if (ml != null)      cmd.ml = ml;
-  if (steps != null)   cmd.steps = steps;
-  if (phValue != null) cmd.phValue = phValue;
-  await setDoc(doc(db, commandPath()), cmd);
+  const body = { user: uid, cmdId, action, status: "pending", result: null };
+  if (pump != null)    body.pump = pump;
+  if (ml != null)      body.ml = ml;
+  if (steps != null)   body.steps = steps;
+  if (phValue != null) body.phValue = phValue;
+
+  let existing = null;
+  try { existing = await pb.collection("aqua_command").getFirstListItem(`user="${uid}"`); } catch (_) {}
+  if (existing) await pb.collection("aqua_command").update(existing.id, body);
+  else          await pb.collection("aqua_command").create(body);
   return cmdId;
 }
 
-// onSnapshot auf das EINE Command-Dokument. Filtert auf unsere ID —
-// wenn jemand anders ein neueres Command schreibt, kriegen wir's nicht.
-// Liefert Unsubscribe-Funktion.
+// Realtime-Abo auf den Command-Record. Liefert eine synchrone
+// Unsubscribe-Funktion (wie früher onSnapshot).
 export function watchCommand(commandId, callback) {
-  return onSnapshot(doc(db, commandPath()), snap => {
-    if (!snap.exists()) { callback(null); return; }
-    const data = snap.data();
-    if (data.id !== commandId) return;  // nicht unser Command
-    callback(data);
-  }, err => {
-    console.warn("watchCommand error:", err);
-    callback(null);
-  });
+  let unsub = null;
+  let cancelled = false;
+  pb.collection("aqua_command").subscribe("*", (e) => {
+    if (e.action === "delete") { callback(null); return; }
+    const r = e.record;
+    if (!r || r.cmdId !== commandId) return; // nicht unser Command
+    callback(r);
+  }).then(fn => { if (cancelled) fn(); else unsub = fn; })
+    .catch(err => console.warn("watchCommand error:", err));
+  return () => { cancelled = true; if (unsub) unsub(); };
 }
 
-// Command-Doc löschen (z. B. bei Abbruch)
 export async function deleteCommand(commandId) {
-  // Nur löschen wenn ID matched (kein Race-Risiko)
+  const uid = requireUid();
   try {
-    const snap = await getDoc(doc(db, commandPath()));
-    if (snap.exists() && snap.data().id === commandId) {
-      await deleteDoc(doc(db, commandPath()));
-    }
+    const r = await pb.collection("aqua_command").getFirstListItem(`user="${uid}"`);
+    if (r && r.cmdId === commandId) await pb.collection("aqua_command").delete(r.id);
   } catch (e) { console.warn("deleteCommand:", e); }
 }
 
 // ---------- Pläne ----------
 export async function getCurrentPlan() {
-  const snap = await getDoc(doc(db, aquaPath("plan-current")));
-  return snap.exists() ? snap.data() : null;
+  const doc = await getAquaDoc("plan-current");
+  return (doc && doc.data) || null;
 }
 
 export async function savePlan(plan) {
-  await setDoc(doc(db, aquaPath("plan-current")), {
-    ...plan,
-    generatedAt: serverTimestamp()
-  });
+  await setAquaDoc("plan-current", { ...plan, generatedAt: Math.floor(Date.now() / 1000) });
 }
 
 // ---------- Defaults ----------
@@ -226,13 +220,30 @@ function defaultPump(index) {
   };
 }
 
+// Firebase-kompatibler Auth-Shim für den restlichen Kalk-Code.
+// Bietet nur, was kalk/index.html und die Übersicht nutzen:
+//   getAuthInstance().currentUser?.{uid,email,emailVerified}
+//   getAuthInstance().onAuthStateChanged(cb)
 export function getAuthInstance() {
-  return auth;
+  return {
+    get currentUser() {
+      if (!pb.authStore.isValid) return null;
+      const r = pb.authStore.record;
+      return { uid: r.id, email: r.email, emailVerified: r.verified };
+    },
+    onAuthStateChanged(cb) {
+      return pb.authStore.onChange((token, r) => {
+        cb(r ? { uid: r.id, email: r.email, emailVerified: r.verified } : null);
+      }, true);
+    }
+  };
 }
+
+// Token für authentifizierte Roh-Requests (z. B. ESP-Doku / Debug)
+export function getPB() { return pb; }
 
 // ---------- Firmware-Update (OTA via GitHub Releases) ----------
 // Liest das neueste Release direkt von der GitHub-API (public, keine Auth).
-// ESP liest die gleiche Quelle.
 export async function getLatestGithubRelease(owner, repo) {
   const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
   const r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });

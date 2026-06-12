@@ -473,7 +473,7 @@
           So verbindest du einen ESP32 mit deinem Account:
         </p>
         <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:1rem">
-          <li><strong>Geräte-Passwort einrichten</strong> (nur einmal, falls du dich bisher nur mit Google angemeldet hast):
+          <li><strong>Account-Zugang bereithalten</strong> (E-Mail + Passwort — bei Bedarf hier zurücksetzen):
             <div id="device-pw-section" style="margin:0.6rem 0;padding:0.8rem;background:var(--bg);border-radius:8px">
               <div id="device-pw-info" style="font-size:0.88rem;margin-bottom:0.5rem">Lade Account-Info …</div>
               <button class="btn btn-primary" id="device-pw-reset" style="display:none">📧 Passwort-Reset-Link senden</button>
@@ -482,7 +482,7 @@
           <li><strong>ESP flashen</strong> — siehe <a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README im GitHub-Repo</a></li>
           <li><strong>ESP einschalten</strong> — beim ersten Start öffnet er ein WLAN namens <code style="background:var(--bg);padding:0.1rem 0.4rem;border-radius:4px">AquariumRechner-Setup</code></li>
           <li>Mit dem WLAN verbinden — Browser öffnet automatisch das Setup-Portal (sonst <code>http://192.168.4.1</code>)</li>
-          <li><strong>WLAN-Daten + deine E-Mail + dein neu gesetztes Passwort</strong> (nicht das Google-Passwort!) eintragen → Speichern</li>
+          <li><strong>WLAN-Daten + deine E-Mail + dein Passwort</strong> (dasselbe wie beim Web-Login) eintragen → Speichern</li>
           <li>ESP startet neu und meldet sich automatisch an. Status erscheint hier oben.</li>
         </ol>
       </div>
@@ -681,17 +681,18 @@
 
 <footer>
   Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
-  <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Daten werden verschlüsselt bei Google Firebase (Server EU) gespeichert. Anmeldung erforderlich.</span>
+  <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Daten werden auf einem privaten Server (Deutschland, Übertragung per HTTPS verschlüsselt) gespeichert. Anmeldung erforderlich.</span>
 </footer>
 
 <script type="module">
   import { initAuthSync } from "/assets/auth-sync.js";
-  import { sendPasswordResetEmail, EmailAuthProvider, linkWithCredential } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  import { pb } from "/assets/pb-client.js";
   import {
     getAuthInstance, getSettings, saveSettings,
-    addMeasurement, listMeasurements, deleteMeasurement,
-    addDosing, listDosings,
+    addMeasurement, listMeasurements, listAllMeasurements, deleteMeasurement,
+    addDosing, listDosings, deleteDosing,
     getPumps, savePump,
+    getAquaDoc, setAquaDoc,
     sendCommand, watchCommand, deleteCommand,
     savePlan, getCurrentPlan,
     getLatestGithubRelease
@@ -1119,19 +1120,15 @@
   async function refreshPhCalStatus() {
     let isFullyCalibrated = false;
     try {
-      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-      const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
       const user = getAuthInstance().currentUser;
       if (!user) return;
-      const app = getApps()[0];
-      const db = getFirestore(app);
-      const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/ph-calibration`));
+      const phDoc = await getAquaDoc("ph-calibration");
       const el = document.getElementById("ph-cal-status");
       if (!el) return;
-      if (!snap.exists()) {
+      if (!phDoc) {
         el.innerHTML = `<div class="info-banner">⚠️ <strong>Noch nicht kalibriert.</strong> Ohne Kalibrierung liefert der Sensor keine pH-Werte und die KH-Tag/Nacht-Entscheidung nutzt die Uhrzeit-Logik.</div>`;
       } else {
-        const d = snap.data();
+        const d = phDoc.data;
         const v4 = d.voltage_pH4, v7 = d.voltage_pH7, cal = d.isCalibrated;
         const when = d.lastCalibratedAt ? new Date(d.lastCalibratedAt * 1000).toLocaleString("de-DE") : "—";
         if (cal) {
@@ -1510,13 +1507,8 @@
       btn.onclick = async () => {
         if (!confirm("Dosierung löschen? Dies beeinflusst auch die Verbrauchs-Berechnung.")) return;
         try {
-          const uid = getAuthInstance().currentUser?.uid;
-          if (!uid) return;
-          const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-          const { getFirestore, doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
-          const app = getApps()[0];
-          const db = getFirestore(app);
-          await deleteDoc(doc(db, `users/${uid}/aquarium/dosings/items/${btn.dataset.delDos}`));
+          if (!getAuthInstance().currentUser) return;
+          await deleteDosing(btn.dataset.delDos);
           await refreshDosings();
           await refreshPlan();  // Verbrauch neu rechnen
         } catch (e) { alert("Fehler: " + e.message); }
@@ -1543,31 +1535,21 @@
 
   document.getElementById("kalk-export").onclick = async () => {
     try {
-      const uid = getAuthInstance().currentUser?.uid;
-      if (!uid) { alert("Nicht eingeloggt"); return; }
-      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-      const { getFirestore, doc, getDoc, collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
-      const app = getApps()[0];
-      const db = getFirestore(app);
+      if (!getAuthInstance().currentUser) { alert("Nicht eingeloggt"); return; }
 
       // Settings + Pumpen + pH-Kalibrierung + Plan
-      const settings = (await getDoc(doc(db, `users/${uid}/aquarium/settings`))).data() || {};
+      const settings = (await getAquaDoc("settings"))?.data || {};
       const pumps = [];
       for (let i = 0; i < 4; i++) {
-        const s = (await getDoc(doc(db, `users/${uid}/aquarium/pump-${i}`))).data();
+        const s = (await getAquaDoc(`pump-${i}`))?.data;
         if (s) pumps.push({ index: i, ...s });
       }
-      const phCal = (await getDoc(doc(db, `users/${uid}/aquarium/ph-calibration`))).data() || null;
-      const planCur = (await getDoc(doc(db, `users/${uid}/aquarium/plan-current`))).data() || null;
+      const phCal = (await getAquaDoc("ph-calibration"))?.data || null;
+      const planCur = (await getAquaDoc("plan-current"))?.data || null;
 
-      // Subcollections
-      const measurements = [];
-      const measSnap = await getDocs(collection(db, `users/${uid}/aquarium/measurements/items`));
-      measSnap.forEach(d => measurements.push({ id: d.id, ...d.data() }));
-
-      const dosings = [];
-      const dosSnap = await getDocs(collection(db, `users/${uid}/aquarium/dosings/items`));
-      dosSnap.forEach(d => dosings.push({ id: d.id, ...d.data() }));
+      // Listen (alle Typen)
+      const measurements = await listAllMeasurements(5000);
+      const dosings = await listDosings(5000);
 
       const data = {
         version: 1,
@@ -1599,45 +1581,34 @@
         ev.target.value = "";
         return;
       }
-      const uid = getAuthInstance().currentUser?.uid;
-      if (!uid) throw new Error("Nicht eingeloggt");
-      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-      const { getFirestore, doc, setDoc, collection, addDoc, getDocs, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
-      const app = getApps()[0];
-      const db = getFirestore(app);
+      if (!getAuthInstance().currentUser) throw new Error("Nicht eingeloggt");
 
-      // 1. Settings + Pumpen + pH-Calibration
-      if (data.settings) await setDoc(doc(db, `users/${uid}/aquarium/settings`), data.settings);
+      // 1. Settings + Pumpen + pH-Calibration + Plan (überschreiben)
+      if (data.settings) await setAquaDoc("settings", data.settings);
       if (Array.isArray(data.pumps)) {
         for (const p of data.pumps) {
           if (p.index != null && p.index >= 0 && p.index < 4) {
             const { index, ...pdata } = p;
-            await setDoc(doc(db, `users/${uid}/aquarium/pump-${index}`), pdata);
+            await setAquaDoc(`pump-${index}`, pdata);
           }
         }
       }
-      if (data.phCalibration) await setDoc(doc(db, `users/${uid}/aquarium/ph-calibration`), data.phCalibration);
-      if (data.planCurrent) await setDoc(doc(db, `users/${uid}/aquarium/plan-current`), data.planCurrent);
+      if (data.phCalibration) await setAquaDoc("ph-calibration", data.phCalibration);
+      if (data.planCurrent) await setAquaDoc("plan-current", data.planCurrent);
 
       // 2. Messungen + Dosierungen: erst alte löschen
-      for (const coll of ["measurements/items", "dosings/items"]) {
-        const snap = await getDocs(collection(db, `users/${uid}/aquarium/${coll}`));
-        const toDelete = [];
-        snap.forEach(d => toDelete.push(d.ref));
-        for (const ref of toDelete) await deleteDoc(ref);
-      }
+      for (const m of await listAllMeasurements(10000)) await deleteMeasurement(m.id);
+      for (const d of await listDosings(10000)) await deleteDosing(d.id);
 
       // 3. Neue einfügen
       if (Array.isArray(data.measurements)) {
         for (const m of data.measurements) {
-          const { id, ...mdata } = m;
-          await addDoc(collection(db, `users/${uid}/aquarium/measurements/items`), mdata);
+          await addMeasurement({ type: m.type, value: m.value, timestamp: m.timestamp, source: m.source });
         }
       }
       if (Array.isArray(data.dosings)) {
         for (const d of data.dosings) {
-          const { id, ...ddata } = d;
-          await addDoc(collection(db, `users/${uid}/aquarium/dosings/items`), ddata);
+          await addDosing({ pump: d.pump, ml: d.ml, timestamp: d.timestamp, isAutomatic: d.isAutomatic, factor: d.factor, dosageType: d.dosageType, success: d.success });
         }
       }
 
@@ -1973,21 +1944,18 @@
 
       // ESP-Status (gleiche Logik wie im Gerät-Tab: lastSeen < 120 s = online)
       try {
-        const { getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-        const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
         const user = getAuthInstance().currentUser;
         const espEl = document.getElementById("dash-esp");
         const espMeta = document.getElementById("dash-esp-meta");
         if (user) {
-          const db = getFirestore(getApps()[0]);
-          const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/info`));
-          if (!snap.exists()) {
+          const infoDoc = await getAquaDoc("info");
+          if (!infoDoc) {
             espEl.textContent = "offline";
             espEl.style.color = "var(--text-light)";
             espMeta.textContent = "noch nie verbunden";
           } else {
-            const d = snap.data();
-            const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
+            const d = infoDoc.data;
+            const lastSeenTs = d.lastSeen ? new Date(d.lastSeen < 1e12 ? d.lastSeen * 1000 : d.lastSeen) : null;
             const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
             espEl.textContent = isOnlineRecent ? "online" : "offline";
             espEl.style.color = isOnlineRecent ? "var(--green)" : "var(--text-light)";
@@ -2068,32 +2036,19 @@
   async function refreshDeviceTab() {
     const user = getAuthInstance().currentUser;
     if (!user) return;
-    const providers = user.providerData.map(p => p.providerId);
-    const hasPassword = providers.includes("password");
-    const hasGoogle = providers.includes("google.com");
     const info = document.getElementById("device-pw-info");
     const btn = document.getElementById("device-pw-reset");
 
-    if (hasPassword) {
-      info.innerHTML = `✅ <strong>Du hast schon ein E-Mail-Passwort.</strong> Du kannst es im ESP-Setup direkt verwenden (E-Mail: <code>${user.email}</code>).`;
-      btn.style.display = "inline-block";
-      btn.textContent = "📧 Passwort zurücksetzen (falls vergessen)";
-    } else if (hasGoogle) {
-      info.innerHTML = `⚠️ <strong>Du bist nur mit Google angemeldet</strong> — der ESP braucht ein klassisches E-Mail-Passwort. Klick auf den Button, dann bekommst du eine Mail mit Reset-Link an <code>${user.email}</code>.`;
-      btn.style.display = "inline-block";
-      btn.textContent = "📧 Passwort-Reset-Link senden";
-    } else {
-      info.innerHTML = `Account: <code>${user.email}</code>`;
-      btn.style.display = "inline-block";
-      btn.textContent = "📧 Passwort-Reset-Link senden";
-    }
+    info.innerHTML = `✅ <strong>Dein Konto:</strong> <code>${user.email}</code>. Diese E-Mail und dein Passwort verwendest du auch im ESP-Setup.`;
+    btn.style.display = "inline-block";
+    btn.textContent = "📧 Passwort zurücksetzen (falls vergessen)";
 
     btn.onclick = async () => {
       try {
         btn.disabled = true;
         btn.textContent = "📤 Sende …";
-        await sendPasswordResetEmail(getAuthInstance(), user.email);
-        info.innerHTML = `✅ <strong>Reset-Link gesendet!</strong> Prüfe dein Postfach (auch Spam) für eine Mail von Firebase mit Link zum Passwort setzen.`;
+        await pb.collection("users").requestPasswordReset(user.email);
+        info.innerHTML = `✅ <strong>Reset-Link gesendet!</strong> Prüfe dein Postfach (auch Spam) für die Mail mit Link zum Passwort setzen.`;
         btn.style.display = "none";
       } catch (e) {
         info.innerHTML = `❌ Fehler: ${e.message}`;
@@ -2104,22 +2059,15 @@
     // ESP-Status: lese aquarium/info
     let espFirmwareVersion = null;
     try {
-      const settings = await getSettings();  // wir nutzen settings nicht direkt, aber sichert auth
-      // info.lastSeen, info.online etc. wären in aquarium/info dokument
-      // Da wir das nicht direkt exportieren, kurz ad-hoc fetch:
-      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js");
-      const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js");
-      const app = getApps()[0];
-      const db = getFirestore(app);
-      const snap = await getDoc(doc(db, `users/${user.uid}/aquarium/info`));
+      const infoDoc = await getAquaDoc("info");
       const statusEl = document.getElementById("device-status-display");
-      if (!snap.exists()) {
+      if (!infoDoc) {
         statusEl.innerHTML = `<div class="center-state"><p>Noch nichts vom ESP empfangen.</p></div>`;
         return;
       }
-      const d = snap.data();
+      const d = infoDoc.data;
       espFirmwareVersion = d.firmware || null;
-      const lastSeenTs = d.lastSeen?.toDate?.() || (d.lastSeen ? new Date(d.lastSeen) : null);
+      const lastSeenTs = d.lastSeen ? new Date(d.lastSeen < 1e12 ? d.lastSeen * 1000 : d.lastSeen) : null;
       const isOnlineRecent = lastSeenTs && (Date.now() - lastSeenTs.getTime()) < 120000;
       const dotColor = isOnlineRecent ? "var(--green)" : "#aabbcc";
       const pumpsCal = Array.isArray(d.pumpsCalibrated) ? d.pumpsCalibrated : [];
