@@ -37,7 +37,7 @@ Komplette Steuerung für eine selbstgebaute 4-Pumpen-Dosier-Anlage (Calcium, Mag
 - Anti-Drip-Sequenz (Prime → Dose → Retract) für sauberes Stop-Verhalten
 - KH-Tag/Nacht-Umschaltung anhand pH-Wert oder Uhrzeit
 - WS2812-Status-LED zeigt System-Zustand
-- Ausfall-Benachrichtigung via [healthchecks.io](https://healthchecks.io) (Email/Telegram/Discord/…)
+- Ausfall-Benachrichtigung per E-Mail — ein serverseitiger Watchdog (PocketBase-Cron) überwacht den Heartbeat und meldet, wenn der ESP länger als 5 Min ausfällt (pro Nutzer im Gerät-Tab an/aus)
 - OTA-Update direkt aus GitHub Releases
 
 ## Hosting & Daten

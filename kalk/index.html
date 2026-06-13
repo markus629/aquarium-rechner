@@ -521,26 +521,14 @@
       <div class="card">
         <h2>Ausfall-Benachrichtigung<span class="save-status">✓ gespeichert</span></h2>
         <p style="color:var(--text-light);margin-bottom:0.8rem">
-          ESP pingt diese URL bei jedem Heartbeat (alle 30 s). Bleibt der Ping aus,
-          schickt der Dienst dir Email/Telegram/Discord/Pushover — sodass du
-          merkst wenn etwas nicht stimmt.
+          Der Server überwacht den Heartbeat deines ESP. Bleibt er länger als <strong>5 Minuten</strong>
+          aus, bekommst du eine E-Mail an deine Konto-Adresse — und eine Entwarnung, sobald er wieder da ist.
         </p>
-        <div class="form-row" style="max-width:600px">
-          <label>Healthcheck-URL <span class="hint">leer lassen = aus</span></label>
-          <input type="url" data-setting="healthcheckUrl" placeholder="https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-        </div>
-        <details style="margin-top:0.8rem;font-size:0.85rem">
-          <summary style="cursor:pointer;color:var(--blue)">📖 So richtest du healthchecks.io ein (kostenlos)</summary>
-          <ol style="line-height:1.7;padding-left:1.3rem;margin-top:0.5rem;color:var(--text-light)">
-            <li>Account auf <a href="https://healthchecks.io" target="_blank" style="color:var(--blue)">healthchecks.io</a> anlegen (kostenlos, 20 Checks frei)</li>
-            <li>„Add Check" → Name: <em>Aquarium-Rechner ESP</em></li>
-            <li>Schedule: <strong>Simple Periodic</strong>, Period: <strong>1 minute</strong>, Grace: <strong>5 minutes</strong>
-              <span class="hint" style="display:block">(ESP pingt zwar alle 30 s, aber das Free-Tier verlangt mindestens 1 Minute — egal, mehr Pings sind erlaubt)</span></li>
-            <li>Tab „Integrations" → Email aktivieren (oder Telegram/Discord/Pushover/…)</li>
-            <li>Ping-URL (<code>https://hc-ping.com/&lt;uuid&gt;</code>) kopieren und oben einfügen</li>
-            <li>Speichern → ESP übernimmt die URL beim nächsten Settings-Sync (max 2 min)</li>
-          </ol>
-        </details>
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.95rem">
+          <input type="checkbox" data-setting="espOfflineAlert">
+          <span>E-Mail senden, wenn der ESP ausfällt</span>
+        </label>
+        <p class="hint" style="margin-top:0.5rem">Funktioniert nur, wenn ein ESP verbunden ist — ohne Gerät kommt keine Mail.</p>
       </div>
     </div>
 

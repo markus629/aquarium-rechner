@@ -188,7 +188,7 @@ function defaultSettings(volume) {
     historyCount: 5,
     autoDosing: false,
     dosingsPerDay: 12,    // wählbar: 2, 3, 4, 6, 8, 12 (alle teilen 24 sauber)
-    healthcheckUrl: "",
+    espOfflineAlert: true,   // E-Mail bei ESP-Ausfall (Server-Watchdog)
     maxDailyChangeKH: 2.0,
     maxDailyChangeCalcium: 20.0,
     magnesiumRatio: 50,

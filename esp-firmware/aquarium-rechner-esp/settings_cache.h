@@ -8,7 +8,6 @@
 //   autoDosing          - Master-Schalter Auto-Dosierung
 //   otaAutoUpdate       - Auto-Install neuer GitHub-Releases
 //   dosingsPerDay       - 2/3/4/6/8/12 (Anzahl Dosier-Intervalle/Tag)
-//   healthcheckUrl      - externer Healthcheck-Ping (z.B. healthchecks.io)
 //   usePhBasedKHDosing  - Tag/Nacht-Schaltung via pH (statt Uhrzeit)
 //   phThresholdForKHNight, khNightStart, khNightEnd
 //   magnesiumRatio      - Mg-Dosis in % der Ca-Dosis
@@ -26,7 +25,6 @@ namespace settings_cache {
 bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
 int dosingsPerDay = 12;           // 2, 3, 4, 6, 8, 12 — Anzahl Dosier-Intervalle pro Tag
 bool otaAutoUpdate = false;       // Master-Schalter: ESP installiert neuere GitHub-Releases automatisch
-String healthcheckUrl = "";       // optionale URL (z.B. healthchecks.io) die bei jedem Heartbeat angepingt wird
 bool usePhBasedKHDosing = false;
 float phThresholdForKHNight = 8.0f;
 int khNightStart = 19;
@@ -41,7 +39,6 @@ void loadFromNVS() {
   autoDosing = p.getBool("autoDose", false);
   dosingsPerDay = p.getInt("dosPerDay", 12);
   otaAutoUpdate = p.getBool("otaAuto", false);
-  healthcheckUrl = p.getString("hcUrl", "");
   usePhBasedKHDosing = p.getBool("phMode", false);
   phThresholdForKHNight = p.getFloat("phThr", 8.0f);
   khNightStart = p.getInt("nightSt", 19);
@@ -62,7 +59,6 @@ void saveToNVS() {
   p.putBool("autoDose", autoDosing);
   p.putInt("dosPerDay", dosingsPerDay);
   p.putBool("otaAuto", otaAutoUpdate);
-  p.putString("hcUrl", healthcheckUrl);
   p.putBool("phMode", usePhBasedKHDosing);
   p.putFloat("phThr", phThresholdForKHNight);
   p.putInt("nightSt", khNightStart);
@@ -104,10 +100,6 @@ void sync() {
   if (doc["otaAutoUpdate"].is<bool>()) {
     bool nv = doc["otaAutoUpdate"].as<bool>();
     if (nv != otaAutoUpdate) { otaAutoUpdate = nv; changed = true; }
-  }
-  if (doc["healthcheckUrl"].is<const char*>()) {
-    String nv = doc["healthcheckUrl"].as<String>();
-    if (nv != healthcheckUrl) { healthcheckUrl = nv; changed = true; }
   }
   if (doc["usePhBasedKHDosing"].is<bool>()) {
     bool nv = doc["usePhBasedKHDosing"].as<bool>();

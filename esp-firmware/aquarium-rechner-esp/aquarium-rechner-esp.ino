@@ -22,7 +22,7 @@
 //     - Auto-Dosierung mit wählbarer Frequenz (2/3/4/6/8/12 pro Tag)
 //     - KH-Tag/Nacht-Umschaltung anhand pH oder Uhrzeit
 //     - Heartbeat alle 30 s mit Doses-Statistik + WLAN-Status
-//     - Healthcheck-Ping (z.B. healthchecks.io) für Ausfall-Alarm
+//     - Ausfall-Erkennung serverseitig (PocketBase-Watchdog, kein externer Ping)
 //     - OTA-Update aus GitHub Releases (mit Schutzfenster zur Dosier-Zeit)
 //     - WS2812 Status-LED (GPIO 48) — zeigt System-Zustand
 //     - Upload-Buffer (FATFS, 800 Items ≈ 2,5 Wochen) für Doses + pH
@@ -41,7 +41,6 @@
 #include "upload_buffer.h"
 #include "plan_executor.h"
 #include "ota_update.h"
-#include "healthcheck.h"
 #include "status_led.h"
 
 unsigned long lastHeartbeatMs = 0;
@@ -168,10 +167,8 @@ void loop() {
     for (int i = 0; i < 4; i++) {
       stats.pumpsCalibrated[i] = pumps::stepsPerML[i] > 0.0f;
     }
-    // Dead-Man's-Switch: externe Healthcheck-URL pingen (z.B. healthchecks.io)
-    // Wenn der ESP ausfällt, bleibt der Ping aus → User bekommt Email/Telegram
-    healthcheck::ping();
-
+    // Ausfall-Erkennung läuft serverseitig (PocketBase-Watchdog prüft den
+    // Heartbeat-Zeitstempel und mailt bei Ausbleiben) — kein externer Ping nötig.
     if (firebase_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
       if (includePh) {
         Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
