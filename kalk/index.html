@@ -2240,6 +2240,32 @@
     ]);
   }
 
+  // ---------- Live-Updates via PocketBase Realtime ----------
+  // Sobald der ESP einen Heartbeat schickt (alle 30 s, inkl. lastPh) oder eine
+  // neue Messung/Dosierung reinkommt, aktualisiert sich das UI automatisch —
+  // kein Neuladen nötig. (Bei eigenem Server ist Realtime "gratis".)
+  let _liveUnsubs = [];
+  async function setupLiveUpdates() {
+    for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
+    _liveUnsubs = [];
+    try {
+      // Heartbeat-Dokument → Live-pH + ESP-Online-Status
+      _liveUnsubs.push(pb.collection("aqua_docs").subscribe("*", (e) => {
+        if (e.record && e.record.key === "info") { refreshDashboard(); refreshDeviceTab(); }
+      }, { filter: "key = 'info'" }));
+      // Neue Messungen → pH-Chart + Dashboard
+      _liveUnsubs.push(pb.collection("aqua_measurements").subscribe("*", () => {
+        refreshPh(); refreshDashboard();
+      }));
+      // Neue Dosierungen (vom ESP) → Verlauf live
+      _liveUnsubs.push(pb.collection("aqua_dosings").subscribe("*", () => { refreshDosings(); }));
+    } catch (e) { console.warn("Live-Updates konnten nicht starten:", e); }
+  }
+  async function stopLiveUpdates() {
+    for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
+    _liveUnsubs = [];
+  }
+
   // Auch Settings-Änderung soll Plan/Dashboard neu rechnen
   document.querySelectorAll("[data-setting]").forEach(inp => {
     inp.addEventListener("change", async () => {
@@ -2256,8 +2282,10 @@
       await loadSettingsIntoForm();
       setupFirmwareUpload();
       await refreshAll();
+      setupLiveUpdates();
     } else {
       settingsLoaded = false;
+      stopLiveUpdates();
       showView("view-login");
     }
   });
