@@ -2,12 +2,11 @@
 
 Werkzeuge für Meerwasser-Aquaristik — von Wasserwechsel-Berechnung bis hin zu vollautomatischer Kalk-Dosierung mit eigener ESP32-Firmware.
 
-## Live
+## Hosting
 
-- **Übersicht**: https://aquarium-rechner.web.app/
-- **C&R Aquarium Rechner**: https://aquarium-rechner.web.app/cr-rechner/
-- **Spurenelemente Rechner**: https://aquarium-rechner.web.app/spurenrechner/
-- **Kalkmanagement**: https://aquarium-rechner.web.app/kalk/
+Selbst gehostet — die Web-Oberfläche wird direkt von einem eigenen **[PocketBase](https://pocketbase.io)**-Server ausgeliefert (statische Dateien im `pb_public/`, dazu API + Auth). Es gibt keine zentrale öffentliche Instanz; Details unter [Hosting & Daten](#hosting--daten).
+
+Die einzelnen Rechner liegen unter den Pfaden `/` (Übersicht), `/cr-rechner/`, `/spurenrechner/` und `/kalk/`.
 
 ## Inhalt
 

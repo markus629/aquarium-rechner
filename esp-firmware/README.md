@@ -1,8 +1,8 @@
 # Aquarium-Rechner ESP-Firmware
 
 Schlanke Firmware für ESP32-S3 N16R8 (16 MB Flash, 8 MB PSRAM), die mit
-dem [Aquarium-Rechner-Web-UI](https://aquarium-rechner.web.app) über
-Firebase synchronisiert.
+dem Aquarium-Rechner-Web-UI über ein selbst gehostetes **PocketBase**-Backend
+(HTTPS-REST) synchronisiert.
 
 ## Hardware
 
@@ -61,7 +61,7 @@ Ab da an läuft alles automatisch. Im Web-UI siehst du den ESP als „online" mi
 
 ## Setup-Modus erneut aktivieren
 
-Wenn du WLAN-Daten oder Firebase-Login ändern willst:
+Wenn du WLAN-Daten oder den Account-Login ändern willst:
 
 - ESP **3× kurz hintereinander stromlos machen + wieder einschalten** → springt zurück in den Setup-Modus
 - Oder über das Web-UI: „Gerät zurücksetzen" (in Phase 2.5 verfügbar)
@@ -69,7 +69,7 @@ Wenn du WLAN-Daten oder Firebase-Login ändern willst:
 ## Status-LED
 
 - **Blau blinkend langsam**: Setup-Modus (warte auf Konfiguration)
-- **Blau dauerhaft**: WLAN verbunden, kein Firebase
+- **Blau dauerhaft**: WLAN verbunden, aber keine Server-Verbindung
 - **Grün dauerhaft**: alles okay, ESP online
 - **Gelb blinkend**: gerade am Dosieren
 - **Rot blinkend**: Fehler — siehe Serial-Monitor
