@@ -8,14 +8,15 @@ dem Aquarium-Rechner-Web-UI über ein selbst gehostetes **PocketBase**-Backend
 
 - **Board**: ESP32-S3 N16R8
 - **Schritt-Motoren** (4 × Stepper für die Pumpen):
-  - STEP gemeinsam: IO4
-  - DIR gemeinsam:  IO5
-  - ENABLE Pumpe 0 (Calcium):     IO14
-  - ENABLE Pumpe 1 (Magnesium):   IO6
-  - ENABLE Pumpe 2 (KH-Tag):      IO13
+  - STEP gemeinsam: IO1
+  - DIR gemeinsam:  IO2
+  - ENABLE Pumpe 0 (Calcium):     IO4
+  - ENABLE Pumpe 1 (Magnesium):   IO5
+  - ENABLE Pumpe 2 (KH-Tag):      IO6
   - ENABLE Pumpe 3 (KH-Nacht):    IO7
-- **pH-Sensor** (analoger Eingang): IO1 (ADC1_CH0)
+- **pH-Sensor** (analoger Eingang): IO10 (ADC1_CH9)
 - **DS3231 RTC** (I²C): SDA=IO8, SCL=IO9
+- **Status-LED** (WS2812 RGB): IO48
 
 ## Erstinstallation (einmalig per USB)
 
