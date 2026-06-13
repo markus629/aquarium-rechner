@@ -1,8 +1,7 @@
 // =============================================================
 // Backend-Anbindung — Auth + Reads/Writes (PocketBase REST)
 // =============================================================
-// Früher Firestore (Mobizt Firebase-ESP-Client), jetzt PocketBase
-// über HTTPS-REST mit ArduinoJson (v7).
+// PocketBase-Backend über HTTPS-REST mit ArduinoJson (v7).
 //
 // Auth-Flow:
 //   - Login mit E-Mail + Passwort (vom Setup-Portal) →

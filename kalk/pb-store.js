@@ -1,8 +1,8 @@
 // =============================================================
 // Daten-Store für Kalkmanagement (1 User = 1 Aquarium)
-// Backend: PocketBase (früher Firestore)
+// Backend: PocketBase
 // =============================================================
-// Mapping der früheren Firestore-Pfade users/{uid}/aquarium/{key}:
+// Collections-Mapping (je 1 Doc pro Schlüssel unter aqua_docs):
 //   - Einzeldokumente (settings, pump-0..3, plan-current,
 //     ph-calibration, info)  -> Collection "aqua_docs" (user, key, data)
 //   - Messungen              -> Collection "aqua_measurements"
@@ -220,7 +220,7 @@ function defaultPump(index) {
   };
 }
 
-// Firebase-kompatibler Auth-Shim für den restlichen Kalk-Code.
+// Schlanker Auth-Shim für den restlichen Kalk-Code.
 // Bietet nur, was kalk/index.html und die Übersicht nutzen:
 //   getAuthInstance().currentUser?.{uid,email,emailVerified}
 //   getAuthInstance().onAuthStateChanged(cb)
