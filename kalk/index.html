@@ -696,7 +696,7 @@
     sendCommand, watchCommand, deleteCommand,
     savePlan, getCurrentPlan,
     getLatestGithubRelease
-  } from "/kalk/firestore-store.js";
+  } from "/kalk/pb-store.js";
   import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
@@ -1744,7 +1744,7 @@
       }
 
       // Auto-Update: errechnete Tages-Verbräuche als neuen Fallback speichern
-      // (nur wenn Checkbox an, Wert valide, und Änderung > 1% damit wir Firestore nicht spammen)
+      // (nur wenn Checkbox an, Wert valide, und Änderung > 1% damit wir den Server nicht spammen)
       if (settings.autoUpdateInitialRates) {
         const update = {};
         if (measuredDailyKH != null && measuredDailyKH > 0) {
@@ -1771,7 +1771,7 @@
         }
       }
 
-      // Plan ans ESP übermitteln (in Firestore speichern)
+      // Plan ans ESP übermitteln (in PocketBase speichern)
       // ESP holt sich das alle 30s (quasi-push, schnelle Aktualisierung)
       // + cached lokal für Offline-Fallback bis 25h
       const planDoc = {
@@ -1788,11 +1788,11 @@
         }
       };
       // Debounce: bei vielen schnellen Setting-Änderungen nur 1× nach 500ms speichern
-      // Verhindert spam von Firestore-Writes
+      // Verhindert Spam von Server-Writes
       clearTimeout(_planSaveTimer);
       _planSaveTimer = setTimeout(async () => {
         try { await savePlan(planDoc); }
-        catch (e) { console.warn("Plan-Save zu Firestore:", e); }
+        catch (e) { console.warn("Plan-Save zu PocketBase:", e); }
       }, 500);
     } catch (e) { console.warn("Plan rechnen:", e); }
   }

@@ -50,7 +50,7 @@
 
 // Stepper-Defaults (stepsPerSec, accelPerSec2) liegen in pumps.h.
 // Anti-Drip-Defaults ebenfalls in pumps.h.
-// Werte werden aus Firestore-Settings gesynct und in NVS persistiert.
+// Werte werden aus PocketBase-Settings gesynct und in NVS persistiert.
 
 // ---------- Intervalle ----------
 const unsigned long HEARTBEAT_INTERVAL_MS    = 30 * 1000UL;

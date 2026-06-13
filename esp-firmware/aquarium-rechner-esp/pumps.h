@@ -31,13 +31,13 @@ FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = nullptr;
 
 // Kalibrierung: Schritte pro ml (lesbarer als ml/Schritt, besonders bei Microstepping)
-float stepsPerML[NUM_PUMPS] = { 0.0f, 0.0f, 0.0f, 0.0f };  // wird aus Firestore geladen
+float stepsPerML[NUM_PUMPS] = { 0.0f, 0.0f, 0.0f, 0.0f };  // wird aus PocketBase geladen
 // Schritt-Geschwindigkeit/Beschleunigung direkt in Hz — funktioniert
 // auch ohne Kalibrierung (für Kalibrier-Lauf selbst).
 uint32_t stepsPerSec  = 400;   // Default: 400 Hz
 uint32_t accelPerSec2 = 200;   // Default: 200 Hz/s
 
-// ---------- Anti-Drip-Settings (kommen aus Firestore via settings_cache) ----------
+// ---------- Anti-Drip-Settings (kommen aus PocketBase via settings_cache) ----------
 bool antiDripEnabled = true;
 float antiDripML = 0.015f;
 uint32_t antiDripStepsPerSec = 400;

@@ -273,7 +273,7 @@ void tickPhCalibration() {
   Serial.printf("[PhCal] pH-%g: Voltage = %.4f V (%d Samples)\n",
                 phCal.targetPh, avg, phCal.sampleCount);
 
-  // In ph_sensor speichern und in Firestore (gepuffert)
+  // In ph_sensor speichern und in PocketBase (gepuffert)
   if (phCal.targetPh == 4.0f) ph_sensor::voltagePH4 = avg;
   else if (phCal.targetPh == 7.0f) ph_sensor::voltagePH7 = avg;
   ph_sensor::calibrated = !isnan(ph_sensor::voltagePH4) && !isnan(ph_sensor::voltagePH7);
@@ -285,7 +285,7 @@ void tickPhCalibration() {
   if (!isnan(ph_sensor::voltagePH7)) p.putFloat("phV7", ph_sensor::voltagePH7);
   p.end();
 
-  // In Firestore (gepuffert)
+  // In PocketBase (gepuffert)
   firebase_sync::writePhCalibration(ph_sensor::voltagePH4, ph_sensor::voltagePH7,
                                      ph_sensor::calibrated);
 
@@ -709,7 +709,7 @@ void begin() {
   }
 }
 
-// Einmalig nach Firebase-Login: pH-Kalibrierung aus Firestore übernehmen,
+// Einmalig nach PocketBase-Login: pH-Kalibrierung aus PocketBase übernehmen,
 // falls lokal (NVS) keine vorhanden ist. Deckt ESP-Tausch + JSON-Restore ab.
 void syncPhCalibrationOnce() {
   static bool done = false;

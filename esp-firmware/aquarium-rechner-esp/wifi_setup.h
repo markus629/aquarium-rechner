@@ -1,8 +1,8 @@
 // =============================================================
-// WiFi + Firebase-Setup-Portal
+// WiFi + Backend-Setup-Portal
 // =============================================================
 // Erstinstallation: ESP startet Access-Point + Captive-Portal-Webserver.
-// Nutzer trägt WLAN + Firebase-Credentials in HTML-Form ein.
+// Nutzer trägt WLAN + Account-Credentials in HTML-Form ein.
 // Nach Speichern: Reboot → ESP verbindet sich autonomously.
 // =============================================================
 #pragma once

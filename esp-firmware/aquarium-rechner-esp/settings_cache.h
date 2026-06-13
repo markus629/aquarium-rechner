@@ -1,8 +1,8 @@
 // =============================================================
-// Settings-Cache (Firestore → ESP)
+// Settings-Cache (PocketBase → ESP)
 // =============================================================
 // Hält System-Settings im RAM und persistiert sie in NVS.
-// Sync von Firestore alle 2 Minuten + initiales Laden aus NVS.
+// Sync von PocketBase alle 2 Minuten + initiales Laden aus NVS.
 //
 // Felder:
 //   autoDosing          - Master-Schalter Auto-Dosierung

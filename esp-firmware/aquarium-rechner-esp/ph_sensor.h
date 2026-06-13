@@ -5,7 +5,7 @@
 // liefert auf Anfrage den Mittelwert als pH.
 //
 // Kalibrierung über zwei Punkte (pH 4.0 und pH 7.0):
-//   voltage_pH4, voltage_pH7 — werden aus Firestore geladen
+//   voltage_pH4, voltage_pH7 — werden aus PocketBase geladen
 //   pH = 7.0 + (voltage_pH7 - voltage) / (voltage_pH4 - voltage_pH7) * 3.0
 // =============================================================
 #pragma once

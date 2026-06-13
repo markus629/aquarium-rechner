@@ -53,7 +53,7 @@ function getNextDosageHour(now, settings) {
 
 // ---------- KH-Plan ----------
 export function calculateKHPlan({
-  settings,        // SystemSettings-Objekt aus Firestore
+  settings,        // SystemSettings-Objekt aus PocketBase
   currentKH,       // letzter gemessener KH-Wert
   dailyConsumption,// ml/Tag (aus Historie oder initialer Wert)
   now              // Unix-Timestamp Sekunden

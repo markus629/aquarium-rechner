@@ -18,8 +18,8 @@
 // stunden/Tag × 3 Pumpen + 12 pH-Werte (~48/Tag). Bei Überlauf: ältester
 // Eintrag wird verworfen (FIFO drop).
 //
-// Speicherung kompakt statt Firestore-JSON, weil 800 volle JSON-Strings
-// den RAM sprengen würden. Das Firestore-JSON wird erst beim Senden in
+// Speicherung kompakt statt Backend-JSON, weil 800 volle JSON-Strings
+// den RAM sprengen würden. Das Backend-JSON wird erst beim Senden in
 // firebase_sync::flushBuffer() aus dem Record rekonstruiert.
 // =============================================================
 #pragma once
