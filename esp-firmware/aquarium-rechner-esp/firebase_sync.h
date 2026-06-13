@@ -1,200 +1,269 @@
 // =============================================================
-// Firebase-Anbindung — Auth + Firestore-Reads/Writes
+// Backend-Anbindung — Auth + Reads/Writes (PocketBase REST)
 // =============================================================
-// Verwendet die "Firebase ESP Client" Library von Mobizt:
-// https://github.com/mobizt/Firebase-ESP-Client
+// Früher Firestore (Mobizt Firebase-ESP-Client), jetzt PocketBase
+// über HTTPS-REST mit ArduinoJson (v7).
 //
 // Auth-Flow:
-//   - Login mit E-Mail + Passwort (vom Setup-Portal)
-//   - Library refresht Tokens automatisch
+//   - Login mit E-Mail + Passwort (vom Setup-Portal) →
+//     POST /api/collections/users/auth-with-password → JWT-Token
+//   - Token wird mitgesendet; bei HTTP 401 automatisch neu eingeloggt.
 //
-// Firestore-Pfade:
-//   users/{uid}/aquarium/info        ← Heartbeat (write)
-//   users/{uid}/aquarium/settings    ← Settings (read)
-//   users/{uid}/aquarium/plan-current ← Aktueller Plan (read)
-//   users/{uid}/aquarium/commands    ← Command-Queue (read+update)
-//   users/{uid}/aquarium/measurements/items/{auto-id} ← pH-Werte (write)
-//   users/{uid}/aquarium/dosings/items/{auto-id}      ← Dose-Bestätigungen (write)
+// Datenmodell (Collections):
+//   aqua_docs       key=info|settings|plan-current|ph-calibration|pump-N  (1 Doc/User, Feld "data")
+//   aqua_measurements  (type,value,timestamp,source)   ← pH-Werte (write)
+//   aqua_dosings       (pump,ml,...,timestamp,source)  ← Dose-Bestätigungen (write)
+//   aqua_command       (cmdId,action,status,...)       ← Command (read+update)
+//
+// HINWEIS: Namespace heißt weiter "firebase_sync", damit die Aufrufer
+// (plan_executor.h, settings_cache.h, .ino) unverändert bleiben.
 // =============================================================
 #pragma once
 
-#include <Firebase_ESP_Client.h>
-#include <addons/TokenHelper.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <time.h>
 #include "config.h"
 #include "upload_buffer.h"
 
+#if PB_TLS_INSECURE == 0
+// ISRG Root X1 (Let's Encrypt) — hier den vollständigen PEM-Block einsetzen,
+// wenn Zertifikatsprüfung gewünscht ist (PB_TLS_INSECURE 0 in config.h).
+static const char *PB_ROOT_CA = R"CERT(
+-----BEGIN CERTIFICATE-----
+... ISRG Root X1 PEM hier einfuegen ...
+-----END CERTIFICATE-----
+)CERT";
+#endif
+
 namespace firebase_sync {
 
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig fbConfig;
-bool ready = false;
+static WiFiClientSecure pbClient;
+static HTTPClient pbHttp;
+
+String authToken;
 String currentUid;
+String credEmail, credPassword;
+bool ready = false;
 
-// ---------- Init + Login ----------
+// PocketBase identifiziert Records per id (nicht per Pfad) → IDs cachen.
+String idCommand;
+String idAquaDoc[6];  // 0=info 1=settings 2=plan-current 3=ph-calibration 4..5 frei
+inline String& cacheIdFor(const String &key) {
+  if (key == "info") return idAquaDoc[0];
+  if (key == "settings") return idAquaDoc[1];
+  if (key == "plan-current") return idAquaDoc[2];
+  if (key == "ph-calibration") return idAquaDoc[3];
+  static String dummy; dummy = ""; return dummy;  // pump-N etc.: nicht gecacht
+}
+
+bool authenticate();  // fwd
+
+// ---------- TLS konfigurieren ----------
+static void configureTLS() {
+#if PB_TLS_INSECURE
+  pbClient.setInsecure();          // keine Zertifikatsprüfung (siehe config.h)
+#else
+  pbClient.setCACert(PB_ROOT_CA);
+#endif
+}
+
+// ---------- URL-Encode (für Filter-Strings) ----------
+static String urlEncode(const String &s) {
+  String out; char buf[4];
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += c;
+    else { sprintf(buf, "%%%02X", (uint8_t)c); out += buf; }
+  }
+  return out;
+}
+
+// ---------- Low-level Request ----------
+// method: GET/POST/PATCH/DELETE. path: ab "/api/...". body: JSON oder "".
+// respOut bekommt den Response-Body. Returns HTTP-Status (<0 = Verbindungsfehler).
+// Bei 401 wird einmal re-authentifiziert und der Request wiederholt.
+static int request(const char *method, const String &path, const String &body,
+                   String *respOut, bool allowReauth = true) {
+  configureTLS();
+  if (!pbHttp.begin(pbClient, String(PB_URL) + path)) return -1;
+  pbHttp.setReuse(true);
+  pbHttp.setTimeout(15000);
+  if (authToken.length()) pbHttp.addHeader("Authorization", authToken);
+  if (body.length())      pbHttp.addHeader("Content-Type", "application/json");
+
+  int code;
+  if (strcmp(method, "GET") == 0) code = pbHttp.GET();
+  else code = pbHttp.sendRequest(method, (uint8_t *)body.c_str(), body.length());
+
+  if (respOut) *respOut = pbHttp.getString();
+  pbHttp.end();
+
+  if (code == 401 && allowReauth) {
+    authToken = "";
+    if (authenticate()) return request(method, path, body, respOut, false);
+  }
+  return code;
+}
+
+// ---------- Auth ----------
+bool authenticate() {
+  JsonDocument body;
+  body["identity"] = credEmail;
+  body["password"] = credPassword;
+  String bodyStr; serializeJson(body, bodyStr);
+
+  String resp;
+  authToken = "";  // ohne Token anfragen
+  int code = request("POST", "/api/collections/users/auth-with-password", bodyStr, &resp, false);
+  if (code != 200) { Serial.printf("[PB] Auth FAIL HTTP %d: %s\n", code, resp.c_str()); return false; }
+
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return false;
+  authToken  = doc["token"].as<String>();
+  currentUid = doc["record"]["id"].as<String>();
+  return authToken.length() > 0 && currentUid.length() > 0;
+}
+
 bool begin(const String &email, const String &password) {
-  fbConfig.api_key = FIREBASE_API_KEY;
-  auth.user.email = email.c_str();
-  auth.user.password = password.c_str();
-  fbConfig.token_status_callback = tokenStatusCallback;
+  credEmail = email; credPassword = password;
+  Serial.println("[PB] Authentifiziere …");
+  ready = authenticate();
+  if (ready) Serial.printf("[PB] eingeloggt als uid=%s\n", currentUid.c_str());
+  else       Serial.println("[PB] FEHLER: Auth fehlgeschlagen");
+  return ready;
+}
 
-  Firebase.begin(&fbConfig, &auth);
-  Firebase.reconnectWiFi(true);
-  fbdo.setBSSLBufferSize(4096, 1024);  // mehr Buffer für TLS
+bool isReady() { return ready && WiFi.status() == WL_CONNECTED; }
+const String& uid() { return currentUid; }
 
-  Serial.println("[Firebase] Warte auf Authentifizierung …");
-  unsigned long start = millis();
-  while (!Firebase.ready() && (millis() - start) < 30000) {
-    delay(250);
-  }
-  if (!Firebase.ready()) {
-    Serial.println("[Firebase] FEHLER: Auth-Timeout");
-    return false;
-  }
-  currentUid = auth.token.uid.c_str();
-  Serial.printf("[Firebase] eingeloggt als uid=%s\n", currentUid.c_str());
-  ready = true;
+// ---------- aqua_docs Helfer ----------
+// Sucht die Record-ID des aqua_docs <key>. "" wenn nicht vorhanden.
+static String findAquaDocId(const String &key) {
+  if (!isReady()) return "";
+  String filter = "user='" + currentUid + "' && key='" + key + "'";
+  String path = "/api/collections/aqua_docs/records?perPage=1&filter=" + urlEncode(filter);
+  String resp;
+  if (request("GET", path, "", &resp) != 200) return "";
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return "";
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.size() == 0) return "";
+  return items[0]["id"].as<String>();
+}
+
+// Lädt das "data"-Objekt des aqua_docs <key> nach out. Returns true wenn vorhanden.
+static bool fetchAquaDoc(const String &key, JsonDocument &out) {
+  if (!isReady()) return false;
+  String filter = "user='" + currentUid + "' && key='" + key + "'";
+  String path = "/api/collections/aqua_docs/records?perPage=1&filter=" + urlEncode(filter);
+  String resp;
+  if (request("GET", path, "", &resp) != 200) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return false;
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.size() == 0) return false;
+  String &cid = cacheIdFor(key);
+  if (cid.length() == 0) cid = items[0]["id"].as<String>();
+  out.set(items[0]["data"]);   // tiefe Kopie des data-Objekts
   return true;
 }
 
-bool isReady() { return ready && Firebase.ready(); }
-const String& uid() { return currentUid; }
+// Schreibt das data-Objekt unter <key> (upsert, ersetzt data komplett).
+static bool upsertAquaDoc(const String &key, JsonVariantConst data) {
+  if (!isReady()) return false;
+  String &cid = cacheIdFor(key);
+  if (cid.length() == 0) cid = findAquaDocId(key);
 
-// ---------- Pfad-Builder ----------
-String pathInfo()      { return "users/" + currentUid + "/aquarium/info"; }
-String pathSettings()  { return "users/" + currentUid + "/aquarium/settings"; }
-String pathPlan()      { return "users/" + currentUid + "/aquarium/plan-current"; }
-String pathCommand()   { return "users/" + currentUid + "/aquarium/cmd"; }
-String pathPump(int i) { return "users/" + currentUid + "/aquarium/pump-" + String(i); }
-String pathMeasurements() { return "users/" + currentUid + "/aquarium/measurements/items"; }
-String pathDosings()   { return "users/" + currentUid + "/aquarium/dosings/items"; }
+  String resp; int code = 0;
+  if (cid.length()) {
+    JsonDocument body; body["data"] = data;
+    String b; serializeJson(body, b);
+    code = request("PATCH", "/api/collections/aqua_docs/records/" + cid, b, &resp);
+    if (code == 404) cid = "";  // Record verschwunden → neu anlegen
+  }
+  if (cid.length() == 0) {
+    JsonDocument body;
+    body["user"] = currentUid; body["key"] = key; body["data"] = data;
+    String b; serializeJson(body, b);
+    code = request("POST", "/api/collections/aqua_docs/records", b, &resp);
+    if (code == 200) {
+      JsonDocument d;
+      if (!deserializeJson(d, resp)) cid = d["id"].as<String>();
+    }
+  }
+  return code == 200;
+}
 
-// ---------- Heartbeat schreiben ----------
-// Erweiterter Heartbeat mit Statistiken und Pumpen-Kalibrierstatus.
+// ---------- Heartbeat schreiben (aqua_docs key="info") ----------
 struct HeartbeatStats {
   unsigned long dosesTotal;
   unsigned long dosesFailedTotal;
   int dosesOk24h;
   int dosesFail24h;
   bool pumpsCalibrated[4];  // mlPerStep > 0 ?
-  int bufferQueueSize;       // wie viele Uploads noch in Queue
+  int bufferQueueSize;
 };
 
 bool sendHeartbeat(float phValue, int phSamples, long uptimeSec, const HeartbeatStats &stats) {
   if (!isReady()) return false;
-  FirebaseJson content;
-  content.set("fields/online/booleanValue", true);
-  content.set("fields/firmware/stringValue", FW_VERSION);
-  time_t now;
-  time(&now);
-  if (now > 1700000000) {
-    char buf[32];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    content.set("fields/lastSeen/timestampValue", buf);
+  JsonDocument data;
+  data["online"]   = true;
+  data["firmware"] = FW_VERSION;
+  time_t now; time(&now);
+  if (now > 1700000000) data["lastSeen"] = (long)now;   // Unix-Sekunden (Web rechnet *1000)
+  data["freeHeap"]  = (int)ESP.getFreeHeap();
+  data["rssi"]      = (int)WiFi.RSSI();
+  data["ip"]        = WiFi.localIP().toString();
+  data["uptimeSec"] = (int)uptimeSec;
+  if (!isnan(phValue)) {
+    data["lastPh"]        = phValue;
+    data["lastPhSamples"] = phSamples;
   }
-  content.set("fields/freeHeap/integerValue", (int)ESP.getFreeHeap());
-  content.set("fields/rssi/integerValue", (int)WiFi.RSSI());
-  content.set("fields/ip/stringValue", WiFi.localIP().toString().c_str());
-  content.set("fields/uptimeSec/integerValue", (int)uptimeSec);
-  // WICHTIG: lastPh nur in die Update-Mask aufnehmen wenn auch gesendet —
-  // Felder in der Mask OHNE Inhalt werden von Firestore GELÖSCHT.
-  bool sendPh = !isnan(phValue);
-  if (sendPh) {
-    content.set("fields/lastPh/doubleValue", phValue);
-    content.set("fields/lastPhSamples/integerValue", phSamples);
-  }
-  // Statistiken
-  content.set("fields/dosesTotal/integerValue", (int)stats.dosesTotal);
-  content.set("fields/dosesFailedTotal/integerValue", (int)stats.dosesFailedTotal);
-  content.set("fields/dosesOk24h/integerValue", stats.dosesOk24h);
-  content.set("fields/dosesFail24h/integerValue", stats.dosesFail24h);
-  content.set("fields/bufferQueueSize/integerValue", stats.bufferQueueSize);
-  // Pumpen-Kalibrier-Array
-  for (int i = 0; i < 4; i++) {
-    String key = String("fields/pumpsCalibrated/arrayValue/values/[") + i + "]/booleanValue";
-    content.set(key.c_str(), stats.pumpsCalibrated[i]);
-  }
+  data["dosesTotal"]       = (int)stats.dosesTotal;
+  data["dosesFailedTotal"] = (int)stats.dosesFailedTotal;
+  data["dosesOk24h"]       = stats.dosesOk24h;
+  data["dosesFail24h"]     = stats.dosesFail24h;
+  data["bufferQueueSize"]  = stats.bufferQueueSize;
+  JsonArray pc = data["pumpsCalibrated"].to<JsonArray>();
+  for (int i = 0; i < 4; i++) pc.add(stats.pumpsCalibrated[i]);
 
-  String mask = "online,firmware,lastSeen,freeHeap,rssi,ip,uptimeSec,"
-                "dosesTotal,dosesFailedTotal,"
-                "dosesOk24h,dosesFail24h,bufferQueueSize,pumpsCalibrated";
-  if (sendPh) mask += ",lastPh,lastPhSamples";
-  return Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathInfo().c_str(),
-                                          content.raw(), mask.c_str());
+  return upsertAquaDoc("info", data);
 }
 
 // ---------- Settings lesen ----------
-// Returns true wenn Daten geladen, schreibt JSON in `out`
-bool fetchSettings(FirebaseJson &out) {
-  if (!isReady()) return false;
-  if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathSettings().c_str())) {
-    out.setJsonData(fbdo.payload());
-    return true;
-  }
-  return false;
-}
+bool fetchSettings(JsonDocument &out) { return fetchAquaDoc("settings", out); }
 
 // ---------- Plan lesen ----------
-bool fetchPlan(FirebaseJson &out) {
-  if (!isReady()) return false;
-  if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathPlan().c_str())) {
-    out.setJsonData(fbdo.payload());
-    return true;
-  }
-  return false;
-}
+bool fetchPlan(JsonDocument &out) { return fetchAquaDoc("plan-current", out); }
 
-// ---------- pH-Messung schreiben (gepuffert) ----------
-// Immer erst in upload_buffer einreihen, der Flush-Mechanismus
-// versucht periodisch zu senden. Garantiert: kein Datenverlust.
-void addPhMeasurement(float phValue) {
-  upload_buffer::enqueuePh(phValue);
-}
-
-// ---------- Dosier-Bestätigung schreiben (gepuffert) ----------
+// ---------- Messung / Dosis puffern ----------
+void addPhMeasurement(float phValue) { upload_buffer::enqueuePh(phValue); }
 void addDosing(int pumpIdx, float ml, const char *dosageType, bool isAutomatic, float factor, bool success) {
-  // factor ist aktuell immer 1.0 → wird beim Senden rekonstruiert
-  (void)factor;
+  (void)factor;  // aktuell immer 1.0 → beim Senden rekonstruiert
   upload_buffer::enqueueDose(pumpIdx, ml, dosageType, isAutomatic, success);
 }
 
 // ---------- Container-Level dekrementieren ----------
-// Schreibt nur das eine Array-Feld zurück (PATCH mit mask).
-// ESP hat lokal keinen Cache der Levels — wir holen sie kurz aus Firestore.
-// Falls offline: Web macht das eh auch separat bei Re-Sync.
 void decrementContainerLevel(int pumpIdx, float ml) {
   if (!isReady() || pumpIdx < 0 || pumpIdx > 3 || ml <= 0) return;
-  // Settings-Doc holen
-  String settingsPath = "users/" + currentUid + "/aquarium/settings";
-  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", settingsPath.c_str())) return;
-  FirebaseJson doc;
-  doc.setJsonData(fbdo.payload());
-  // Aktuelle Levels lesen
-  float levels[4] = { 5000, 5000, 5000, 5000 };
-  for (int i = 0; i < 4; i++) {
-    FirebaseJsonData v;
-    String path = String("fields/containerLevel/arrayValue/values/[") + i + "]/doubleValue";
-    if (doc.get(v, path.c_str()) && v.success) levels[i] = v.floatValue;
-    else {
-      String pathInt = String("fields/containerLevel/arrayValue/values/[") + i + "]/integerValue";
-      if (doc.get(v, pathInt.c_str()) && v.success) levels[i] = (float)v.intValue;
-    }
+  JsonDocument data;
+  if (!fetchAquaDoc("settings", data)) return;
+  JsonArray levels = data["containerLevel"].as<JsonArray>();
+  if (levels.isNull() || levels.size() < 4) {
+    // Feld fehlt → mit Defaults anlegen
+    levels = data["containerLevel"].to<JsonArray>();
+    for (int i = 0; i < 4; i++) levels.add(5000.0);
   }
-  // Dekrementieren
-  levels[pumpIdx] -= ml;
-  if (levels[pumpIdx] < 0) levels[pumpIdx] = 0;
-  // Zurückschreiben via PATCH mit mask
-  FirebaseJson content;
-  for (int i = 0; i < 4; i++) {
-    String key = String("fields/containerLevel/arrayValue/values/[") + i + "]/doubleValue";
-    content.set(key.c_str(), levels[i]);
-  }
-  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", settingsPath.c_str(),
-                                   content.raw(), "containerLevel");
+  float cur = levels[pumpIdx].as<float>();
+  cur -= ml; if (cur < 0) cur = 0;
+  levels[pumpIdx] = cur;
+  upsertAquaDoc("settings", data);  // ganzes data zurückschreiben (andere Felder bleiben)
 }
 
-// ---------- pH-Kalibrierung schreiben (gepuffert) ----------
+// ---------- pH-Kalibrierung puffern ----------
 void writePhCalibration(float voltage_pH4, float voltage_pH7, bool isCalibrated) {
   upload_buffer::enqueuePhCal(voltage_pH4, voltage_pH7, isCalibrated);
 }
@@ -202,22 +271,15 @@ void writePhCalibration(float voltage_pH4, float voltage_pH7, bool isCalibrated)
 // ---------- pH-Kalibrierung lesen ----------
 bool fetchPhCalibration(float &v4_out, float &v7_out, bool &calibrated_out) {
   if (!isReady()) return false;
-  String path = "users/" + currentUid + "/aquarium/ph-calibration";
-  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) return false;
-  FirebaseJson doc;
-  doc.setJsonData(fbdo.payload());
-  FirebaseJsonData v;
-  if (doc.get(v, "fields/voltage_pH4/doubleValue") && v.success) v4_out = v.floatValue;
-  else if (doc.get(v, "fields/voltage_pH4/integerValue") && v.success) v4_out = (float)v.intValue;
-  if (doc.get(v, "fields/voltage_pH7/doubleValue") && v.success) v7_out = v.floatValue;
-  else if (doc.get(v, "fields/voltage_pH7/integerValue") && v.success) v7_out = (float)v.intValue;
+  JsonDocument data;
+  if (!fetchAquaDoc("ph-calibration", data)) return false;
+  if (data["voltage_pH4"].is<float>()) v4_out = data["voltage_pH4"].as<float>();
+  if (data["voltage_pH7"].is<float>()) v7_out = data["voltage_pH7"].as<float>();
   calibrated_out = !isnan(v4_out) && !isnan(v7_out);
   return true;
 }
 
 // ---------- Buffer-Flush ----------
-// Versucht den ältesten gepufferten Eintrag zu senden.
-// Returns true wenn erfolgreich (oder Queue leer), false wenn fehlgeschlagen.
 bool flushBuffer() {
   if (!isReady() || upload_buffer::queue.empty()) return true;
   unsigned long ms = millis();
@@ -227,43 +289,44 @@ bool flushBuffer() {
 
   upload_buffer::PendingWrite &first = upload_buffer::queue.front();
   first.attempts++;
-  bool ok;
+  bool ok = false;
+  String resp;
 
-  // Firestore-JSON aus dem kompakten Record rekonstruieren — mit dem
-  // ORIGINAL-Timestamp (Moment des Dosierens/Messens, nicht jetzt).
-  FirebaseJson content;
   if (first.kind == upload_buffer::KIND_DOSE) {
-    content.set("fields/pump/integerValue", (int)first.pump);
-    content.set("fields/ml/doubleValue", first.ml);
-    content.set("fields/dosageType/stringValue", upload_buffer::doseTypeToStr(first.doseType));
-    content.set("fields/isAutomatic/booleanValue", first.isAuto);
-    content.set("fields/factor/doubleValue", 1.0);
-    content.set("fields/success/booleanValue", first.success);
-    content.set("fields/source/stringValue", "esp");
-    if (first.timestamp > 1700000000) content.set("fields/timestamp/integerValue", (int)first.timestamp);
-    ok = Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "",
-                                           pathDosings().c_str(), "", content.raw(), "");
+    JsonDocument body;
+    body["user"]        = currentUid;
+    body["pump"]        = (int)first.pump;
+    body["ml"]          = first.ml;
+    body["dosageType"]  = upload_buffer::doseTypeToStr(first.doseType);
+    body["isAutomatic"] = first.isAuto;
+    body["factor"]      = 1.0;
+    body["success"]     = first.success;
+    body["source"]      = "esp";
+    if (first.timestamp > 1700000000) body["timestamp"] = (long)first.timestamp;
+    String b; serializeJson(body, b);
+    ok = request("POST", "/api/collections/aqua_dosings/records", b, &resp) == 200;
+
   } else if (first.kind == upload_buffer::KIND_PH) {
-    content.set("fields/type/stringValue", "ph");
-    content.set("fields/value/doubleValue", first.phValue);
-    content.set("fields/source/stringValue", "esp");
-    if (first.timestamp > 1700000000) content.set("fields/timestamp/integerValue", (int)first.timestamp);
-    ok = Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "",
-                                           pathMeasurements().c_str(), "", content.raw(), "");
-  } else { // KIND_PHCAL → einzelnes Doc, patchDocument (Merge)
-    if (!isnan(first.v4)) content.set("fields/voltage_pH4/doubleValue", first.v4);
-    if (!isnan(first.v7)) content.set("fields/voltage_pH7/doubleValue", first.v7);
-    content.set("fields/isCalibrated/booleanValue", first.calibrated);
-    if (first.timestamp > 1700000000) content.set("fields/lastCalibratedAt/integerValue", (int)first.timestamp);
-    String calPath = "users/" + currentUid + "/aquarium/ph-calibration";
-    ok = Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "",
-                                          calPath.c_str(), content.raw(),
-                                          "voltage_pH4,voltage_pH7,isCalibrated,lastCalibratedAt");
+    JsonDocument body;
+    body["user"]   = currentUid;
+    body["type"]   = "ph";
+    body["value"]  = first.phValue;
+    body["source"] = "esp";
+    if (first.timestamp > 1700000000) body["timestamp"] = (long)first.timestamp;
+    String b; serializeJson(body, b);
+    ok = request("POST", "/api/collections/aqua_measurements/records", b, &resp) == 200;
+
+  } else {  // KIND_PHCAL → aqua_docs key="ph-calibration" (Merge mit Bestand)
+    JsonDocument data;
+    fetchAquaDoc("ph-calibration", data);  // evtl. leer
+    if (!isnan(first.v4)) data["voltage_pH4"] = first.v4;
+    if (!isnan(first.v7)) data["voltage_pH7"] = first.v7;
+    data["isCalibrated"] = first.calibrated;
+    if (first.timestamp > 1700000000) data["lastCalibratedAt"] = (long)first.timestamp;
+    ok = upsertAquaDoc("ph-calibration", data);
   }
+
   if (ok) {
-    // Kanister-Dekrement passiert hier (statt direkt beim Dosieren):
-    // so geht es auch im Offline-Betrieb nicht verloren — es wird einfach
-    // zusammen mit der gepufferten Dose nachgeholt.
     if (first.kind == upload_buffer::KIND_DOSE && first.success) {
       decrementContainerLevel(first.pump, first.ml);
     }
@@ -271,80 +334,59 @@ bool flushBuffer() {
     upload_buffer::queue.erase(upload_buffer::queue.begin());
     upload_buffer::save();
     upload_buffer::nextRetryAtMs = 0;
-    // Erfolg → nächster Flush darf sofort kommen (schnelles Abarbeiten
-    // großer Backlogs, z.B. nach Urlaub). 15-s-Intervall gilt nur als
-    // Grundtakt, Backoff nur nach Fehlern.
-    upload_buffer::lastFlushAttemptMs = 0;
+    upload_buffer::lastFlushAttemptMs = 0;  // großen Backlog schnell abarbeiten
     return true;
   } else {
-    Serial.printf("[Buffer] flush FAIL (attempts=%d, %d in queue): %s\n",
-                  first.attempts, (int)upload_buffer::queue.size(),
-                  fbdo.errorReason().c_str());
+    Serial.printf("[Buffer] flush FAIL (attempts=%d, %d in queue)\n",
+                  first.attempts, (int)upload_buffer::queue.size());
     upload_buffer::nextRetryAtMs = ms + upload_buffer::BACKOFF_AFTER_FAIL_MS;
-    upload_buffer::save();  // attempts++ persistieren
+    upload_buffer::save();
     return false;
   }
 }
 
 // ---------- Pump-Konfig lesen (Kalibrierung) ----------
-// Returns true wenn erfolgreich, schreibt stepsPerML ins out-Parameter.
 bool fetchPumpStepsPerML(int pumpIdx, float &outStepsPerML) {
   if (!isReady()) return false;
-  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathPump(pumpIdx).c_str())) {
-    return false;
-  }
-  FirebaseJson doc;
-  doc.setJsonData(fbdo.payload());
-  FirebaseJsonData v;
-  if (doc.get(v, "fields/stepsPerML/doubleValue") && v.success) {
-    outStepsPerML = v.floatValue;
-    return true;
-  }
-  if (doc.get(v, "fields/stepsPerML/integerValue") && v.success) {
-    outStepsPerML = (float)v.intValue;
+  JsonDocument data;
+  if (!fetchAquaDoc("pump-" + String(pumpIdx), data)) return false;
+  if (data["stepsPerML"].is<float>()) {
+    outStepsPerML = data["stepsPerML"].as<float>();
     return true;
   }
   return false;
 }
 
-// ---------- Aktuelles Command lesen (einzelnes Doc) ----------
-// Liest users/{uid}/aquarium/cmd. Returns true wenn Doc existiert.
-bool fetchActiveCommand(FirebaseJson &out) {
+// ---------- Aktuelles Command lesen (aqua_command, 1 Record/User) ----------
+// Füllt out mit dem Record (cmdId, action, status, pump, ml, steps, phValue).
+// Returns true wenn ein Command-Record existiert.
+bool fetchActiveCommand(JsonDocument &out) {
   if (!isReady()) return false;
-  if (!Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathCommand().c_str())) {
-    // Doc existiert nicht ist OK (kein pending command), nicht spammen
-    String err = fbdo.errorReason();
-    if (err.length() > 0 && err.indexOf("Not Found") < 0 && err.indexOf("not found") < 0) {
-      Serial.printf("[Cmd] getDocument FAIL: %s\n", err.c_str());
-    }
-    return false;
-  }
-  out.setJsonData(fbdo.payload());
+  String filter = "user='" + currentUid + "'";
+  String path = "/api/collections/aqua_command/records?perPage=1&filter=" + urlEncode(filter);
+  String resp;
+  if (request("GET", path, "", &resp) != 200) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return false;
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.size() == 0) return false;
+  idCommand = items[0]["id"].as<String>();
+  out.set(items[0]);
   return true;
 }
 
 // ---------- Command-Status aktualisieren ----------
-bool updateCommandStatus(const String &status, FirebaseJson *resultJson = nullptr) {
+bool updateCommandStatus(const String &status, JsonDocument *resultJson = nullptr) {
   if (!isReady()) return false;
-  FirebaseJson content;
-  content.set("fields/status/stringValue", status);
-  time_t now; time(&now);
-  if (now > 1700000000) {
-    char buf[32];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    if (status == "running") content.set("fields/startedAt/timestampValue", buf);
-    else if (status == "done" || status == "failed") content.set("fields/completedAt/timestampValue", buf);
-  }
-  String mask = "status";
-  if (status == "running") mask += ",startedAt";
-  if (status == "done" || status == "failed") mask += ",completedAt";
-  if (resultJson) {
-    content.set("fields/result/mapValue/fields", *resultJson);
-    mask += ",result";
-  }
-  bool ok = Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pathCommand().c_str(),
-                                              content.raw(), mask.c_str());
-  if (!ok) Serial.printf("[Cmd] update FAIL: %s\n", fbdo.errorReason().c_str());
+  // idCommand wird von fetchActiveCommand() gesetzt (immer vor Status-Updates aufgerufen).
+  if (idCommand.length() == 0) return false;
+  JsonDocument body;
+  body["status"] = status;
+  if (resultJson) body["result"] = *resultJson;
+  String b; serializeJson(body, b);
+  String resp;
+  bool ok = request("PATCH", "/api/collections/aqua_command/records/" + idCommand, b, &resp) == 200;
+  if (!ok) Serial.printf("[Cmd] update FAIL: %s\n", resp.c_str());
   return ok;
 }
 

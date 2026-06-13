@@ -175,10 +175,10 @@ void syncPlan() {
   if (lastPlanFetchMs != 0 && now - lastPlanFetchMs < PLAN_FETCH_INTERVAL_MS) return;
   lastPlanFetchMs = now;
 
-  FirebaseJson doc;
+  JsonDocument doc;
   if (!firebase_sync::fetchPlan(doc)) return;
   String json;
-  doc.toString(json);
+  serializeJson(doc, json);
   if (json.length() > 0 && json != cachedPlanJson) {
     cachedPlanJson = json;
     savePlanCacheToNVS(json);
@@ -230,12 +230,12 @@ PhCalibrationCmd phCal;
 
 bool startPhCalibration(const String &cmdId, float targetPh) {
   if (phCal.active) {
-    FirebaseJson r; r.set("error/stringValue", "Kalibrierung bereits aktiv");
+    JsonDocument r; r["error"] = "Kalibrierung bereits aktiv";
     firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (targetPh != 4.0f && targetPh != 7.0f) {
-    FirebaseJson r; r.set("error/stringValue", "phValue muss 4.0 oder 7.0 sein");
+    JsonDocument r; r["error"] = "phValue muss 4.0 oder 7.0 sein";
     firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
@@ -264,7 +264,7 @@ void tickPhCalibration() {
 
   // Kalibrierung abgeschlossen
   if (phCal.sampleCount == 0) {
-    FirebaseJson r; r.set("error/stringValue", "Keine Voltage-Samples");
+    JsonDocument r; r["error"] = "Keine Voltage-Samples";
     firebase_sync::updateCommandStatus("failed", &r);
     phCal.active = false;
     return;
@@ -289,12 +289,12 @@ void tickPhCalibration() {
   firebase_sync::writePhCalibration(ph_sensor::voltagePH4, ph_sensor::voltagePH7,
                                      ph_sensor::calibrated);
 
-  FirebaseJson result;
-  result.set("voltage/doubleValue", avg);
-  result.set("samples/integerValue", phCal.sampleCount);
-  result.set("phValue/doubleValue", phCal.targetPh);
-  result.set("durationMs/integerValue", (int)elapsed);
-  result.set("isFullyCalibrated/booleanValue", ph_sensor::calibrated);
+  JsonDocument result;
+  result["voltage"] = avg;
+  result["samples"] = phCal.sampleCount;
+  result["phValue"] = phCal.targetPh;
+  result["durationMs"] = (int)elapsed;
+  result["isFullyCalibrated"] = ph_sensor::calibrated;
   firebase_sync::updateCommandStatus("done", &result);
   phCal.active = false;
 }
@@ -367,36 +367,36 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
     firebase_sync::updateCommandStatus("running");
     // 1) GitHub-Release holen (~2 s)
     bool found = ota_update::fetchLatestRelease();
-    FirebaseJson r;
-    r.set("currentVersion/stringValue", FW_VERSION);
-    r.set("availableVersion/stringValue", ota_update::availableVersion);
+    JsonDocument r;
+    r["currentVersion"] = FW_VERSION;
+    r["availableVersion"] = ota_update::availableVersion;
     if (!found) {
-      r.set("info/stringValue", "Kein GitHub-Release gefunden");
+      r["info"] = "Kein GitHub-Release gefunden";
       firebase_sync::updateCommandStatus("done", &r);
       return true;
     }
     int cmp = ota_update::compareVersions(FW_VERSION, ota_update::availableVersion);
     if (cmp >= 0) {
-      r.set("info/stringValue", "Bereits aktuell");
+      r["info"] = "Bereits aktuell";
       firebase_sync::updateCommandStatus("done", &r);
       return true;
     }
     if (ota_update::isProtectedWindow()) {
-      r.set("info/stringValue", "Update verschoben — Dosier-Schutzfenster (:08-:20)");
+      r["info"] = "Update verschoben — Dosier-Schutzfenster (:08-:20)";
       firebase_sync::updateCommandStatus("done", &r);
       return true;
     }
     // 2) Update wird durchgeführt — Web vorher informieren, sonst Timeout beim Reboot
-    r.set("info/stringValue", "Update läuft — ESP startet gleich neu");
+    r["info"] = "Update läuft — ESP startet gleich neu";
     firebase_sync::updateCommandStatus("done", &r);
-    delay(500);  // Firestore-PATCH Zeit zum Committen geben
+    delay(500);  // PATCH Zeit zum Committen geben
     // 3) Jetzt der eigentliche Download + Reboot (blockt mehrere Sekunden)
     ota_update::performUpdate(ota_update::availableUrl);
     // Falls performUpdate scheitert (kein Reboot), Status nochmal melden
-    FirebaseJson r2;
-    r2.set("currentVersion/stringValue", FW_VERSION);
-    r2.set("availableVersion/stringValue", ota_update::availableVersion);
-    r2.set("info/stringValue", "Update fehlgeschlagen — siehe ESP-Serial");
+    JsonDocument r2;
+    r2["currentVersion"] = FW_VERSION;
+    r2["availableVersion"] = ota_update::availableVersion;
+    r2["info"] = "Update fehlgeschlagen — siehe ESP-Serial";
     firebase_sync::updateCommandStatus("failed", &r2);
     return true;
   }
@@ -404,7 +404,7 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
     return startPhCalibration(cmdId, phValue);
   }
   if (pump < 0 || pump >= pumps::NUM_PUMPS) {
-    FirebaseJson r; r.set("error/stringValue", "ungültige Pumpe");
+    JsonDocument r; r["error"] = "ungültige Pumpe";
     firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
@@ -412,25 +412,25 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   bool ok = false;
   if (action == "calibrate") {
     if (steps <= 0) {
-      FirebaseJson r; r.set("error/stringValue", "steps fehlt");
+      JsonDocument r; r["error"] = "steps fehlt";
       firebase_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runSteps(pump, steps);
   } else if (action == "dose") {
     if (isnan(ml) || ml <= 0) {
-      FirebaseJson r; r.set("error/stringValue", "ml fehlt");
+      JsonDocument r; r["error"] = "ml fehlt";
       firebase_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runMl(pump, ml);
   } else {
-    FirebaseJson r; r.set("error/stringValue", "unbekannte action");
+    JsonDocument r; r["error"] = "unbekannte action";
     firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (!ok) {
-    FirebaseJson r; r.set("error/stringValue", "Pumpe nicht startbar");
+    JsonDocument r; r["error"] = "Pumpe nicht startbar";
     firebase_sync::updateCommandStatus("failed", &r);
     return false;
   }
@@ -479,11 +479,11 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
                   DT_LABELS[current.dosageType],
                   success ? "done" : "FAILED", duration);
   } else {
-    FirebaseJson result;
-    result.set("durationMs/integerValue", (int)duration);
-    if (current.action == "calibrate") result.set("actualSteps/integerValue", (int)current.steps);
-    else if (current.action == "dose") result.set("actualMl/doubleValue", current.ml);
-    if (!success && errorMsg) result.set("error/stringValue", errorMsg);
+    JsonDocument result;
+    result["durationMs"] = (int)duration;
+    if (current.action == "calibrate") result["actualSteps"] = (int)current.steps;
+    else if (current.action == "dose") result["actualMl"] = current.ml;
+    if (!success && errorMsg) result["error"] = errorMsg;
     firebase_sync::updateCommandStatus(success ? "done" : "failed", &result);
     if (current.action == "dose" && success) {
       // Kanister-Dekrement übernimmt flushBuffer beim Upload
@@ -506,30 +506,24 @@ void pollCommands() {
   // WICHTIG: auch während laufender Aktion weiter pollen — sonst kommt
   // ein Stop-Command nie an. Nicht-Stop-Commands warten unten einfach.
 
-  FirebaseJson doc;
+  JsonDocument doc;
   if (!firebase_sync::fetchActiveCommand(doc)) return;
 
-  FirebaseJsonData fId, fStatus, fAction, fPump, fMl, fSteps, fPhValue;
-  doc.get(fId,      "fields/id/stringValue");
-  doc.get(fStatus,  "fields/status/stringValue");
-  doc.get(fAction,  "fields/action/stringValue");
-  doc.get(fPump,    "fields/pump/integerValue");
-  doc.get(fMl,      "fields/ml/doubleValue");
-  if (!fMl.success) doc.get(fMl, "fields/ml/integerValue");  // Firestore speichert ganze Zahlen als integer
-  doc.get(fSteps,   "fields/steps/integerValue");
-  if (!fSteps.success) doc.get(fSteps, "fields/steps/doubleValue");
-  doc.get(fPhValue, "fields/phValue/doubleValue");
-  if (!fPhValue.success) doc.get(fPhValue, "fields/phValue/integerValue");
+  String cmdId  = doc["cmdId"]  | "";
+  String status = doc["status"] | "";
+  String action = doc["action"] | "";
+  if (cmdId == "" || status == "" || action == "") return;
+  if (status != "pending") return;
+  if (cmdId == lastProcessedCmdId) return;  // schon abgearbeitet
 
-  if (!fStatus.success || !fAction.success || !fId.success) return;
-  if (fStatus.stringValue != "pending") return;
-  // Schon abgearbeitet?
-  if (fId.stringValue == lastProcessedCmdId) return;
-
-  String cmdId = fId.stringValue;
+  // is<float>() ist auch für Ganzzahlen true; fehlende Felder → Default.
+  int   pump    = doc["pump"].is<float>()    ? (int)doc["pump"].as<float>()   : -1;
+  float ml      = doc["ml"].is<float>()      ? doc["ml"].as<float>()          : NAN;
+  long  steps   = doc["steps"].is<float>()   ? (long)doc["steps"].as<float>() : 0;
+  float phValue = doc["phValue"].is<float>() ? doc["phValue"].as<float>()     : NAN;
 
   // Stop hat Vorrang und darf IMMER durch — auch während laufender Aktion
-  if (fAction.stringValue == "stop") {
+  if (action == "stop") {
     lastProcessedCmdId = cmdId;
     abortAll();
     firebase_sync::updateCommandStatus("done");
@@ -540,13 +534,9 @@ void pollCommands() {
   if (current.active || phCal.active) return;
 
   lastProcessedCmdId = cmdId;
-  Serial.printf("[Cmd] Pending entdeckt: action=%s id=%s\n", fAction.stringValue.c_str(), cmdId.c_str());
+  Serial.printf("[Cmd] Pending entdeckt: action=%s id=%s\n", action.c_str(), cmdId.c_str());
 
-  startCommand(cmdId, fAction.stringValue,
-               fPump.success ? (int)fPump.intValue : -1,
-               fMl.success ? fMl.floatValue : NAN,
-               fSteps.success ? (long)fSteps.intValue : 0,
-               fPhValue.success ? fPhValue.floatValue : NAN);
+  startCommand(cmdId, action, pump, ml, steps, phValue);
 }
 
 // ---------- Helpers für Plan-Iteration ----------
@@ -559,22 +549,16 @@ struct PlanEntry {
   bool valid;
 };
 
-PlanEntry parseEntry(FirebaseJson &entry, bool isKH) {
+PlanEntry parseEntry(JsonObjectConst entry, bool isKH) {
   PlanEntry pe = { 0, 0, 0, 0, false, false };
-  FirebaseJsonData v;
-  if (entry.get(v, "mapValue/fields/date/integerValue") && v.success) pe.date = (time_t)v.intValue;
-  // Firestore speichert ganze Zahlen als integerValue — Fallback nötig
+  pe.date = (time_t)(entry["date"] | 0L);
   if (isKH) {
-    if (entry.get(v, "mapValue/fields/dosageML/doubleValue") && v.success) pe.dosageML = v.floatValue;
-    else if (entry.get(v, "mapValue/fields/dosageML/integerValue") && v.success) pe.dosageML = (float)v.intValue;
+    pe.dosageML = entry["dosageML"] | 0.0f;
   } else {
-    if (entry.get(v, "mapValue/fields/caDosageML/doubleValue") && v.success) pe.caDosageML = v.floatValue;
-    else if (entry.get(v, "mapValue/fields/caDosageML/integerValue") && v.success) pe.caDosageML = (float)v.intValue;
-    if (entry.get(v, "mapValue/fields/mgDosageML/doubleValue") && v.success) pe.mgDosageML = v.floatValue;
-    else if (entry.get(v, "mapValue/fields/mgDosageML/integerValue") && v.success) pe.mgDosageML = (float)v.intValue;
+    pe.caDosageML = entry["caDosageML"] | 0.0f;
+    pe.mgDosageML = entry["mgDosageML"] | 0.0f;
   }
-  if (entry.get(v, "mapValue/fields/isMaintenanceDose/booleanValue") && v.success)
-    pe.isMaintenanceDose = (v.stringValue == "true");
+  pe.isMaintenanceDose = entry["isMaintenanceDose"] | false;
   pe.valid = true;
   return pe;
 }
@@ -588,14 +572,7 @@ bool sameLocalHour(time_t lastTs, time_t now) {
   return a.tm_year == b.tm_year && a.tm_yday == b.tm_yday && a.tm_hour == b.tm_hour;
 }
 
-// Hole Plan-Array (khEntries oder caEntries) als FirebaseJsonArray
-bool getPlanArray(FirebaseJson &doc, const char* fieldKey, FirebaseJsonArray &out) {
-  String basePath = String("fields/") + fieldKey + "/arrayValue/values";
-  FirebaseJsonData arrData;
-  if (!doc.get(arrData, basePath.c_str())) return false;
-  arrData.get(out);
-  return true;
-}
+// (getPlanArray entfällt — Plan-Arrays werden unten direkt mit ArduinoJson iteriert)
 
 // ---------- Auto-Dosing-Sequenz prüfen ----------
 // Wird alle 30s aufgerufen, fired aber nur in Minute 10-15 einer Dosier-Stunde.
@@ -618,24 +595,21 @@ void checkAutoDosingSequence() {
   if (t.tm_hour % settings_cache::intervalHours() != 0 ||
       t.tm_min < 10 || t.tm_min > 15) return;
 
-  FirebaseJson doc;
-  doc.setJsonData(cachedPlanJson);
+  JsonDocument doc;
+  if (deserializeJson(doc, cachedPlanJson)) return;  // ungültiger Cache → abbrechen
 
   // Stunden-Fenster für AUSGLEICH-Detection
   time_t hourStart = now - t.tm_min * 60 - t.tm_sec;
   time_t hourEnd = hourStart + 3600 - 1;
 
   // ---------- KH-Plan analysieren ----------
-  FirebaseJsonArray khArr;
-  bool hasKHPlan = getPlanArray(doc, "khEntries", khArr);
+  JsonArrayConst khArr = doc["khEntries"].as<JsonArrayConst>();
   float khDosageML = 0;
   bool khAdjustment = false;
-  if (hasKHPlan) {
+  if (!khArr.isNull()) {
     // 1) Spezifische AUSGLEICH-Dose für diese Stunde?
-    for (size_t i = 0; i < khArr.size(); i++) {
-      FirebaseJsonData ed; khArr.get(ed, i);
-      FirebaseJson entry; entry.setJsonData(ed.stringValue);
-      PlanEntry pe = parseEntry(entry, true);
+    for (JsonObjectConst e : khArr) {
+      PlanEntry pe = parseEntry(e, true);
       if (pe.isMaintenanceDose || pe.date == 0) continue;
       if (pe.date >= hourStart && pe.date <= hourEnd) {
         khDosageML = pe.dosageML;
@@ -645,10 +619,8 @@ void checkAutoDosingSequence() {
     }
     // 2) ERHALTUNG (nur wenn kein Ausgleich für diese Stunde)
     if (!khAdjustment) {
-      for (size_t i = 0; i < khArr.size(); i++) {
-        FirebaseJsonData ed; khArr.get(ed, i);
-        FirebaseJson entry; entry.setJsonData(ed.stringValue);
-        PlanEntry pe = parseEntry(entry, true);
+      for (JsonObjectConst e : khArr) {
+        PlanEntry pe = parseEntry(e, true);
         if (pe.isMaintenanceDose || pe.date == 0) {
           khDosageML = pe.dosageML;
           break;
@@ -658,15 +630,12 @@ void checkAutoDosingSequence() {
   }
 
   // ---------- Ca-Plan analysieren ----------
-  FirebaseJsonArray caArr;
-  bool hasCaPlan = getPlanArray(doc, "caEntries", caArr);
+  JsonArrayConst caArr = doc["caEntries"].as<JsonArrayConst>();
   float caDosageML = 0, mgDosageML = 0;
   bool caAdjustment = false;
-  if (hasCaPlan) {
-    for (size_t i = 0; i < caArr.size(); i++) {
-      FirebaseJsonData ed; caArr.get(ed, i);
-      FirebaseJson entry; entry.setJsonData(ed.stringValue);
-      PlanEntry pe = parseEntry(entry, false);
+  if (!caArr.isNull()) {
+    for (JsonObjectConst e : caArr) {
+      PlanEntry pe = parseEntry(e, false);
       if (pe.isMaintenanceDose || pe.date == 0) continue;
       if (pe.date >= hourStart && pe.date <= hourEnd) {
         caDosageML = pe.caDosageML;
@@ -676,10 +645,8 @@ void checkAutoDosingSequence() {
       }
     }
     if (!caAdjustment) {
-      for (size_t i = 0; i < caArr.size(); i++) {
-        FirebaseJsonData ed; caArr.get(ed, i);
-        FirebaseJson entry; entry.setJsonData(ed.stringValue);
-        PlanEntry pe = parseEntry(entry, false);
+      for (JsonObjectConst e : caArr) {
+        PlanEntry pe = parseEntry(e, false);
         if (pe.isMaintenanceDose || pe.date == 0) {
           caDosageML = pe.caDosageML;
           mgDosageML = pe.mgDosageML;
@@ -756,7 +723,7 @@ void syncPhCalibrationOnce() {
     p.putFloat("phV4", v4);
     p.putFloat("phV7", v7);
     p.end();
-    Serial.printf("[pH] Kalibrierung aus Firestore übernommen: V4=%.4f V7=%.4f\n", v4, v7);
+    Serial.printf("[pH] Kalibrierung aus PocketBase übernommen: V4=%.4f V7=%.4f\n", v4, v7);
   }
 }
 

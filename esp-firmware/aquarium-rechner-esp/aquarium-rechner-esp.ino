@@ -6,7 +6,6 @@
 //   Partition:  16M Flash (3MB APP/9.9MB FATFS)
 //
 //   Libraries:
-//     - Firebase Arduino Client (Mobizt)
 //     - FastAccelStepper
 //     - ArduinoJson v7
 //     - RTClib (DS3231)
@@ -14,7 +13,7 @@
 //
 //   Funktionsumfang:
 //     - WiFi-Setup-Portal (Captive Portal, 3× Power-Cycle = Reset)
-//     - Firebase Auth (E-Mail + Passwort) + Firestore-Sync
+//     - PocketBase Auth (E-Mail + Passwort) + REST-Sync (HTTPS)
 //     - 4-Pumpen-Dosier-Anlage (Ca, Mg, KH-Tag, KH-Nacht) mit Anti-Drip
 //     - Live-Pumpen-Kalibrierung + Manual-Dosing via Web-Command
 //     - pH-Sensor mit gleitendem Mittelwert + 2-Punkt-Kalibrierung
@@ -98,7 +97,7 @@ void setup() {
   } else {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
     if (!firebase_sync::begin(fbEmail, fbPass)) {
-      Serial.println("[Boot] Firebase-Login fehlgeschlagen — retry über Loop");
+      Serial.println("[Boot] PocketBase-Login fehlgeschlagen — retry über Loop");
     }
   }
 
@@ -117,13 +116,13 @@ void loop() {
     bootCountReset = true;
   }
 
-  // Firebase-Lazy-Init: wenn WLAN erst nach dem Boot kam (Watchdog),
-  // NTP + Firebase-Login hier nachholen.
+  // Backend-Lazy-Init: wenn WLAN erst nach dem Boot kam (Watchdog),
+  // NTP + PocketBase-Login hier nachholen.
   static unsigned long lastFbInitTryMs = 0;
   if (WiFi.status() == WL_CONNECTED && !firebase_sync::ready
       && millis() - lastFbInitTryMs > 60000) {
     lastFbInitTryMs = millis();
-    Serial.println("[Boot] WLAN da — hole NTP + Firebase-Login nach");
+    Serial.println("[Boot] WLAN da — hole NTP + PocketBase-Login nach");
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
     String ssid, wifiPass, fbEmail, fbPass;
     setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);

@@ -86,90 +86,73 @@ void sync() {
   if (lastSyncMs != 0 && now - lastSyncMs < 2UL * 60 * 1000) return;
   lastSyncMs = now;
 
-  FirebaseJson doc;
+  JsonDocument doc;
   if (!firebase_sync::fetchSettings(doc)) return;
 
   bool changed = false;
-  FirebaseJsonData v;
-  if (doc.get(v, "fields/autoDosing/booleanValue") && v.success) {
-    bool nv = (v.stringValue == "true");
+  // PocketBase liefert flaches JSON; is<float>() ist auch für Ganzzahlen true.
+  if (doc["autoDosing"].is<bool>()) {
+    bool nv = doc["autoDosing"].as<bool>();
     if (nv != autoDosing) { autoDosing = nv; changed = true; }
   }
-  if (doc.get(v, "fields/dosingsPerDay/integerValue") && v.success) {
-    int nv = (int)v.intValue;
+  if (doc["dosingsPerDay"].is<float>()) {
+    int nv = (int)doc["dosingsPerDay"].as<float>();
     if (nv != dosingsPerDay && nv > 0 && nv <= 24 && (24 % nv == 0)) {
       dosingsPerDay = nv; changed = true;
     }
   }
-  if (doc.get(v, "fields/otaAutoUpdate/booleanValue") && v.success) {
-    bool nv = (v.stringValue == "true");
+  if (doc["otaAutoUpdate"].is<bool>()) {
+    bool nv = doc["otaAutoUpdate"].as<bool>();
     if (nv != otaAutoUpdate) { otaAutoUpdate = nv; changed = true; }
   }
-  if (doc.get(v, "fields/healthcheckUrl/stringValue") && v.success) {
-    String nv = v.stringValue;
+  if (doc["healthcheckUrl"].is<const char*>()) {
+    String nv = doc["healthcheckUrl"].as<String>();
     if (nv != healthcheckUrl) { healthcheckUrl = nv; changed = true; }
   }
-  if (doc.get(v, "fields/usePhBasedKHDosing/booleanValue") && v.success) {
-    bool nv = (v.stringValue == "true");
+  if (doc["usePhBasedKHDosing"].is<bool>()) {
+    bool nv = doc["usePhBasedKHDosing"].as<bool>();
     if (nv != usePhBasedKHDosing) { usePhBasedKHDosing = nv; changed = true; }
   }
-  if (doc.get(v, "fields/phThresholdForKHNight/doubleValue") && v.success) {
-    float nv = v.floatValue;
+  if (doc["phThresholdForKHNight"].is<float>()) {
+    float nv = doc["phThresholdForKHNight"].as<float>();
     if (nv != phThresholdForKHNight) { phThresholdForKHNight = nv; changed = true; }
   }
-  if (doc.get(v, "fields/phThresholdForKHNight/integerValue") && v.success) {
-    float nv = (float)v.intValue;
-    if (nv != phThresholdForKHNight) { phThresholdForKHNight = nv; changed = true; }
-  }
-  if (doc.get(v, "fields/khNightStart/integerValue") && v.success) {
-    int nv = (int)v.intValue;
+  if (doc["khNightStart"].is<float>()) {
+    int nv = (int)doc["khNightStart"].as<float>();
     if (nv != khNightStart) { khNightStart = nv; changed = true; }
   }
-  if (doc.get(v, "fields/khNightEnd/integerValue") && v.success) {
-    int nv = (int)v.intValue;
+  if (doc["khNightEnd"].is<float>()) {
+    int nv = (int)doc["khNightEnd"].as<float>();
     if (nv != khNightEnd) { khNightEnd = nv; changed = true; }
   }
-  if (doc.get(v, "fields/magnesiumRatio/doubleValue") && v.success) {
-    float nv = v.floatValue;
-    if (nv != magnesiumRatio) { magnesiumRatio = nv; changed = true; }
-  }
-  if (doc.get(v, "fields/magnesiumRatio/integerValue") && v.success) {
-    float nv = (float)v.intValue;
+  if (doc["magnesiumRatio"].is<float>()) {
+    float nv = doc["magnesiumRatio"].as<float>();
     if (nv != magnesiumRatio) { magnesiumRatio = nv; changed = true; }
   }
   // Schritt-Geschwindigkeit / -Beschleunigung
-  // (integer + double Fallback — Firestore typisiert nach Eingabewert)
-  if ((doc.get(v, "fields/stepsPerSec/integerValue") && v.success) ||
-      (doc.get(v, "fields/stepsPerSec/doubleValue") && v.success)) {
-    uint32_t nv = (uint32_t)v.floatValue;
+  if (doc["stepsPerSec"].is<float>()) {
+    uint32_t nv = (uint32_t)doc["stepsPerSec"].as<float>();
     if (nv > 0 && nv != pumps::stepsPerSec) { pumps::stepsPerSec = nv; changed = true; }
   }
-  if ((doc.get(v, "fields/accelStepsPerSec2/integerValue") && v.success) ||
-      (doc.get(v, "fields/accelStepsPerSec2/doubleValue") && v.success)) {
-    uint32_t nv = (uint32_t)v.floatValue;
+  if (doc["accelStepsPerSec2"].is<float>()) {
+    uint32_t nv = (uint32_t)doc["accelStepsPerSec2"].as<float>();
     if (nv != pumps::accelPerSec2) { pumps::accelPerSec2 = nv; changed = true; }
   }
   // Anti-Drip Settings
-  if (doc.get(v, "fields/enableAntiDrip/booleanValue") && v.success) {
-    bool nv = (v.stringValue == "true");
+  if (doc["enableAntiDrip"].is<bool>()) {
+    bool nv = doc["enableAntiDrip"].as<bool>();
     if (nv != pumps::antiDripEnabled) { pumps::antiDripEnabled = nv; changed = true; }
   }
-  if (doc.get(v, "fields/antiDripML/integerValue") && v.success) {
-    float nv = (float)v.intValue;
+  if (doc["antiDripML"].is<float>()) {
+    float nv = doc["antiDripML"].as<float>();
     if (nv != pumps::antiDripML) { pumps::antiDripML = nv; changed = true; }
   }
-  if (doc.get(v, "fields/antiDripML/doubleValue") && v.success) {
-    float nv = v.floatValue;
-    if (nv != pumps::antiDripML) { pumps::antiDripML = nv; changed = true; }
-  }
-  if ((doc.get(v, "fields/antiDripStepsPerSec/integerValue") && v.success) ||
-      (doc.get(v, "fields/antiDripStepsPerSec/doubleValue") && v.success)) {
-    uint32_t nv = (uint32_t)v.floatValue;
+  if (doc["antiDripStepsPerSec"].is<float>()) {
+    uint32_t nv = (uint32_t)doc["antiDripStepsPerSec"].as<float>();
     if (nv > 0 && nv != pumps::antiDripStepsPerSec) { pumps::antiDripStepsPerSec = nv; changed = true; }
   }
-  if ((doc.get(v, "fields/antiDripAccelStepsPerSec2/integerValue") && v.success) ||
-      (doc.get(v, "fields/antiDripAccelStepsPerSec2/doubleValue") && v.success)) {
-    uint32_t nv = (uint32_t)v.floatValue;
+  if (doc["antiDripAccelStepsPerSec2"].is<float>()) {
+    uint32_t nv = (uint32_t)doc["antiDripAccelStepsPerSec2"].as<float>();
     if (nv != pumps::antiDripAccelPerSec2) { pumps::antiDripAccelPerSec2 = nv; changed = true; }
   }
   if (changed) {

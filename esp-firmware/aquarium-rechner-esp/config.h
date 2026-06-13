@@ -14,10 +14,18 @@
 // Asset-Name-Filter: Datei im Release muss diesen Substring enthalten (z.B. ".bin")
 #define OTA_ASSET_FILTER ".bin"
 
-// ---------- Firebase Projekt ----------
-#define FIREBASE_API_KEY "AIzaSyAsQ9yj2ZrT6KBzffarsFDpov4787ON-00"
-#define FIREBASE_PROJECT_ID "aquarium-rechner"
-#define FIREBASE_DATABASE_URL ""  // wir verwenden nur Firestore (kein RTDB, kein Storage)
+// ---------- PocketBase Backend ----------
+// Öffentliche Basis-URL des PocketBase-Servers (Tailscale Funnel).
+// Ohne abschließenden Slash.
+#define PB_URL "https://aquarium.barracuda-lungfish.ts.net"
+
+// TLS-Zertifikatsprüfung:
+//   1 = WiFiClientSecure.setInsecure() — KEINE Zertifikatsprüfung.
+//       Einfachste Variante, verbindet sich garantiert. Theoretisch
+//       MITM-angreifbar. Für den ersten Flash/Test empfohlen.
+//   0 = Root-CA pinnen (sicherer). Dann in firebase_sync.h die
+//       ISRG-Root-X1-CA (Let's Encrypt) im Platzhalter PB_ROOT_CA setzen.
+#define PB_TLS_INSECURE 1
 
 // ---------- Hardware-Pins ----------
 // Schritt-Motoren — alle Signale als Block GPIO 1-2 + 4-7

@@ -15,7 +15,7 @@ Werkzeuge für Meerwasser-Aquaristik — von Wasserwechsel-Berechnung bis hin zu
 Berechnet optimale Wasserwechsel mit C&R Lösungen, um ICP-Messwerte schrittweise zu Optimalwerten zu führen. Mit Max-Δ-Begrenzung pro Schritt für schonende Anpassung empfindlicher Korallen.
 
 ### Spurenelemente Rechner
-Plant Tagesdosen einzelner Spurenelemente basierend auf ICP-Messwerten und Verbrauchshistorie. Daten lokal oder im Firebase-Account.
+Plant Tagesdosen einzelner Spurenelemente basierend auf ICP-Messwerten und Verbrauchshistorie. Daten lokal oder im eigenen Account.
 
 ### Kalkmanagement (Web + ESP32-Firmware)
 Komplette Steuerung für eine selbstgebaute 4-Pumpen-Dosier-Anlage (Calcium, Magnesium, KH-Tag, KH-Nacht). Web-Interface plant die Dosierung, ESP32 führt sie aus.
@@ -43,13 +43,13 @@ Komplette Steuerung für eine selbstgebaute 4-Pumpen-Dosier-Anlage (Calcium, Mag
 
 ## Hosting & Daten
 
-Statische HTML-Seiten via Firebase Hosting. Alles läuft im Browser.
+Statische HTML-Seiten, ausgeliefert direkt von PocketBase (`pb_public/`). Alles läuft im Browser.
 
 **Ohne Login** (C&R, Spuren): Daten werden ausschließlich lokal im Browser gespeichert (localStorage). Nichts wird übertragen.
 
-**Mit Login** (E-Mail/Passwort oder Google): Daten werden zusätzlich verschlüsselt bei Google Firebase / Firestore (Region europe-west) abgelegt, damit du sie auf jedem Gerät verfügbar hast. Jeder Nutzer kann nur seine eigenen Daten lesen/schreiben (Firestore Security Rules). Kein Tracking, keine Weitergabe.
+**Mit Login** (E-Mail/Passwort): Daten werden zusätzlich auf einem privaten PocketBase-Server (Deutschland, Übertragung per HTTPS verschlüsselt) abgelegt, damit du sie auf jedem Gerät verfügbar hast. Jeder Nutzer kann nur seine eigenen Daten lesen/schreiben (PocketBase-API-Regeln pro Nutzer). Kein Tracking, keine Weitergabe.
 
-**Kalkmanagement** erfordert einen Account, weil Web und ESP über Firestore synchronisieren.
+**Kalkmanagement** erfordert einen Account, weil Web und ESP über PocketBase synchronisieren.
 
 ## ESP-Firmware bauen
 
@@ -58,7 +58,7 @@ Im Ordner [`esp-firmware/aquarium-rechner-esp/`](esp-firmware/aquarium-rechner-e
 - Board: **ESP32-S3 N16R8** (16 MB Flash, 8 MB OPI PSRAM)
 - IDE: Arduino 2.x mit „ESP32 by Espressif Systems" Boards
 - Partition: `16M Flash (3MB APP/9.9MB FATFS)`
-- Libraries: FastAccelStepper, Firebase Arduino Client, ArduinoJson, RTClib, Adafruit NeoPixel
+- Libraries: FastAccelStepper, ArduinoJson (v7), RTClib, Adafruit NeoPixel (keine Firebase-Library mehr nötig — Backend per HTTPS-REST)
 
 Pin-Belegung siehe [`config.h`](esp-firmware/aquarium-rechner-esp/config.h).
 

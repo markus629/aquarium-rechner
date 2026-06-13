@@ -25,25 +25,18 @@ Firebase synchronisiert.
 4. **Partition Scheme**: `16M Flash (3MB APP/9.9MB FATFS)` — Default für N16R8
 5. **PSRAM**: `OPI PSRAM` (nicht QSPI — N16R8 hat Octal PSRAM)
 6. **Libraries installieren** (Library Manager):
-   - `Firebase ESP Client` (von Mobizt) — Version 4.4+
    - `FastAccelStepper` (von gin66)
    - `RTClib` (von Adafruit)
    - `ArduinoJson` (von Benoit Blanchon) — Version 7.x
+   - `Adafruit NeoPixel` (Status-LED)
+   - (Backend läuft über die im ESP32-Core enthaltenen `WiFiClientSecure` + `HTTPClient` — keine extra Firebase-Library nötig)
 7. Sketch `aquarium-rechner-esp.ino` öffnen, kompilieren, hochladen
 
-## Vor dem ESP-Setup: E-Mail-Passwort einrichten (einmalig)
+## Account-Zugang
 
-Wenn du dich bisher nur per **Google-Login** auf `aquarium-rechner.web.app`
-angemeldet hast, hast du **kein klassisches E-Mail-Passwort** — der ESP
-braucht aber eines, weil er kein Browser-basiertes OAuth durchlaufen kann.
-
-So setzt du eines:
-1. `aquarium-rechner.web.app` öffnen → einloggen
-2. Tab **„Gerät"** → Button **„📧 Passwort-Reset-Link senden"**
-3. Mail von Firebase (auch im Spam-Ordner) → Link → Passwort setzen
-
-Danach kannst du dich sowohl mit Google als auch mit E-Mail+Passwort
-anmelden. Letzteres verwendet der ESP.
+Der ESP meldet sich mit **derselben E-Mail + demselben Passwort** an, die du
+auch für den Web-Login nutzt. Passwort vergessen? Im Web unter Tab **„Gerät"**
+→ **„📧 Passwort zurücksetzen"** einen Reset-Link anfordern.
 
 ## Erster Boot — WiFi-Setup
 
@@ -53,18 +46,18 @@ Nach dem ersten Flash:
 2. Verbinde dich mit Handy/Laptop (kein Passwort)
 3. Browser öffnet automatisch das Setup-Portal (Captive-Portal), oder gehe zu `http://192.168.4.1/`
 4. **WLAN-Daten** + **E-Mail + dein neu gesetztes Passwort** eingeben
-5. Speichern → ESP startet neu, verbindet sich mit deinem WLAN, meldet sich an Firebase an
+5. Speichern → ESP startet neu, verbindet sich mit deinem WLAN, meldet sich an PocketBase an
 
 Ab da an läuft alles automatisch. Im Web-UI siehst du den ESP als „online" mit Live-Heartbeat.
 
 ## Was die Firmware tut
 
-- **Heartbeat alle 30 s**: meldet pH, Uhrzeit, freier RAM, WLAN-Signal an `users/{uid}/aquarium/info`
+- **Heartbeat alle 30 s**: meldet pH, Uhrzeit, freier RAM, WLAN-Signal an `aqua_docs` (key=`info`)
 - **Command-Polling**: alle 30 s (oder 2 s wenn ein Command offen ist) — führt Dosierungen, Kalibrierungen, manuelle Aktionen aus
 - **Plan-Ausführung**: prüft alle 60 s ob ein Dosier-Job aus dem geplanten Plan jetzt fällig ist
 - **Tag/Nacht-Entscheidung**: lokal anhand pH-Wert oder Uhrzeit (je nach Einstellung)
 - **Offline-Fallback**: Plan-Cache in NVS — bei WLAN-Ausfall läuft der Plan bis zu 25 h ohne Server weiter
-- **Auto-OTA**: alle 6 h Check auf neue Firmware in Firebase Storage
+- **Auto-OTA**: alle 6 h Check auf neue Firmware in GitHub Releases
 
 ## Setup-Modus erneut aktivieren
 
