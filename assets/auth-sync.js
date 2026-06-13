@@ -157,13 +157,27 @@ function openLoginModal(calculatorName) {
           if (!pass) { setMsg("Bitte Passwort eingeben.", "error"); submit.disabled = false; return; }
           if (mode === "signup") {
             await pb.collection("users").create({ email, password: pass, passwordConfirm: pass });
-            await pb.collection("users").authWithPassword(email, pass);
-            try { await pb.collection("users").requestVerification(email); } catch (_) {}
-            closeModal({ user: pb.authStore.record, isNew: true, sentVerification: true });
+            pb.collection("users").requestVerification(email).catch(() => {}); // Mail im Hintergrund
+            // Kein Auto-Login — erst E-Mail bestätigen.
+            mode = "login";
+            render();
+            const m = overlay.querySelector("#as-msg");
+            if (m) {
+              m.textContent = "Konto erstellt! Wir haben dir eine Bestätigungs-Mail geschickt. Bitte klick den Link und melde dich dann hier an.";
+              m.className = "as-msg success";
+            }
             return;
           }
           // login
           await pb.collection("users").authWithPassword(email, pass);
+          if (!pb.authStore.record || !pb.authStore.record.verified) {
+            // Unverifizierte nicht einlassen (Datenzugriff ist serverseitig ohnehin gesperrt).
+            pb.authStore.clear();
+            pb.collection("users").requestVerification(email).catch(() => {}); // Mail im Hintergrund
+            setMsg("Bitte bestätige zuerst deine E-Mail-Adresse. Wir haben dir gerade einen neuen Bestätigungs-Link geschickt.", "error");
+            submit.disabled = false;
+            return;
+          }
           closeModal({ user: pb.authStore.record, isNew: false });
         } catch (e) {
           const data = (e && e.response && e.response.data) || {};
@@ -210,6 +224,7 @@ function buildUserMenu(btn, user, onSync, onLogout) {
     <div class="as-menu-item" data-act="sync">🔄 Jetzt synchronisieren</div>
     ${!isVerified ? `<div class="as-menu-item" data-act="verify">📧 Verifikations-Mail erneut senden</div>` : ""}
     <div class="as-menu-item" data-act="logout" style="color:#c0392b">🚪 Abmelden</div>
+    <div class="as-menu-item" data-act="delete" style="color:#c0392b">🗑️ Konto löschen</div>
   `;
   btn.appendChild(menu);
   menu.querySelectorAll(".as-menu-item").forEach(item => {
@@ -222,6 +237,18 @@ function buildUserMenu(btn, user, onSync, onLogout) {
       if (act === "verify") {
         try { await pb.collection("users").requestVerification(user.email); toast("Verifikations-Mail gesendet.", "success"); }
         catch (e) { toast("Fehler: " + ((e && e.message) || e), "error"); }
+      }
+      if (act === "delete") {
+        if (!confirm("Konto wirklich unwiderruflich löschen?\n\nAlle deine gespeicherten Daten (Einstellungen, Verlauf, Pläne) werden dabei entfernt. Das kann nicht rückgängig gemacht werden.")) return;
+        try {
+          await pb.collection("users").delete(user.id);
+          for (const k of KNOWN_LOCALSTORAGE_KEYS) { try { localStorage.removeItem(k); } catch (_) {} }
+          pb.authStore.clear();
+          toast("Konto gelöscht.", "success");
+          setTimeout(() => location.reload(), 900);
+        } catch (e) {
+          toast("Löschen fehlgeschlagen: " + ((e && e.message) || e), "error");
+        }
       }
     };
   });
@@ -365,6 +392,8 @@ export async function initAuthSync(opts) {
   // Auth-State beobachten (z.B. nach Reload oder Login auf anderer Seite).
   // Der zweite Parameter `true` feuert sofort mit dem aktuellen Zustand.
   pb.authStore.onChange(async (token, record) => {
+    // Unverifizierte Sessions nicht zulassen (z.B. nach Reload mit altem Token).
+    if (record && !record.verified) { pb.authStore.clear(); return; }
     const user = record || null;
     if (user) {
       if (!currentUser) {
