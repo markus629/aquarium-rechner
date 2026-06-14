@@ -49,12 +49,14 @@ bool ready = false;
 
 // PocketBase identifiziert Records per id (nicht per Pfad) → IDs cachen.
 String idCommand;
-String idAquaDoc[6];  // 0=info 1=settings 2=plan-current 3=ph-calibration 4..5 frei
+String idAquaDoc[6];  // 0=info 1=settings 2=plan-current 3=ph-calibration 4=livePh 5=_livereq
 inline String& cacheIdFor(const String &key) {
   if (key == "info") return idAquaDoc[0];
   if (key == "settings") return idAquaDoc[1];
   if (key == "plan-current") return idAquaDoc[2];
   if (key == "ph-calibration") return idAquaDoc[3];
+  if (key == "livePh") return idAquaDoc[4];
+  if (key == "_livereq") return idAquaDoc[5];
   static String dummy; dummy = ""; return dummy;  // pump-N etc.: nicht gecacht
 }
 
@@ -276,6 +278,28 @@ bool fetchPhCalibration(float &v4_out, float &v7_out, bool &calibrated_out) {
   if (data["voltage_pH7"].is<float>()) v7_out = data["voltage_pH7"].as<float>();
   calibrated_out = !isnan(v4_out) && !isnan(v7_out);
   return true;
+}
+
+// ---------- Live-pH (On-Demand) ----------
+// Schaut gerade jemand im UI zu? UI setzt aqua_docs key="_livereq" data.until
+// (Unix-Sekunden) und frischt es regelmäßig auf. true = aktiv.
+bool livePhRequested() {
+  if (!isReady()) return false;
+  JsonDocument d;
+  if (!fetchAquaDoc("_livereq", d)) return false;
+  long until = d["until"] | 0L;
+  time_t now; time(&now);
+  return now > 1700000000 && until > (long)now;
+}
+
+// Aktuellen pH-Wert live veröffentlichen — flüchtig (eigener Key, überschreibt
+// sich, KEIN Graph-Punkt). UI abonniert aqua_docs key="livePh" per Realtime.
+void publishLivePh(float ph) {
+  if (!isReady() || isnan(ph)) return;
+  JsonDocument d;
+  d["ph"] = ph;
+  d["ts"] = (long)time(nullptr);
+  upsertAquaDoc("livePh", d);
 }
 
 // ---------- Buffer-Flush ----------

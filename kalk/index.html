@@ -715,6 +715,7 @@
     btn.onclick = () => {
       document.querySelectorAll("#main-tabs .tab-btn").forEach(b => b.classList.toggle("active", b === btn));
       document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === btn.dataset.tab));
+      if (typeof updateLivePresence === "function") updateLivePresence();
     };
   });
 
@@ -2249,10 +2250,12 @@
     for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
     _liveUnsubs = [];
     try {
-      // Heartbeat-Dokument → Live-pH + ESP-Online-Status
+      // aqua_docs-Events verteilen: info → Dashboard/Gerät, livePh → Live-Anzeige
       _liveUnsubs.push(pb.collection("aqua_docs").subscribe("*", (e) => {
-        if (e.record && e.record.key === "info") { refreshDashboard(); refreshDeviceTab(); }
-      }, { filter: "key = 'info'" }));
+        const r = e.record; if (!r) return;
+        if (r.key === "info") { refreshDashboard(); refreshDeviceTab(); }
+        else if (r.key === "livePh") showLivePh(r.data);
+      }));
       // Neue Messungen → pH-Chart + Dashboard
       _liveUnsubs.push(pb.collection("aqua_measurements").subscribe("*", () => {
         refreshPh(); refreshDashboard();
@@ -2264,7 +2267,40 @@
   async function stopLiveUpdates() {
     for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
     _liveUnsubs = [];
+    updateLivePresence();  // räumt Präsenz/Live-pH ab (nach Logout)
   }
+
+  // ---------- Live-pH (On-Demand, alle 5 s) ----------
+  // Auf Live-Tabs signalisieren wir dem ESP "jemand schaut zu" (Präsenz alle
+  // 15 s, läuft am Server nach 30 s ab) und zeigen den vom ESP gepushten Wert.
+  const LIVE_PH_TABS = ["tab-dashboard", "tab-ph"];
+  let _presenceTimer = null;
+  function liveTabActive() {
+    if (document.visibilityState !== "visible" || !pb.authStore.isValid) return false;
+    const active = document.querySelector("#main-tabs .tab-btn.active")?.dataset.tab;
+    return LIVE_PH_TABS.includes(active);
+  }
+  async function pingPresence() {
+    try { await setAquaDoc("_livereq", { until: Math.floor(Date.now() / 1000) + 30 }); } catch (_) {}
+  }
+  function showLivePh(d) {
+    if (!d || d.ph == null) return;
+    const v = document.getElementById("dash-ph");
+    const m = document.getElementById("dash-ph-meta");
+    if (v) v.textContent = Number(d.ph).toFixed(2);
+    if (m) m.textContent = "● live";
+  }
+  function updateLivePresence() {
+    const want = liveTabActive();
+    if (want && !_presenceTimer) {
+      pingPresence();
+      _presenceTimer = setInterval(pingPresence, 15000);
+    } else if (!want && _presenceTimer) {
+      clearInterval(_presenceTimer); _presenceTimer = null;
+      try { refreshDashboard(); } catch (_) {}   // dash-ph zurück auf letzte 2-h-Messung
+    }
+  }
+  document.addEventListener("visibilitychange", updateLivePresence);
 
   // Auch Settings-Änderung soll Plan/Dashboard neu rechnen
   document.querySelectorAll("[data-setting]").forEach(inp => {
@@ -2283,6 +2319,7 @@
       setupFirmwareUpload();
       await refreshAll();
       setupLiveUpdates();
+      updateLivePresence();
     } else {
       settingsLoaded = false;
       stopLiveUpdates();

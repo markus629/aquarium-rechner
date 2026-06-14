@@ -299,36 +299,30 @@ void tickPhCalibration() {
   phCal.active = false;
 }
 
-// ---------- pH-Probe schreiben — :05 jeder Dosier-Stunde ----------
-// 5 Minuten vor Dosis-Trigger, sodass aktueller pH-Wert in dosings/items
-// landet UND beim Trigger um :10 für die Tag/Nacht-Entscheidung verfügbar ist.
+// ---------- pH-Graph-Probe — fix alle 2 Stunden ----------
+// Unabhängig vom Dosier-Plan: schreibt alle 2 h EINEN pH-Wert in die
+// Messungen (für gleichmäßige Verlaufs-Graphen im UI). Ausgerichtet auf
+// ein festes 2-h-Raster (now/7200) → genau ein Punkt pro Slot.
 void checkPhSampleSchedule() {
   if (!ph_sensor::isCalibrated()) return;  // unsicher ohne Kalibrierung
   time_t now; time(&now);
   if (now < 1700000000) return;
-  struct tm t; localtime_r(&now, &t);
 
-  // Trigger: Minute 5 jeder Dosier-Stunde (hour % intervalHours == 0)
-  // Dosier-Intervall aus Settings (12/Tag = 2h, 6/Tag = 4h, etc.)
-  if (settings_cache::intervalHours() <= 0) return;
-  if (t.tm_hour % settings_cache::intervalHours() != 0) return;
-  if (t.tm_min < 5 || t.tm_min > 8) return;
-
-  // Schon in dieser Stunde geschrieben?
-  if (lastPhSampleAt > 0) {
-    struct tm last; localtime_r(&lastPhSampleAt, &last);
-    if (last.tm_year == t.tm_year && last.tm_yday == t.tm_yday && last.tm_hour == t.tm_hour) return;
-  }
+  long slot = (long)(now / 7200);            // 2-h-Slot
+  static long lastSlot = -1;
+  if (lastSlot < 0 && lastPhSampleAt > 0) lastSlot = (long)(lastPhSampleAt / 7200);
+  if (slot == lastSlot) return;              // in diesem Slot schon geschrieben
 
   float ph = ph_sensor::getPH();
   if (isnan(ph)) return;
   firebase_sync::addPhMeasurement(ph);
+  lastSlot = slot;
   lastPhSampleAt = now;
   Preferences p;
   p.begin(NVS_NAMESPACE, false);
   p.putULong("lastPhAt", (unsigned long)now);
   p.end();
-  Serial.printf("[pH] :05-Sample: %.2f → measurements\n", ph);
+  Serial.printf("[pH] 2h-Sample: %.2f → measurements\n", ph);
 }
 
 // ---------- Abbruch: laufende Aktion + Queue stoppen ----------

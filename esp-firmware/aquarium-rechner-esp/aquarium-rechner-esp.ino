@@ -148,6 +148,23 @@ void loop() {
   // Plan + Commands (adaptives Polling intern, übernimmt auch Pump-Check + finishCommand)
   plan_executor::tick();
 
+  // ---------- Live-pH (On-Demand) ----------
+  // Schaut jemand im UI auf einem Live-Tab zu? Dann alle 5 s den aktuellen
+  // pH pushen (flüchtig, eigener Key). Präsenz wird sparsam alle 4 s geprüft;
+  // ein 30-s-Fenster überbrückt die Lücken zwischen den UI-Auffrischungen.
+  {
+    unsigned long ms = millis();
+    static unsigned long lastLiveCheckMs = 0, lastLivePushMs = 0, liveUntilMs = 0;
+    if (ms - lastLiveCheckMs > 4000) {
+      lastLiveCheckMs = ms;
+      if (firebase_sync::livePhRequested()) liveUntilMs = ms + 30000;
+    }
+    if ((long)(liveUntilMs - ms) > 0 && ms - lastLivePushMs > 5000) {
+      lastLivePushMs = ms;
+      firebase_sync::publishLivePh(ph_sensor::getPH());
+    }
+  }
+
   // Heartbeat
   unsigned long now = millis();
   if (now - lastHeartbeatMs > HEARTBEAT_INTERVAL_MS) {
