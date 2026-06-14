@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.5.3"
+#define FW_VERSION "0.5.4"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -15,11 +15,14 @@
 #define OTA_ASSET_FILTER ".bin"
 
 // ---------- PocketBase Backend ----------
-// Öffentliche Basis-URL des PocketBase-Servers (Tailscale Funnel).
-// Ohne abschließenden Slash.
-#define PB_URL "https://aquarium.barracuda-lungfish.ts.net"
+// Der ESP steht im selben LAN wie der Server → zuerst die LOKALE IP (schnell,
+// kein Internet/DNS/TLS, immun gegen Funnel-/IP-Wechsel). Schlägt das fehl
+// (z.B. ESP woanders), automatischer Fallback auf die öffentliche Funnel-Adresse.
+// Jeweils ohne abschließenden Slash.
+#define PB_URL_LOCAL  "http://192.168.178.72:8090"
+#define PB_URL_FUNNEL "https://aquarium.barracuda-lungfish.ts.net"
 
-// TLS-Zertifikatsprüfung:
+// TLS-Zertifikatsprüfung (gilt nur für den HTTPS-Funnel-Fallback):
 //   1 = WiFiClientSecure.setInsecure() — KEINE Zertifikatsprüfung.
 //       Einfachste Variante, verbindet sich garantiert. Theoretisch
 //       MITM-angreifbar. Für den ersten Flash/Test empfohlen.
