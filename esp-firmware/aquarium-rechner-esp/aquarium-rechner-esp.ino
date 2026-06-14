@@ -161,7 +161,7 @@ void loop() {
     }
     if ((long)(liveUntilMs - ms) > 0 && ms - lastLivePushMs > 5000) {
       lastLivePushMs = ms;
-      firebase_sync::publishLivePh(ph_sensor::getPH());
+      firebase_sync::publishLive(ph_sensor::getPH(), ph_sensor::getVoltage());
     }
   }
 

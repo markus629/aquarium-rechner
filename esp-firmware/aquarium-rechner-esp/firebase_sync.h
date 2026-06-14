@@ -292,12 +292,15 @@ bool livePhRequested() {
   return now > 1700000000 && until > (long)now;
 }
 
-// Aktuellen pH-Wert live veröffentlichen — flüchtig (eigener Key, überschreibt
-// sich, KEIN Graph-Punkt). UI abonniert aqua_docs key="livePh" per Realtime.
-void publishLivePh(float ph) {
-  if (!isReady() || isnan(ph)) return;
+// Aktuellen pH-Wert + Spannung live veröffentlichen — flüchtig (eigener Key,
+// überschreibt sich, KEIN Graph-Punkt). UI abonniert aqua_docs key="livePh".
+// Wichtig: auch während der Kalibrierung pushen (pH evtl. NaN) → die Spannung
+// zeigt im UI live, wie sich der Sensor in den Pufferlösungen bewegt.
+void publishLive(float ph, float voltage) {
+  if (!isReady() || isnan(voltage)) return;
   JsonDocument d;
-  d["ph"] = ph;
+  if (!isnan(ph)) d["ph"] = ph;       // pH nur wenn kalibriert + plausibel
+  d["voltage"] = voltage;
   d["ts"] = (long)time(nullptr);
   upsertAquaDoc("livePh", d);
 }

@@ -430,11 +430,15 @@
       <div class="card">
         <h2>pH-Sensor-Kalibrierung</h2>
         <p style="color:var(--text-light);margin-bottom:1rem">
-          Zweipunkt-Kalibrierung mit pH-4- und pH-7-Pufferlösung. Lege die Sonde in den jeweiligen Puffer,
-          warte bis sich der Wert stabilisiert (~30 Sek.), klick Start. Der ESP sampelt 10 Sekunden lang
-          und speichert die Voltage.
+          Zweipunkt-Kalibrierung mit pH-4- und pH-7-Pufferlösung. Lege die Sonde in den jeweiligen Puffer
+          und beobachte unten die <strong>Live-Spannung</strong> — sobald sie stabil ist (~30 Sek.), auf Start.
+          Der ESP sampelt dann 10 Sekunden und speichert die Spannung.
         </p>
         <div id="ph-cal-status" style="margin-bottom:1rem"></div>
+        <div id="ph-live" class="info-banner" style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:1rem">
+          <span>Live-Messwert <span class="hint">(alle 5 s, solange dieser Tab offen ist)</span></span>
+          <span>Spannung <code id="ph-live-v">—</code> &middot; pH <code id="ph-live-ph">—</code></span>
+        </div>
         <div style="display:flex;gap:0.7rem;flex-wrap:wrap">
           <button class="btn btn-primary" id="ph-cal-4">▶ pH-4 kalibrieren</button>
           <button class="btn btn-primary" id="ph-cal-7">▶ pH-7 kalibrieren</button>
@@ -2284,11 +2288,20 @@
     try { await setAquaDoc("_livereq", { until: Math.floor(Date.now() / 1000) + 30 }); } catch (_) {}
   }
   function showLivePh(d) {
-    if (!d || d.ph == null) return;
-    const v = document.getElementById("dash-ph");
-    const m = document.getElementById("dash-ph-meta");
-    if (v) v.textContent = Number(d.ph).toFixed(2);
-    if (m) m.textContent = "● live";
+    if (!d) return;
+    // Dashboard: pH live (nur wenn kalibriert + plausibel)
+    if (d.ph != null) {
+      const v = document.getElementById("dash-ph");
+      const m = document.getElementById("dash-ph-meta");
+      if (v) v.textContent = Number(d.ph).toFixed(2);
+      if (m) m.textContent = "● live";
+    }
+    // pH-Tab: Live-Spannung (+ pH wenn gültig) — entscheidend beim Kalibrieren,
+    // da pH in den Pufferlösungen (v.a. pH 4) nicht plausibel/berechenbar ist.
+    const lv = document.getElementById("ph-live-v");
+    const lp = document.getElementById("ph-live-ph");
+    if (lv && d.voltage != null) lv.textContent = Number(d.voltage).toFixed(4) + " V";
+    if (lp) lp.textContent = d.ph != null ? Number(d.ph).toFixed(2) : "—";
   }
   function updateLivePresence() {
     const want = liveTabActive();
