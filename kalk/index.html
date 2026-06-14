@@ -697,7 +697,15 @@
     document.getElementById("error-message").textContent = msg;
   }
   window.addEventListener("error", (e) => showError("JS-Fehler: " + (e.message || e.error)));
-  window.addEventListener("unhandledrejection", (e) => showError("Promise-Fehler: " + (e.reason?.message || e.reason)));
+  window.addEventListener("unhandledrejection", (e) => {
+    console.warn("Unhandled rejection:", e.reason);
+    // Läuft die App schon (Hauptansicht sichtbar)? Dann eine transiente
+    // Laufzeit-Rejection (z.B. kurzer Netz-/Realtime-Abriss) NICHT eskalieren —
+    // nur loggen, sonst würde die ganze UI durch die Fehler-Ansicht ersetzt.
+    const mainVisible = document.getElementById("view-main")?.style.display === "block";
+    if (mainVisible) { e.preventDefault(); return; }
+    showError("Promise-Fehler: " + (e.reason?.message || e.reason));
+  });
 
   function showView(id) {
     ["view-loading", "view-login", "view-main", "view-error"].forEach(s => {
@@ -2253,20 +2261,23 @@
   async function setupLiveUpdates() {
     for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
     _liveUnsubs = [];
-    try {
-      // aqua_docs-Events verteilen: info → Dashboard/Gerät, livePh → Live-Anzeige
-      _liveUnsubs.push(pb.collection("aqua_docs").subscribe("*", (e) => {
-        const r = e.record; if (!r) return;
-        if (r.key === "info") { refreshDashboard(); refreshDeviceTab(); }
-        else if (r.key === "livePh") showLivePh(r.data);
-      }));
-      // Neue Messungen → pH-Chart + Dashboard
-      _liveUnsubs.push(pb.collection("aqua_measurements").subscribe("*", () => {
-        refreshPh(); refreshDashboard();
-      }));
-      // Neue Dosierungen (vom ESP) → Verlauf live
-      _liveUnsubs.push(pb.collection("aqua_dosings").subscribe("*", () => { refreshDosings(); }));
-    } catch (e) { console.warn("Live-Updates konnten nicht starten:", e); }
+    // Async-Refreshes ohne unbehandelte Rejections aufrufen
+    const safe = (...fns) => fns.forEach(f => { try { Promise.resolve(f()).catch(() => {}); } catch (_) {} });
+    // subscribe so verpacken, dass ein Verbindungsabbruch (z.B. beim Funnel-
+    // Neuanwenden / IP-Wechsel) NICHT als unbehandelte Rejection die App in die
+    // Fehler-Ansicht wirft — der SDK reconnectet ohnehin von selbst.
+    const sub = (col, cb) => pb.collection(col).subscribe("*", cb)
+      .catch(e => { console.warn("Realtime", col, e); return () => {}; });
+    // aqua_docs: info → Dashboard/Gerät, livePh → Live-Anzeige
+    _liveUnsubs.push(sub("aqua_docs", (e) => {
+      const r = e.record; if (!r) return;
+      if (r.key === "info") safe(refreshDashboard, refreshDeviceTab);
+      else if (r.key === "livePh") showLivePh(r.data);
+    }));
+    // Neue Messungen → pH-Chart + Dashboard
+    _liveUnsubs.push(sub("aqua_measurements", () => safe(refreshPh, refreshDashboard)));
+    // Neue Dosierungen (vom ESP) → Verlauf live
+    _liveUnsubs.push(sub("aqua_dosings", () => safe(refreshDosings)));
   }
   async function stopLiveUpdates() {
     for (const u of _liveUnsubs) { try { (await u)(); } catch (_) {} }
