@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.5.5"
+#define FW_VERSION "0.5.6"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -15,14 +15,13 @@
 #define OTA_ASSET_FILTER ".bin"
 
 // ---------- PocketBase Backend ----------
-// Der ESP steht im selben LAN wie der Server → zuerst die LOKALE IP (schnell,
-// kein Internet/DNS/TLS, immun gegen IP-/Tunnel-Wechsel). Schlägt das fehl
-// (z.B. ESP woanders), automatischer Fallback auf die öffentliche Adresse
-// (Cloudflare-Tunnel auf die eigene Domain). Jeweils ohne abschließenden Slash.
-#define PB_URL_LOCAL  "http://192.168.178.72:8090"
-#define PB_URL_REMOTE "https://fishtankpro.de"
+// Bewusst NUR die öffentliche Internet-Adresse (Cloudflare-Tunnel auf die eigene
+// Domain) — kein lokaler LAN-Pfad. So verhält sich JEDER ESP identisch, egal ob er
+// im Heimnetz des Betreibers steht oder bei einem anderen Nutzer. Damit ist sicher,
+// dass der Internet-Weg funktioniert. Ohne abschließenden Slash.
+#define PB_URL "https://fishtankpro.de"
 
-// TLS-Zertifikatsprüfung (gilt nur für den HTTPS-Remote-Fallback):
+// TLS-Zertifikatsprüfung (für die HTTPS-Verbindung):
 //   1 = WiFiClientSecure.setInsecure() — KEINE Zertifikatsprüfung.
 //       Einfachste Variante, verbindet sich garantiert. Theoretisch
 //       MITM-angreifbar. Für den ersten Flash/Test empfohlen.

@@ -36,14 +36,12 @@ static const char *PB_ROOT_CA = R"CERT(
 
 namespace pb_sync {
 
-static WiFiClientSecure pbClient;   // für HTTPS-Remote-Fallback
-static WiFiClient pbPlain;          // für lokales HTTP (kein TLS)
+static WiFiClientSecure pbClient;   // HTTPS zur öffentlichen Domain
 static HTTPClient pbHttp;
 
 String authToken;
 String currentUid;
 String credEmail, credPassword;
-String activeBase = PB_URL_LOCAL;   // bevorzugt lokal; bei Fehler → Remote
 bool ready = false;
 
 // PocketBase identifiziert Records per id (nicht per Pfad) → IDs cachen.
@@ -82,13 +80,11 @@ static String urlEncode(const String &s) {
 }
 
 // ---------- Low-level Request ----------
-// Ein Request gegen eine konkrete Basis-URL. Returns HTTP-Status (<=0 = Verbindungsfehler).
-static int doRequest(const String &base, const char *method, const String &path,
+// Ein Request gegen die öffentliche Domain (PB_URL). Returns HTTP-Status (<=0 = Verbindungsfehler).
+static int doRequest(const char *method, const String &path,
                      const String &body, String *respOut) {
-  WiFiClient *cl;
-  if (base.startsWith("https")) { configureTLS(); cl = &pbClient; }  // Remote (TLS)
-  else                          { cl = &pbPlain; }                    // lokal (HTTP)
-  if (!pbHttp.begin(*cl, base + path)) return -1;
+  configureTLS();
+  if (!pbHttp.begin(pbClient, String(PB_URL) + path)) return -1;
   pbHttp.setReuse(true);
   pbHttp.setTimeout(15000);
   if (authToken.length()) pbHttp.addHeader("Authorization", authToken);
@@ -104,17 +100,10 @@ static int doRequest(const String &base, const char *method, const String &path,
 }
 
 // method: GET/POST/PATCH/DELETE. path: ab "/api/...". body: JSON oder "".
-// Versucht zuerst activeBase; bei Verbindungsfehler die andere Basis (lokal <->
-// Remote) und merkt sich die funktionierende. Bei 401 wird re-authentifiziert.
+// Geht immer über die öffentliche Domain (PB_URL). Bei 401 wird re-authentifiziert.
 static int request(const char *method, const String &path, const String &body,
                    String *respOut, bool allowReauth = true) {
-  int code = doRequest(activeBase, method, path, body, respOut);
-  if (code <= 0) {
-    String other = (activeBase == String(PB_URL_LOCAL)) ? String(PB_URL_REMOTE)
-                                                        : String(PB_URL_LOCAL);
-    int code2 = doRequest(other, method, path, body, respOut);
-    if (code2 > 0) { activeBase = other; code = code2; }   // Basis wechseln + merken
-  }
+  int code = doRequest(method, path, body, respOut);
   if (code == 401 && allowReauth) {
     authToken = "";
     if (authenticate()) return request(method, path, body, respOut, false);
