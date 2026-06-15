@@ -20,7 +20,7 @@
 //
 // Speicherung kompakt statt Backend-JSON, weil 800 volle JSON-Strings
 // den RAM sprengen würden. Das Backend-JSON wird erst beim Senden in
-// firebase_sync::flushBuffer() aus dem Record rekonstruiert.
+// pb_sync::flushBuffer() aus dem Record rekonstruiert.
 // =============================================================
 #pragma once
 
@@ -60,7 +60,7 @@ const unsigned long FLUSH_INTERVAL_MS = 15UL * 1000;  // alle 15s versuchen
 const unsigned long BACKOFF_AFTER_FAIL_MS = 60UL * 1000;
 unsigned long nextRetryAtMs = 0;
 
-// doseType-String → enum (für firebase_sync)
+// doseType-String → enum (für pb_sync)
 inline uint8_t doseTypeToCode(const char* s) {
   if (!strcmp(s, "kh-day"))   return 0;
   if (!strcmp(s, "kh-night")) return 1;

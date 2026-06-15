@@ -26,7 +26,7 @@
 //   1 = WiFiClientSecure.setInsecure() — KEINE Zertifikatsprüfung.
 //       Einfachste Variante, verbindet sich garantiert. Theoretisch
 //       MITM-angreifbar. Für den ersten Flash/Test empfohlen.
-//   0 = Root-CA pinnen (sicherer). Dann in firebase_sync.h die passende
+//   0 = Root-CA pinnen (sicherer). Dann in pb_sync.h die passende
 //       Root-CA (Cloudflare-Edge nutzt Let's Encrypt / Google Trust)
 //       im Platzhalter PB_ROOT_CA setzen.
 #define PB_TLS_INSECURE 1

@@ -25,7 +25,7 @@
 
 #include <Preferences.h>
 #include "config.h"
-#include "firebase_sync.h"
+#include "pb_sync.h"
 #include "pumps.h"
 #include "ph_sensor.h"
 #include "settings_cache.h"
@@ -159,7 +159,7 @@ void syncPumpConfigs() {
   lastPumpConfigSyncMs = now;
   for (int i = 0; i < pumps::NUM_PUMPS; i++) {
     float v;
-    if (firebase_sync::fetchPumpStepsPerML(i, v)) {
+    if (pb_sync::fetchPumpStepsPerML(i, v)) {
       if (v != pumps::stepsPerML[i]) {
         pumps::setStepsPerML(i, v);
         Serial.printf("[PumpConfig] Pumpe %d: %.2f Schritte/ml\n", i, v);
@@ -170,13 +170,13 @@ void syncPumpConfigs() {
 
 // ---------- Plan alle 30s syncen (Quasi-Push) ----------
 void syncPlan() {
-  if (!firebase_sync::isReady()) return;
+  if (!pb_sync::isReady()) return;
   unsigned long now = millis();
   if (lastPlanFetchMs != 0 && now - lastPlanFetchMs < PLAN_FETCH_INTERVAL_MS) return;
   lastPlanFetchMs = now;
 
   JsonDocument doc;
-  if (!firebase_sync::fetchPlan(doc)) return;
+  if (!pb_sync::fetchPlan(doc)) return;
   String json;
   serializeJson(doc, json);
   if (json.length() > 0 && json != cachedPlanJson) {
@@ -231,12 +231,12 @@ PhCalibrationCmd phCal;
 bool startPhCalibration(const String &cmdId, float targetPh) {
   if (phCal.active) {
     JsonDocument r; r["error"] = "Kalibrierung bereits aktiv";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (targetPh != 4.0f && targetPh != 7.0f) {
     JsonDocument r; r["error"] = "phValue muss 4.0 oder 7.0 sein";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     return false;
   }
   phCal.active = true;
@@ -245,7 +245,7 @@ bool startPhCalibration(const String &cmdId, float targetPh) {
   phCal.startMs = millis();
   phCal.voltageSum = 0;
   phCal.sampleCount = 0;
-  firebase_sync::updateCommandStatus("running");
+  pb_sync::updateCommandStatus("running");
   Serial.printf("[PhCal] starte pH-%g Kalibrierung (10s sampling)\n", targetPh);
   return true;
 }
@@ -265,7 +265,7 @@ void tickPhCalibration() {
   // Kalibrierung abgeschlossen
   if (phCal.sampleCount == 0) {
     JsonDocument r; r["error"] = "Keine Voltage-Samples";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     phCal.active = false;
     return;
   }
@@ -286,7 +286,7 @@ void tickPhCalibration() {
   p.end();
 
   // In PocketBase (gepuffert)
-  firebase_sync::writePhCalibration(ph_sensor::voltagePH4, ph_sensor::voltagePH7,
+  pb_sync::writePhCalibration(ph_sensor::voltagePH4, ph_sensor::voltagePH7,
                                      ph_sensor::calibrated);
 
   JsonDocument result;
@@ -295,7 +295,7 @@ void tickPhCalibration() {
   result["phValue"] = phCal.targetPh;
   result["durationMs"] = (int)elapsed;
   result["isFullyCalibrated"] = ph_sensor::calibrated;
-  firebase_sync::updateCommandStatus("done", &result);
+  pb_sync::updateCommandStatus("done", &result);
   phCal.active = false;
 }
 
@@ -315,7 +315,7 @@ void checkPhSampleSchedule() {
 
   float ph = ph_sensor::getPH();
   if (isnan(ph)) return;
-  firebase_sync::addPhMeasurement(ph);
+  pb_sync::addPhMeasurement(ph);
   lastSlot = slot;
   lastPhSampleAt = now;
   Preferences p;
@@ -336,7 +336,7 @@ void abortAll() {
     if (current.action == "dose") {
       time_t now; time(&now);
       if (now > 1700000000) recordDose(now, false);
-      firebase_sync::addDosing(current.pump, current.ml,
+      pb_sync::addDosing(current.pump, current.ml,
                                current.fromPlan ? DT_LABELS[current.dosageType] : "manual",
                                current.fromPlan, 1.0f, false);
     }
@@ -354,11 +354,11 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   }
   if (action == "stop") {
     abortAll();
-    firebase_sync::updateCommandStatus("done");
+    pb_sync::updateCommandStatus("done");
     return true;
   }
   if (action == "otaCheck") {
-    firebase_sync::updateCommandStatus("running");
+    pb_sync::updateCommandStatus("running");
     // 1) GitHub-Release holen (~2 s)
     bool found = ota_update::fetchLatestRelease();
     JsonDocument r;
@@ -366,23 +366,23 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
     r["availableVersion"] = ota_update::availableVersion;
     if (!found) {
       r["info"] = "Kein GitHub-Release gefunden";
-      firebase_sync::updateCommandStatus("done", &r);
+      pb_sync::updateCommandStatus("done", &r);
       return true;
     }
     int cmp = ota_update::compareVersions(FW_VERSION, ota_update::availableVersion);
     if (cmp >= 0) {
       r["info"] = "Bereits aktuell";
-      firebase_sync::updateCommandStatus("done", &r);
+      pb_sync::updateCommandStatus("done", &r);
       return true;
     }
     if (ota_update::isProtectedWindow()) {
       r["info"] = "Update verschoben — Dosier-Schutzfenster (:08-:20)";
-      firebase_sync::updateCommandStatus("done", &r);
+      pb_sync::updateCommandStatus("done", &r);
       return true;
     }
     // 2) Update wird durchgeführt — Web vorher informieren, sonst Timeout beim Reboot
     r["info"] = "Update läuft — ESP startet gleich neu";
-    firebase_sync::updateCommandStatus("done", &r);
+    pb_sync::updateCommandStatus("done", &r);
     delay(500);  // PATCH Zeit zum Committen geben
     // 3) Jetzt der eigentliche Download + Reboot (blockt mehrere Sekunden)
     ota_update::performUpdate(ota_update::availableUrl);
@@ -391,7 +391,7 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
     r2["currentVersion"] = FW_VERSION;
     r2["availableVersion"] = ota_update::availableVersion;
     r2["info"] = "Update fehlgeschlagen — siehe ESP-Serial";
-    firebase_sync::updateCommandStatus("failed", &r2);
+    pb_sync::updateCommandStatus("failed", &r2);
     return true;
   }
   if (action == "calibratePh") {
@@ -399,7 +399,7 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   }
   if (pump < 0 || pump >= pumps::NUM_PUMPS) {
     JsonDocument r; r["error"] = "ungültige Pumpe";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     return false;
   }
 
@@ -407,25 +407,25 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   if (action == "calibrate") {
     if (steps <= 0) {
       JsonDocument r; r["error"] = "steps fehlt";
-      firebase_sync::updateCommandStatus("failed", &r);
+      pb_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runSteps(pump, steps);
   } else if (action == "dose") {
     if (isnan(ml) || ml <= 0) {
       JsonDocument r; r["error"] = "ml fehlt";
-      firebase_sync::updateCommandStatus("failed", &r);
+      pb_sync::updateCommandStatus("failed", &r);
       return false;
     }
     ok = pumps::runMl(pump, ml);
   } else {
     JsonDocument r; r["error"] = "unbekannte action";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     return false;
   }
   if (!ok) {
     JsonDocument r; r["error"] = "Pumpe nicht startbar";
-    firebase_sync::updateCommandStatus("failed", &r);
+    pb_sync::updateCommandStatus("failed", &r);
     return false;
   }
 
@@ -438,7 +438,7 @@ bool startCommand(const String &cmdId, const String &action, int pump, float ml,
   current.startMs = millis();
   current.active = true;
   current.fromPlan = false;
-  firebase_sync::updateCommandStatus("running");
+  pb_sync::updateCommandStatus("running");
   Serial.printf("[Cmd] %s pump=%d %s (id=%s)\n", action.c_str(), pump,
                 action == "dose" ? (String("ml=") + ml).c_str()
                                  : (String("steps=") + steps).c_str(),
@@ -467,7 +467,7 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     }
     // Kanister-Dekrement übernimmt flushBuffer beim Upload der Dose
     // (offline-sicher — geht im Urlaubs-Puffer nicht verloren)
-    firebase_sync::addDosing(current.pump, current.ml,
+    pb_sync::addDosing(current.pump, current.ml,
                               DT_LABELS[current.dosageType], true, 1.0f, success);
     Serial.printf("[Plan] DOSE %s %s (%lums)\n",
                   DT_LABELS[current.dosageType],
@@ -478,10 +478,10 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     if (current.action == "calibrate") result["actualSteps"] = (int)current.steps;
     else if (current.action == "dose") result["actualMl"] = current.ml;
     if (!success && errorMsg) result["error"] = errorMsg;
-    firebase_sync::updateCommandStatus(success ? "done" : "failed", &result);
+    pb_sync::updateCommandStatus(success ? "done" : "failed", &result);
     if (current.action == "dose" && success) {
       // Kanister-Dekrement übernimmt flushBuffer beim Upload
-      firebase_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
+      pb_sync::addDosing(current.pump, current.ml, "manual", false, 1.0f, true);
     }
     Serial.printf("[Cmd] %s (%lums)\n", success ? "done" : "FAILED", duration);
   }
@@ -501,7 +501,7 @@ void pollCommands() {
   // ein Stop-Command nie an. Nicht-Stop-Commands warten unten einfach.
 
   JsonDocument doc;
-  if (!firebase_sync::fetchActiveCommand(doc)) return;
+  if (!pb_sync::fetchActiveCommand(doc)) return;
 
   String cmdId  = doc["cmdId"]  | "";
   String status = doc["status"] | "";
@@ -520,7 +520,7 @@ void pollCommands() {
   if (action == "stop") {
     lastProcessedCmdId = cmdId;
     abortAll();
-    firebase_sync::updateCommandStatus("done");
+    pb_sync::updateCommandStatus("done");
     return;
   }
 
@@ -707,10 +707,10 @@ void begin() {
 // falls lokal (NVS) keine vorhanden ist. Deckt ESP-Tausch + JSON-Restore ab.
 void syncPhCalibrationOnce() {
   static bool done = false;
-  if (done || ph_sensor::isCalibrated() || !firebase_sync::isReady()) return;
+  if (done || ph_sensor::isCalibrated() || !pb_sync::isReady()) return;
   done = true;
   float v4 = NAN, v7 = NAN; bool cal = false;
-  if (firebase_sync::fetchPhCalibration(v4, v7, cal) && cal) {
+  if (pb_sync::fetchPhCalibration(v4, v7, cal) && cal) {
     ph_sensor::setCalibration(v4, v7);
     Preferences p;
     p.begin(NVS_NAMESPACE, false);
@@ -731,7 +731,7 @@ void tick() {
   syncPhCalibrationOnce();         // pH-Kalib aus Cloud falls NVS leer
   checkPhSampleSchedule();         // pH-Probe um :05 schreiben
   checkAutoDosingSequence();       // Dosier-Sequenz um :10
-  firebase_sync::flushBuffer();    // Backlog-Uploads versuchen
+  pb_sync::flushBuffer();    // Backlog-Uploads versuchen
 }
 
 } // namespace plan_executor

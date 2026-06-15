@@ -33,7 +33,7 @@
 #include "time.h"
 #include "config.h"
 #include "wifi_setup.h"
-#include "firebase_sync.h"
+#include "pb_sync.h"
 #include "ph_sensor.h"
 #include "pumps.h"
 #include "rtc_sync.h"
@@ -95,7 +95,7 @@ void setup() {
     Serial.println("[Boot] WLAN (noch) nicht erreichbar — laufe offline weiter, Watchdog versucht Reconnect");
   } else {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
-    if (!firebase_sync::begin(fbEmail, fbPass)) {
+    if (!pb_sync::begin(fbEmail, fbPass)) {
       Serial.println("[Boot] PocketBase-Login fehlgeschlagen — retry über Loop");
     }
   }
@@ -118,14 +118,14 @@ void loop() {
   // Backend-Lazy-Init: wenn WLAN erst nach dem Boot kam (Watchdog),
   // NTP + PocketBase-Login hier nachholen.
   static unsigned long lastFbInitTryMs = 0;
-  if (WiFi.status() == WL_CONNECTED && !firebase_sync::ready
+  if (WiFi.status() == WL_CONNECTED && !pb_sync::ready
       && millis() - lastFbInitTryMs > 60000) {
     lastFbInitTryMs = millis();
     Serial.println("[Boot] WLAN da — hole NTP + PocketBase-Login nach");
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
     String ssid, wifiPass, fbEmail, fbPass;
     setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
-    firebase_sync::begin(fbEmail, fbPass);
+    pb_sync::begin(fbEmail, fbPass);
   }
 
   // pH-Sampling (alle 100 ms)
@@ -157,11 +157,11 @@ void loop() {
     static unsigned long lastLiveCheckMs = 0, lastLivePushMs = 0, liveUntilMs = 0;
     if (ms - lastLiveCheckMs > 4000) {
       lastLiveCheckMs = ms;
-      if (firebase_sync::livePhRequested()) liveUntilMs = ms + 30000;
+      if (pb_sync::livePhRequested()) liveUntilMs = ms + 30000;
     }
     if ((long)(liveUntilMs - ms) > 0 && ms - lastLivePushMs > 5000) {
       lastLivePushMs = ms;
-      firebase_sync::publishLive(ph_sensor::getPH(), ph_sensor::getVoltage());
+      pb_sync::publishLive(ph_sensor::getPH(), ph_sensor::getVoltage());
     }
   }
 
@@ -176,7 +176,7 @@ void loop() {
     float ph = includePh ? ph_sensor::getPH() : NAN;
     int phSamples = includePh ? ph_sensor::getSampleCount() : 0;
     long uptime = (now - bootMs) / 1000;
-    firebase_sync::HeartbeatStats stats;
+    pb_sync::HeartbeatStats stats;
     stats.dosesTotal = plan_executor::dosesTotal;
     stats.dosesFailedTotal = plan_executor::dosesFailedTotal;
     plan_executor::countDosesLast24h(stats.dosesOk24h, stats.dosesFail24h);
@@ -186,7 +186,7 @@ void loop() {
     }
     // Ausfall-Erkennung läuft serverseitig (PocketBase-Watchdog prüft den
     // Heartbeat-Zeitstempel und mailt bei Ausbleiben) — kein externer Ping nötig.
-    if (firebase_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
+    if (pb_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
       if (includePh) {
         Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
                       uptime, ph, WiFi.RSSI(),

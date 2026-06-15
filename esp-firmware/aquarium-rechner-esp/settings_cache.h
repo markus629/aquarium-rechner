@@ -17,7 +17,7 @@
 
 #include <Preferences.h>
 #include "config.h"
-#include "firebase_sync.h"
+#include "pb_sync.h"
 #include "pumps.h"
 
 namespace settings_cache {
@@ -83,7 +83,7 @@ void sync() {
   lastSyncMs = now;
 
   JsonDocument doc;
-  if (!firebase_sync::fetchSettings(doc)) return;
+  if (!pb_sync::fetchSettings(doc)) return;
 
   bool changed = false;
   // PocketBase liefert flaches JSON; is<float>() ist auch für Ganzzahlen true.

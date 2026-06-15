@@ -13,9 +13,6 @@
 //   aqua_measurements  (type,value,timestamp,source)   ← pH-Werte (write)
 //   aqua_dosings       (pump,ml,...,timestamp,source)  ← Dose-Bestätigungen (write)
 //   aqua_command       (cmdId,action,status,...)       ← Command (read+update)
-//
-// HINWEIS: Namespace heißt weiter "firebase_sync", damit die Aufrufer
-// (plan_executor.h, settings_cache.h, .ino) unverändert bleiben.
 // =============================================================
 #pragma once
 
@@ -37,7 +34,7 @@ static const char *PB_ROOT_CA = R"CERT(
 )CERT";
 #endif
 
-namespace firebase_sync {
+namespace pb_sync {
 
 static WiFiClientSecure pbClient;   // für HTTPS-Remote-Fallback
 static WiFiClient pbPlain;          // für lokales HTTP (kein TLS)
@@ -432,4 +429,4 @@ bool updateCommandStatus(const String &status, JsonDocument *resultJson = nullpt
   return ok;
 }
 
-} // namespace firebase_sync
+} // namespace pb_sync
