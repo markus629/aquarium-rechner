@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OSCI Motion Spurenelemente Rechner</title>
+<title>Spurenelemente Rechner</title>
 <style>
   :root {
     --blue:#1a73a7; --blue-dark:#125a84; --blue-light:#e8f4fb;
@@ -171,7 +171,7 @@
 <body>
 <header>
   <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
-  <h1>OSCI Motion Spurenelemente</h1>
+  <h1>Spurenelemente Rechner</h1>
   <p>ICP-Messung erfassen · Dosierung berechnen · Historie führen</p>
 </header>
 <main>
@@ -193,30 +193,37 @@
     </div>
     <p class="info-line" style="font-size:0.78rem;">Letzte Zeile leer ausfüllen und mit ✓ als neues Element speichern. Vorhandene Elemente lassen sich mit − löschen (Mess-Historie bleibt erhalten).</p>
 
-    <h3>Mischung</h3>
+    <h3>Startlösung berechnen</h3>
+    <p class="info-line" style="font-size:0.78rem;">Berechnet die <strong>Anfangsdosis</strong> je Spurenelement aus Volumen, ICP-Intervall und Besatz und trägt sie oben in die Tabelle ein. Daraus ergibt sich automatisch die Tagesdosis (Volumen/100) und die Ansatzmenge für die Dosierberechnung. Nur diese Spurenelemente (Co, Ni, Fe, Mn, Cu, Cr, Zn, F, I, V, Se) werden überschrieben — andere Elemente bleiben unverändert.</p>
     <div class="form-row form-row-multi">
       <div class="form-field">
-        <label>Tagesdosis je Lösung (ml/Tag)</label>
-        <input type="number" id="dailyMl" min="0" step="0.1" value="5">
+        <label>Nettovolumen (L)</label>
+        <input type="number" id="startVolume" min="0" step="1" placeholder="z. B. 500">
       </div>
       <div class="form-field">
-        <label>ICP-Abstand (Tage)</label>
-        <input type="number" id="icpIntervalDays" min="1" step="1" value="30">
+        <label>ICP-Intervall</label>
+        <select id="startInterval" style="padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; background:#fff;">
+          <option value="1">monatlich (reicht 40 Tage)</option>
+          <option value="0.5">14-tägig (reicht 20 Tage)</option>
+        </select>
       </div>
       <div class="form-field">
-        <label>Sicherheit (Tage)</label>
-        <input type="number" id="safetyDays" min="0" step="1" value="10">
+        <label>Korallenbesatz</label>
+        <select id="startBesatz" style="padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; background:#fff;">
+          <option value="1">normal</option>
+          <option value="0.5">schwach</option>
+        </select>
       </div>
     </div>
-    <div class="form-row" style="font-size:0.8rem; color:var(--text-light);">
-      <label>Ergibt</label>
-      <div id="mixSummary" style="padding:0.4rem 0;"></div>
+    <div id="startPreview" class="info-line" style="font-size:0.78rem; min-height:1em;"></div>
+    <div class="btn-row" style="margin-bottom:1.5rem;">
+      <button class="btn btn-primary" id="startCalcBtn">Anfangsdosis berechnen &amp; in Tabelle übernehmen</button>
     </div>
+    <h3>Dosier-Anpassung</h3>
     <div class="form-row">
       <label>Max. Anpassung pro Iteration (%)</label>
       <input type="number" id="capPct" step="1" value="25">
     </div>
-    <h3>Glättung</h3>
     <div class="form-row form-row-multi">
       <div class="form-field">
         <label>Glättungs-Fenster (Anzahl Messungen)</label>
@@ -287,7 +294,6 @@
 
 <footer>
   Dieser Rechner dient als Hilfsmittel. Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
-  <span style="font-size:0.72rem;opacity:0.7">Datenschutz: Mit Login werden deine Daten auf einem privaten Server (Deutschland, Übertragung per HTTPS verschlüsselt) gespeichert. Ohne Login bleibt alles ausschließlich in deinem Browser.</span><br>
   <span style="font-size:0.78rem"><a href="/impressum.html" style="color:#3498db">Impressum</a> · <a href="/datenschutz.html" style="color:#3498db">Datenschutz</a></span>
 </footer>
 
@@ -386,7 +392,7 @@ function rebuildElementBindings() {
   const list = (state && state.settings && Array.isArray(state.settings.elements))
     ? state.settings.elements
     : DEFAULT_ELEMENTS;
-  ALL_ELEMENTS = list.map(e => ({ ...e }));
+  ALL_ELEMENTS = list.map(e => ({ ...e, unit: e.unit || (e.key === "F" ? "mg/l" : "µg/l") }));
   ELEMENTS = {
     cat: ALL_ELEMENTS.filter(e => e.group === "cat"),
     an:  ALL_ELEMENTS.filter(e => e.group === "an"),
@@ -395,7 +401,7 @@ function rebuildElementBindings() {
 
 const STORAGE_KEY = "spurenrechner.v1";
 const DEFAULTS = {
-  elements: DEFAULT_ELEMENTS.map(e => ({ key:e.key, name:e.name, group:e.group })),
+  elements: DEFAULT_ELEMENTS.map(e => ({ key:e.key, name:e.name, group:e.group, unit: e.key==="F" ? "mg/l" : "µg/l" })),
   ideal:   Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.ideal])),
   min:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.min])),
   max:     Object.fromEntries(DEFAULT_ELEMENTS.map(e=>[e.key, e.max])),
@@ -581,6 +587,7 @@ function buildLimitsTable() {
       <td class="num">${numTxt("min",     e.key)}</td>
       <td class="num">${numTxt("ideal",   e.key)}</td>
       <td class="num">${numTxt("max",     e.key)}</td>
+      <td><span class="cell-ro">${e.unit || "µg/l"}</span></td>
       <td class="num">${numTxt("initial", e.key)}</td>
       <td class="num">${numTxt("nwg",     e.key)}</td>
       <td class="action-cell"><button type="button" class="row-action edit" data-action="edit" data-key="${e.key}" title="Bearbeiten">✎</button></td>
@@ -593,6 +600,10 @@ function buildLimitsTable() {
       <td class="num">${numIn("min",     e.key)}</td>
       <td class="num">${numIn("ideal",   e.key)}</td>
       <td class="num">${numIn("max",     e.key)}</td>
+      <td><select data-meta="unit" data-key="${e.key}" style="width:5em;">
+        <option value="µg/l" ${(e.unit||"µg/l")==="µg/l"?"selected":""}>µg/l</option>
+        <option value="mg/l" ${(e.unit||"µg/l")==="mg/l"?"selected":""}>mg/l</option>
+      </select></td>
       <td class="num">${numIn("initial", e.key)}</td>
       <td class="num">${numIn("nwg",     e.key)}</td>
       <td class="action-cell" style="white-space:nowrap;">
@@ -619,6 +630,10 @@ function buildLimitsTable() {
       <td class="num"><input type="number" step="any"  data-new="min"     placeholder="Min"></td>
       <td class="num"><input type="number" step="any"  data-new="ideal"   placeholder="Optimal"></td>
       <td class="num"><input type="number" step="any"  data-new="max"     placeholder="Max"></td>
+      <td><select data-new="unit" style="width:5em;">
+        <option value="µg/l">µg/l</option>
+        <option value="mg/l">mg/l</option>
+      </select></td>
       <td class="num"><input type="number" step="any"  data-new="initial" placeholder="Anf."></td>
       <td class="num"><input type="number" step="any"  data-new="nwg"     placeholder="NWG"></td>
       <td class="action-cell"><button type="button" class="row-action save" data-action="save-new" title="Neues Element speichern">✓</button></td>
@@ -627,8 +642,9 @@ function buildLimitsTable() {
     <thead><tr>
       <th>Gruppe</th><th>Sym.</th><th>Name</th>
       <th class="num">Min</th><th class="num">Optimal</th><th class="num">Max</th>
-      <th class="num" title="ml-Konzentrat in der ersten Mischung">Anfangsdosis</th>
-      <th class="num" title="Nachweisgrenze des ICP-Labors (optional). Bei Messwert 0 wird mit NWG/2 als angenommenem Wert gerechnet statt blind um den Cap zu erhöhen.">NWG</th>
+      <th title="Konzentrations-Einheit (gilt für Min/Optimal/Max/NWG)">Einheit</th>
+      <th class="num" title="ml-Konzentrat in der ersten Mischung">Anfangsdosis (ml)</th>
+      <th class="num" title="Nachweisgrenze des ICP-Labors (optional, in der Einheit des Elements). Bei Messwert 0 wird mit NWG/2 als angenommenem Wert gerechnet statt blind um den Cap zu erhöhen.">NWG</th>
       <th></th>
     </tr></thead>
     <tbody>${ALL_ELEMENTS.map(elementRow).join("")}${newRow}</tbody>`;
@@ -769,7 +785,8 @@ function buildLimitsTable() {
     const max     = isNaN(getN("max"))     ? 0 : getN("max");
     const initial = isNaN(getN("initial")) ? 0 : getN("initial");
     const nwg     = isNaN(getN("nwg"))     ? 0 : getN("nwg");
-    state.settings.elements.push({ key, name, group });
+    const unit    = get("unit") || "µg/l";
+    state.settings.elements.push({ key, name, group, unit });
     state.settings.ideal[key]   = ideal;
     state.settings.min[key]     = min;
     state.settings.max[key]     = max;
@@ -792,26 +809,109 @@ function bindSettingsScalar(id, field, transform=v=>v) {
     if (isNaN(v)) v = 0;
     state.settings[field] = transform(v);
     saveState();
-    updateMixSummary();
   });
 }
 
-function updateMixSummary() {
-  const el = document.getElementById("mixSummary");
+// ── Startlösung-Rechner (OSCI-Rezeptur) ──────────────────────
+// Anfangsdosis (ml-Konzentrat je Element in der Erstmischung) = G × Besatz × Faktor,
+// mit G = Intervall-Faktor × Volumen/500. Iod hat bei "schwach" einen Sonderfall:
+// es wird weniger stark reduziert (Faktor 0.9/0.6 statt der einfachen Halbierung).
+const START_FACTORS = {
+  // K+ (kationisch)
+  Co:30, Ni:15, Fe:4, Zn:2, Cu:1, Mn:0.5, Cr:0.4,
+  // A- (anionisch)
+  F:90, Se:1.5, I:1.2, V:0.8,
+};
+function computeStartDoses(volumeL, intervalF, besatzF) {
+  const G = intervalF * (volumeL / 500);
+  const out = {};
+  for (const [key, factor] of Object.entries(START_FACTORS)) {
+    let amt;
+    if (key === "I") {
+      // OSCI-Sonderfall Iod: bei schwachem Besatz nur auf 0.75× statt 0.5× reduzieren
+      amt = (besatzF === 1) ? G * factor : G * besatzF * factor * (0.9 / 0.6);
+    } else {
+      amt = G * besatzF * factor;
+    }
+    out[key] = Math.round(amt * 100) / 100;
+  }
+  return out;
+}
+function updateStartPreview() {
+  const el = document.getElementById("startPreview");
   if (!el) return;
-  const { dailyMl, totalDays, totalMl } = mixDerived();
-  el.innerHTML = `<strong>${fmt(dailyMl,2)} ml/Tag</strong> · ${totalDays} Tage · ergibt <strong>${fmt(totalMl,1)} ml</strong> pro Lösung`;
+  const vol = parseFloat(document.getElementById("startVolume").value);
+  const intervalF = parseFloat(document.getElementById("startInterval").value) || 1;
+  if (!(vol > 0)) { el.textContent = ""; return; }
+  const dailyMl = vol / 100;
+  const days = Math.round(intervalF * 40);
+  const batch = intervalF * (vol / 500) * 200;
+  el.innerHTML = `Ergibt: Tagesdosis <strong>${fmt(dailyMl,1)} ml/Tag</strong> je Lösung · Reichweite <strong>${days} Tage</strong> · Ansatzmenge <strong>${fmt(batch,0)} ml</strong> pro Lösung.`;
+}
+function applyStartDoses() {
+  const vol = parseFloat(document.getElementById("startVolume").value);
+  const intervalF = parseFloat(document.getElementById("startInterval").value) || 1;
+  const besatzF = parseFloat(document.getElementById("startBesatz").value) || 1;
+  if (!(vol > 0)) { toast("Bitte ein gültiges Nettovolumen eingeben."); return; }
+  const doses = computeStartDoses(vol, intervalF, besatzF);
+  const known = new Set(state.settings.elements.map(e => e.key));
+  let applied = 0; const skipped = [];
+  for (const [key, val] of Object.entries(doses)) {
+    if (known.has(key)) { state.settings.initial[key] = val; applied++; }
+    else skipped.push(key);
+  }
+  // Abgeleitete Mischungs-Werte (ersetzen die früheren manuellen Felder Tagesdosis/Abstand/Sicherheit)
+  state.settings.dailyMl = Math.round((vol / 100) * 100) / 100;  // V/100 ml pro Tag je Lösung
+  state.settings.icpIntervalDays = Math.round(intervalF * 40);   // Reichweite 40 (monatlich) / 20 (14-tägig)
+  state.settings.safetyDays = 0;                                 // Puffer bereits in der Reichweite enthalten
+  // Eingaben für das nächste Mal merken
+  state.settings.startVolume = vol;
+  state.settings.startInterval = intervalF;
+  state.settings.startBesatz = besatzF;
+  saveState();
+  buildLimitsTable();
+  updateStartPreview();
+  let msg = `${applied} Anfangsdosen aktualisiert.`;
+  if (skipped.length) msg += ` Nicht in Tabelle (übersprungen): ${skipped.join(", ")}.`;
+  toast(msg);
+}
+function syncStartForm() {
+  const v = document.getElementById("startVolume");
+  const i = document.getElementById("startInterval");
+  const b = document.getElementById("startBesatz");
+  if (!v || !i || !b) return;
+  if (state.settings.startVolume   != null) v.value = state.settings.startVolume;
+  if (state.settings.startInterval != null) i.value = String(state.settings.startInterval);
+  if (state.settings.startBesatz   != null) b.value = String(state.settings.startBesatz);
+  updateStartPreview();
+}
+function persistStartInputs() {
+  const vol = parseFloat(document.getElementById("startVolume").value);
+  state.settings.startVolume   = (vol > 0) ? vol : null;
+  state.settings.startInterval = parseFloat(document.getElementById("startInterval").value) || 1;
+  state.settings.startBesatz   = parseFloat(document.getElementById("startBesatz").value) || 1;
+  saveState();
+}
+function initStartCalc() {
+  const btn = document.getElementById("startCalcBtn");
+  if (!btn) return;
+  btn.addEventListener("click", applyStartDoses);
+  ["startVolume", "startInterval", "startBesatz"].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) {
+      e.addEventListener("input", updateStartPreview);
+      e.addEventListener("change", () => { updateStartPreview(); persistStartInputs(); });
+    }
+  });
+  syncStartForm();
 }
 
 function renderSettings() {
   buildLimitsTable();
-  bindSettingsScalar("dailyMl",         "dailyMl");
-  bindSettingsScalar("icpIntervalDays", "icpIntervalDays");
-  bindSettingsScalar("safetyDays",      "safetyDays");
   bindSettingsScalar("capPct",   "capPct", v => v/100);
   bindSettingsScalar("smoothN",  "smoothN");
   bindSettingsScalar("deadbandPct", "deadbandPct", v => v/100);
-  updateMixSummary();
+  syncStartForm();
   const cm = document.getElementById("chartMonths");
   cm.value = String(state.settings.chartMonths ?? 0);
   cm.addEventListener("change", () => {
@@ -842,8 +942,9 @@ function buildMeasureGrid(containerId, list) {
       <div class="element-label">${e.name} <span class="sym">${e.key}</span></div>
       <div class="element-input-row">
         <input type="number" step="any" placeholder="Messwert" data-mkey="${e.key}">
+        <span class="unit">${e.unit || "µg/l"}</span>
       </div>
-      <div class="ideal-hint">${fmt(state.settings.min[e.key])} <span style="opacity:0.6;">·</span> <strong>${fmt(state.settings.ideal[e.key])}</strong> <span style="opacity:0.6;">·</span> ${fmt(state.settings.max[e.key])}</div>`;
+      <div class="ideal-hint">${fmt(state.settings.min[e.key])} <span style="opacity:0.6;">·</span> <strong>${fmt(state.settings.ideal[e.key])}</strong> <span style="opacity:0.6;">·</span> ${fmt(state.settings.max[e.key])} ${e.unit || "µg/l"}</div>`;
     c.appendChild(div);
   });
 }
@@ -1078,8 +1179,9 @@ function renderResults(measured, calc) {
       <td>${fmt(r.ideal)}</td>
       <td>${r.measured==null ? "–" : fmt(r.measured)}</td>
       <td>${smoothedCell}</td>
-      <td>${fmt(r.prev,3)}</td>
-      <td><span class="mix-edit" contenteditable="true" data-mix="${e.key}" inputmode="decimal">${fmt(r.value,3)}</span><button class="mix-undo" data-undo="${e.key}" title="Manuelle Eingabe rückgängig" hidden>↺</button> ${flag}</td>
+      <td style="color:var(--text-light);">${e.unit || "µg/l"}</td>
+      <td>${fmt(r.prev,2)}</td>
+      <td><span class="mix-edit" contenteditable="true" data-mix="${e.key}" inputmode="decimal">${fmt(r.value,2)}</span><button class="mix-undo" data-undo="${e.key}" title="Manuelle Eingabe rückgängig" hidden>↺</button> ${flag}</td>
       <td>${arrow}</td>
       <td><span class="help-dot" data-calc-detail="${e.key}" title="Berechnung anzeigen">?</span></td>
     </tr>`;
@@ -1087,6 +1189,7 @@ function renderResults(measured, calc) {
   const tableHead = `<thead><tr>
     <th>Element</th><th>Ideal</th><th title="aktuell eingegebene Messung">Mess</th>
     <th title="rauschbereinigter Messwert bei aktueller Dosis (gewichteter Schnitt der Mess/Dosis-Verhältnisse × aktuelle Dosis)">Ø</th>
+    <th title="Einheit der Konzentrationswerte (Ideal/Mess/Ø)">Einheit</th>
     <th title="Konzentrat in der vorigen Mischung">Vorher (ml)</th>
     <th title="Konzentrat für die nächste ${totalDays}-Tage-Mischung">Neue Menge (ml)</th>
     <th>Δ</th>
@@ -1202,13 +1305,13 @@ function renderResults(measured, calc) {
       refreshSums();
     };
     span.addEventListener("input", commit);
-    span.addEventListener("blur", () => { span.textContent = fmt(calc.perElement[key].value, 3); });
+    span.addEventListener("blur", () => { span.textContent = fmt(calc.perElement[key].value, 2); });
     span.addEventListener("keydown", ev => {
       if (ev.key === "Enter") { ev.preventDefault(); span.blur(); }
     });
     undoBtn.addEventListener("click", () => {
       calc.perElement[key].value = calc.perElement[key]._auto;
-      span.textContent = fmt(calc.perElement[key]._auto, 3);
+      span.textContent = fmt(calc.perElement[key]._auto, 2);
       span.classList.remove("edited");
       undoBtn.hidden = true;
       refreshSums();
@@ -1563,15 +1666,15 @@ function renderHistory() {
         <div>
           <strong>Messwerte</strong>
           <table class="dose-table" style="margin-top:0.4rem;">
-            <thead><tr><th>El.</th><th>Ideal</th><th>Mess</th></tr></thead>
-            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(state.settings.ideal[e.key])}</td><td>${m.measured[e.key]==null?"–":fmt(m.measured[e.key])}</td></tr>`).join("")}</tbody>
+            <thead><tr><th>El.</th><th>Ideal</th><th>Mess</th><th>Einheit</th></tr></thead>
+            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(state.settings.ideal[e.key])}</td><td>${m.measured[e.key]==null?"–":fmt(m.measured[e.key])}</td><td style="color:var(--text-light);">${e.unit||"µg/l"}</td></tr>`).join("")}</tbody>
           </table>
         </div>
         <div>
           <strong>Berechnete Dosis (ml pro Mischung)</strong>
           <table class="dose-table" style="margin-top:0.4rem;">
             <thead><tr><th>El.</th><th>ml</th></tr></thead>
-            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(m.dose[e.key],3)}</td></tr>`).join("")}</tbody>
+            <tbody>${ALL_ELEMENTS.map(e=>`<tr><td>${e.name}</td><td>${fmt(m.dose[e.key],2)}</td></tr>`).join("")}</tbody>
           </table>
           <p class="ideal-hint" style="margin-top:0.4rem;">
             Σ Kationen: ${fmt(ELEMENTS.cat.reduce((s,e)=>s+(m.dose[e.key]||0),0),2)} ml ·
@@ -1708,6 +1811,7 @@ function init() {
   rebuildElementBindings();
   document.getElementById("measureDate").value = todayStr();
   renderSettings();
+  initStartCalc();
   rebuildMeasureGrids();
   renderHistory();
 }
