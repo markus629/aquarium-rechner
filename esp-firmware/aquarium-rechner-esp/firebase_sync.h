@@ -39,14 +39,14 @@ static const char *PB_ROOT_CA = R"CERT(
 
 namespace firebase_sync {
 
-static WiFiClientSecure pbClient;   // für HTTPS-Funnel-Fallback
+static WiFiClientSecure pbClient;   // für HTTPS-Remote-Fallback
 static WiFiClient pbPlain;          // für lokales HTTP (kein TLS)
 static HTTPClient pbHttp;
 
 String authToken;
 String currentUid;
 String credEmail, credPassword;
-String activeBase = PB_URL_LOCAL;   // bevorzugt lokal; bei Fehler → Funnel
+String activeBase = PB_URL_LOCAL;   // bevorzugt lokal; bei Fehler → Remote
 bool ready = false;
 
 // PocketBase identifiziert Records per id (nicht per Pfad) → IDs cachen.
@@ -89,7 +89,7 @@ static String urlEncode(const String &s) {
 static int doRequest(const String &base, const char *method, const String &path,
                      const String &body, String *respOut) {
   WiFiClient *cl;
-  if (base.startsWith("https")) { configureTLS(); cl = &pbClient; }  // Funnel (TLS)
+  if (base.startsWith("https")) { configureTLS(); cl = &pbClient; }  // Remote (TLS)
   else                          { cl = &pbPlain; }                    // lokal (HTTP)
   if (!pbHttp.begin(*cl, base + path)) return -1;
   pbHttp.setReuse(true);
@@ -108,12 +108,12 @@ static int doRequest(const String &base, const char *method, const String &path,
 
 // method: GET/POST/PATCH/DELETE. path: ab "/api/...". body: JSON oder "".
 // Versucht zuerst activeBase; bei Verbindungsfehler die andere Basis (lokal <->
-// Funnel) und merkt sich die funktionierende. Bei 401 wird re-authentifiziert.
+// Remote) und merkt sich die funktionierende. Bei 401 wird re-authentifiziert.
 static int request(const char *method, const String &path, const String &body,
                    String *respOut, bool allowReauth = true) {
   int code = doRequest(activeBase, method, path, body, respOut);
   if (code <= 0) {
-    String other = (activeBase == String(PB_URL_LOCAL)) ? String(PB_URL_FUNNEL)
+    String other = (activeBase == String(PB_URL_LOCAL)) ? String(PB_URL_REMOTE)
                                                         : String(PB_URL_LOCAL);
     int code2 = doRequest(other, method, path, body, respOut);
     if (code2 > 0) { activeBase = other; code = code2; }   // Basis wechseln + merken

@@ -4,7 +4,7 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.5.4"
+#define FW_VERSION "0.5.5"
 #define FW_NAME "aquarium-rechner-esp"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
@@ -16,18 +16,19 @@
 
 // ---------- PocketBase Backend ----------
 // Der ESP steht im selben LAN wie der Server → zuerst die LOKALE IP (schnell,
-// kein Internet/DNS/TLS, immun gegen Funnel-/IP-Wechsel). Schlägt das fehl
-// (z.B. ESP woanders), automatischer Fallback auf die öffentliche Funnel-Adresse.
-// Jeweils ohne abschließenden Slash.
+// kein Internet/DNS/TLS, immun gegen IP-/Tunnel-Wechsel). Schlägt das fehl
+// (z.B. ESP woanders), automatischer Fallback auf die öffentliche Adresse
+// (Cloudflare-Tunnel auf die eigene Domain). Jeweils ohne abschließenden Slash.
 #define PB_URL_LOCAL  "http://192.168.178.72:8090"
-#define PB_URL_FUNNEL "https://aquarium.barracuda-lungfish.ts.net"
+#define PB_URL_REMOTE "https://fishtankpro.de"
 
-// TLS-Zertifikatsprüfung (gilt nur für den HTTPS-Funnel-Fallback):
+// TLS-Zertifikatsprüfung (gilt nur für den HTTPS-Remote-Fallback):
 //   1 = WiFiClientSecure.setInsecure() — KEINE Zertifikatsprüfung.
 //       Einfachste Variante, verbindet sich garantiert. Theoretisch
 //       MITM-angreifbar. Für den ersten Flash/Test empfohlen.
-//   0 = Root-CA pinnen (sicherer). Dann in firebase_sync.h die
-//       ISRG-Root-X1-CA (Let's Encrypt) im Platzhalter PB_ROOT_CA setzen.
+//   0 = Root-CA pinnen (sicherer). Dann in firebase_sync.h die passende
+//       Root-CA (Cloudflare-Edge nutzt Let's Encrypt / Google Trust)
+//       im Platzhalter PB_ROOT_CA setzen.
 #define PB_TLS_INSECURE 1
 
 // ---------- Hardware-Pins ----------
