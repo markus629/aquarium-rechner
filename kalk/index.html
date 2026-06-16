@@ -439,6 +439,11 @@
           <span>Live-Messwert <span class="hint">(alle 5 s, solange dieser Tab offen ist)</span></span>
           <span>Spannung <code id="ph-live-v">—</code> &middot; pH <code id="ph-live-ph">—</code></span>
         </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem">
+          <span style="font-size:0.8rem;color:var(--text-light)">Live-Spannung (letzte 3 min) &middot; <span id="ph-live-stab">–</span></span>
+          <button type="button" id="ph-live-reset" style="font-size:0.75rem;background:none;border:none;color:var(--accent);cursor:pointer;padding:0">↺ zurücksetzen</button>
+        </div>
+        <div id="ph-live-chart" style="margin-bottom:1rem"></div>
         <div style="display:flex;gap:0.7rem;flex-wrap:wrap">
           <button class="btn btn-primary" id="ph-cal-4">▶ pH-4 kalibrieren</button>
           <button class="btn btn-primary" id="ph-cal-7">▶ pH-7 kalibrieren</button>
@@ -876,8 +881,8 @@
 
     // X-Achse (Datums-Labels)
     const dateOf = ts => new Date(ts * 1000).toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit" });
-    svg += `<text x="${padL}" y="${H-8}" font-size="10" fill="var(--text-light)">${dateOf(tsMin)}</text>`;
-    svg += `<text x="${W-padR}" y="${H-8}" font-size="10" fill="var(--text-light)" text-anchor="end">${dateOf(tsMax)}</text>`;
+    svg += `<text x="${padL}" y="${H-8}" font-size="10" fill="#7a8896">${dateOf(tsMin)}</text>`;
+    svg += `<text x="${W-padR}" y="${H-8}" font-size="10" fill="#7a8896" text-anchor="end">${dateOf(tsMax)}</text>`;
 
     // Pro Serie: Trendlinie + Linie + Datenpunkte
     series.forEach(s => {
@@ -2298,6 +2303,66 @@
   async function pingPresence() {
     try { await setAquaDoc("_livereq", { until: Math.floor(Date.now() / 1000) + 30 }); } catch (_) {}
   }
+  // ---------- Live-Spannungs-Graph (Kalibrier-Hilfe, rollendes 3-Min-Fenster) ----------
+  const LIVE_VOLT_WINDOW = 180;       // Sekunden (3 min)
+  const LIVE_VOLT_STABLE_MV = 5;      // Schwankung über 30 s < 5 mV → "stabil"
+  let liveVoltBuf = [];               // {ts (Sek.), v (Volt)}
+  function pushLiveVolt(v) {
+    if (v == null || isNaN(v)) return;
+    const now = Date.now() / 1000;
+    liveVoltBuf.push({ ts: now, v });
+    liveVoltBuf = liveVoltBuf.filter(p => p.ts >= now - LIVE_VOLT_WINDOW);
+    renderLiveVoltChart();
+  }
+  function clearLiveVolt() { liveVoltBuf = []; renderLiveVoltChart(); }
+  function renderLiveVoltChart() {
+    const c = document.getElementById("ph-live-chart");
+    const stab = document.getElementById("ph-live-stab");
+    if (!c) return;
+    const now = Date.now() / 1000;
+    const pts = liveVoltBuf;
+    // Stabilitäts-Hinweis: Spanne (max−min) der letzten 30 s in mV
+    if (stab) {
+      const recent = pts.filter(p => p.ts >= now - 30).map(p => p.v);
+      if (recent.length >= 2) {
+        const mV = (Math.max(...recent) - Math.min(...recent)) * 1000;
+        const ok = mV < LIVE_VOLT_STABLE_MV;
+        stab.innerHTML = `Schwankung 30 s: <strong>${mV.toFixed(1)} mV</strong>` + (ok ? ` <span style="color:var(--green)">· stabil ✓</span>` : "");
+      } else { stab.textContent = "–"; }
+    }
+    if (pts.length < 2) {
+      c.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-light);font-size:0.85rem;border:1px dashed var(--border);border-radius:8px">warte auf Live-Werte …</div>`;
+      return;
+    }
+    const W = 600, H = 120, padL = 48, padR = 10, padT = 10, padB = 18;
+    const cw = W - padL - padR, chh = H - padT - padB;
+    let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
+    if (hi - lo < 0.001) { lo -= 0.005; hi += 0.005; } else { const m = (hi - lo) * 0.15; lo -= m; hi += m; }
+    // X-Achse auf den tatsächlichen Datenbereich skalieren (ältester Punkt … jetzt),
+    // damit die Linie sofort die volle Breite nutzt und nicht rechts zusammenklebt.
+    const tmin = Math.min(...pts.map(p => p.ts));
+    const tspan = Math.max(now - tmin, 1);
+    const xOf = t => padL + ((t - tmin) / tspan) * cw;
+    const yOf = v => padT + chh - ((v - lo) / (hi - lo)) * chh;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block">`;
+    for (let i = 0; i <= 2; i++) {
+      const y = padT + (chh / 2) * i;
+      const val = hi - (hi - lo) * (i / 2);
+      svg += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#e1e8ed" stroke-width="1"/>`;
+      svg += `<text x="${padL - 5}" y="${y + 3}" font-size="10" fill="#7a8896" text-anchor="end">${val.toFixed(3)}</text>`;
+    }
+    const elapsed = Math.round(tspan);
+    const leftLbl = elapsed >= 60 ? `−${Math.round(elapsed / 60)} min` : `−${elapsed} s`;
+    svg += `<text x="${padL}" y="${H - 4}" font-size="10" fill="#7a8896">${leftLbl}</text>`;
+    svg += `<text x="${W - padR}" y="${H - 4}" font-size="10" fill="#7a8896" text-anchor="end">jetzt</text>`;
+    const sorted = [...pts].sort((a, b) => a.ts - b.ts);
+    const path = sorted.map((p, i) => (i ? "L" : "M") + xOf(p.ts).toFixed(1) + " " + yOf(p.v).toFixed(1)).join(" ");
+    svg += `<path d="${path}" stroke="#3498db" stroke-width="2" fill="none"/>`;
+    const last = sorted[sorted.length - 1];
+    svg += `<circle cx="${xOf(last.ts).toFixed(1)}" cy="${yOf(last.v).toFixed(1)}" r="3.5" fill="#3498db"/>`;
+    svg += `</svg>`;
+    c.innerHTML = svg;
+  }
   function showLivePh(d) {
     if (!d) return;
     // Dashboard: pH live (nur wenn kalibriert + plausibel)
@@ -2313,6 +2378,7 @@
     const lp = document.getElementById("ph-live-ph");
     if (lv && d.voltage != null) lv.textContent = Number(d.voltage).toFixed(4) + " V";
     if (lp) lp.textContent = d.ph != null ? Number(d.ph).toFixed(2) : "—";
+    if (d.voltage != null) { try { pushLiveVolt(Number(d.voltage)); } catch (_) {} }
   }
   function updateLivePresence() {
     const want = liveTabActive();
@@ -2325,6 +2391,10 @@
     }
   }
   document.addEventListener("visibilitychange", updateLivePresence);
+  try {
+    document.getElementById("ph-live-reset")?.addEventListener("click", clearLiveVolt);
+    renderLiveVoltChart();  // initialer Leer-Zustand ("warte auf Live-Werte …")
+  } catch (e) { console.warn("Live-Volt-Graph init:", e); }
 
   // Auch Settings-Änderung soll Plan/Dashboard neu rechnen
   document.querySelectorAll("[data-setting]").forEach(inp => {
