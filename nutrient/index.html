@@ -130,7 +130,6 @@
         <div class="grid2">
           <div class="field"><label>Lern-Fenster (Tage)</label><input type="number" data-setting="learnWindowDays" step="1" min="3"></div>
           <div class="field"><label>Slew-Limit Erhaltung (%)</label><input type="number" data-setting="slewLimitPct" data-pct step="1" min="1" max="100"></div>
-          <div class="field"><label>Korrektur-Verstärkung (%)</label><input type="number" data-setting="correctionGainPct" data-pct step="1" min="1" max="100"></div>
           <div class="field"><label>Überschuss-Bestätigung (Tage)</label><input type="number" data-setting="surplusConfirmDays" step="1" min="1"></div>
           <div class="field"><label>Totband NO₃ (mg/l)</label><input type="number" data-setting="deadbandNO3" step="0.1"></div>
           <div class="field"><label>Totband PO₄ (mg/l)</label><input type="number" data-setting="deadbandPO4" step="0.001"></div>
@@ -219,7 +218,6 @@
     po4Min: ["PO₄-Bereich (min/max)", "Akzeptierter Bereich für Phosphat (grünes Band im Graph)."],
     learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den die Ausgleichsgerade durch deine Messungen gelegt wird. Nur Messungen aus diesem Fenster zählen für die Verbrauchs-Lernung. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
     slewLimitPct: ["Slew-Limit Erhaltung (%)", "Wie stark die tägliche Erhaltungsdosis pro Messung HÖCHSTENS nachgezogen wird (in % der aktuellen Dosis). Klein = sanft, keine Sprünge (empfohlen); groß = schneller, aber unruhiger. Verhindert Überreaktion auf eine einzelne Messung."],
-    correctionGainPct: ["Korrektur-Verstärkung (%)", "Wie viel der aktuellen Abweichung zum Ziel pro Korrektur geschlossen wird. 50 % = die halbe Lücke wird sofort korrigiert, der Rest nähert sich über die nächsten Messungen an. Klein = vorsichtig, kein Überschwingen; groß = schnell, Risiko 'vom Berg ins Tal'."],
     surplusConfirmDays: ["Überschuss-Bestätigung (Tage)", "So viele Tage muss der Wert TROTZ 0-Dosierung flach bleiben oder steigen, bevor aktiv abgebaut wird (C bzw. Lanthan). Schützt davor, vorschnell Nährstoffe rauszuziehen — erst Aufbau stoppen, dann beobachten, dann erst abbauen."],
     deadbandNO3: ["Totband NO₃ (mg/l)", "Toleranz um den Zielwert. Liegt die Messung innerhalb ± diesem Wert, wird NICHT korrigiert — verhindert ständiges Nachregeln auf Mess-Rauschen."],
     deadbandPO4: ["Totband PO₄ (mg/l)", "Toleranz um den PO₄-Zielwert; innerhalb wird nicht korrigiert (kein Jagen auf Rauschen)."],
@@ -315,7 +313,7 @@
       state[cfg.key+"_surplusSince"]=0;
     } else if(tooLow){
       out.status="low"; out.badge="low";
-      const corrMl=Math.min(settings.correctionGainPct*gap/effUp, corrCap);
+      const corrMl=Math.min(gap/effUp, corrCap);
       out.action={pump:cfg.up, pumpName:PUMP_NAMES[cfg.up], ml:corrMl, kind:"einmalige Korrektur ↑"};
       out.statusText=`Zu niedrig (${fmt(lvl,cfg.dp)} < Ziel ${fmt(cfg.target,cfg.dp)}). Erhaltung wird erhöht + Korrektur.`;
       state[cfg.key+"_surplusSince"]=0;
@@ -335,7 +333,7 @@
           out.badge="high";
           if(cfg.downSpecific){
             const effDown=cfg.coeffDown*100/settings.aquariumVolume;
-            const redMl=Math.min(settings.correctionGainPct*(lvl-cfg.target)/effDown, corrCap);
+            const redMl=Math.min((lvl-cfg.target)/effDown, corrCap);
             out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:redMl, kind:"Abbau (Überschuss bestätigt) ↓"};
           } else {
             const cMl=settings.cMinML100*settings.aquariumVolume/100; // konservativer C-Start

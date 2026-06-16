@@ -197,7 +197,6 @@ export function defaultSettings() {
     // Lernen
     learnWindowDays: 28,            // 4-Wochen-Fenster für die Ausgleichsgerade
     slewLimitPct: 0.20,             // Erhaltungsdosis max. ±20 % pro Messung nachziehen
-    correctionGainPct: 0.5,         // pro Zyklus 50 % der Lücke schließen (gedämpft)
     deadbandNO3: 1.0,               // mg/l um Ziel -> keine Korrektur
     deadbandPO4: 0.01,              // mg/l um Ziel -> keine Korrektur
     surplusConfirmDays: 5,          // so lange flach/steigend bei 0-Dosis -> echter Überschuss -> C/Lanthan
