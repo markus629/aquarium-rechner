@@ -149,8 +149,9 @@ void loop() {
   plan_executor::tick();
 
   // ---------- Live-pH (On-Demand) ----------
-  // Schaut jemand im UI auf einem Live-Tab zu? Dann alle 5 s den aktuellen
-  // pH pushen (flüchtig, eigener Key). Präsenz wird sparsam alle 4 s geprüft;
+  // Schaut jemand im UI auf einem Live-Tab zu? Dann jede Sekunde den aktuellen
+  // pH pushen (flüchtig, eigener Key) — flüssigere Live-Kurve beim Kalibrieren.
+  // Präsenz wird sparsam alle 4 s geprüft;
   // ein 30-s-Fenster überbrückt die Lücken zwischen den UI-Auffrischungen.
   {
     unsigned long ms = millis();
@@ -159,7 +160,7 @@ void loop() {
       lastLiveCheckMs = ms;
       if (pb_sync::livePhRequested()) liveUntilMs = ms + 30000;
     }
-    if ((long)(liveUntilMs - ms) > 0 && ms - lastLivePushMs > 5000) {
+    if ((long)(liveUntilMs - ms) > 0 && ms - lastLivePushMs > 1000) {
       lastLivePushMs = ms;
       pb_sync::publishLive(ph_sensor::getPH(), ph_sensor::getVoltage());
     }
