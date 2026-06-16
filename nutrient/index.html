@@ -54,6 +54,11 @@
   footer a{color:var(--blue)}
   .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:0.6rem 1rem;border-radius:8px;font-size:0.88rem;z-index:50;transition:opacity .3s}
   .toast.ok{background:var(--green)} .toast.err{background:var(--red)}
+  .info-i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--text-light);color:#fff;font-size:10px;font-weight:700;font-style:normal;text-transform:none;cursor:pointer;margin-left:5px;vertical-align:middle;flex:none}
+  .info-i:hover{background:var(--blue)}
+  .info-pop-back{position:fixed;inset:0;z-index:99}
+  .info-pop{position:fixed;z-index:100;max-width:290px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:0.75rem 0.85rem;font-size:0.82rem;line-height:1.45;color:var(--text);text-transform:none;font-weight:400;letter-spacing:normal}
+  .info-pop .ttl{font-weight:700;color:var(--blue-dark);margin-bottom:0.25rem}
 </style>
 </head>
 <body>
@@ -202,6 +207,54 @@
       if(!confirm("Einstellungen auf Standard zurücksetzen?")) return;
       settings=defaultSettings(); await saveSettings(settings); fillSettings(); await refreshAll(); toast("Zurückgesetzt","ok");
     };
+  }
+
+  // ---------- Info-Popover für Einstellungen ----------
+  const HELP = {
+    aquariumVolume: ["Nettovolumen (L)", "Wasservolumen des Beckens (Aquarium + Technikbecken, abzüglich Gestein/Sand). Basis für ALLE Mengenberechnungen. Dieser Wert ist zentral und gilt in allen Rechnern gleich."],
+    dosingsPerDay: ["Dosierungen/Tag", "In wie viele kleine Einzelportionen die tägliche Erhaltungsdosis aufgeteilt wird. Mehr Portionen = gleichmäßigere Nährstoffversorgung über den Tag (weniger Schwankung)."],
+    targetNO3: ["NO₃-Ziel", "Wunsch-Konzentration Nitrat, auf die die Regelung hinarbeitet. Die Korrektur zieht den gemessenen Wert dort hin."],
+    targetPO4: ["PO₄-Ziel", "Wunsch-Konzentration Phosphat, auf die die Regelung hinarbeitet."],
+    no3Min: ["NO₃-Bereich (min/max)", "Akzeptierter Bereich für Nitrat. Außerhalb wird im Plan deutlich markiert; das Band erscheint grün im Verlauf-Graph."],
+    po4Min: ["PO₄-Bereich (min/max)", "Akzeptierter Bereich für Phosphat (grünes Band im Graph)."],
+    learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den die Ausgleichsgerade durch deine Messungen gelegt wird. Nur Messungen aus diesem Fenster zählen für die Verbrauchs-Lernung. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
+    slewLimitPct: ["Slew-Limit Erhaltung (%)", "Wie stark die tägliche Erhaltungsdosis pro Messung HÖCHSTENS nachgezogen wird (in % der aktuellen Dosis). Klein = sanft, keine Sprünge (empfohlen); groß = schneller, aber unruhiger. Verhindert Überreaktion auf eine einzelne Messung."],
+    correctionGainPct: ["Korrektur-Verstärkung (%)", "Wie viel der aktuellen Abweichung zum Ziel pro Korrektur geschlossen wird. 50 % = die halbe Lücke wird sofort korrigiert, der Rest nähert sich über die nächsten Messungen an. Klein = vorsichtig, kein Überschwingen; groß = schnell, Risiko 'vom Berg ins Tal'."],
+    surplusConfirmDays: ["Überschuss-Bestätigung (Tage)", "So viele Tage muss der Wert TROTZ 0-Dosierung flach bleiben oder steigen, bevor aktiv abgebaut wird (C bzw. Lanthan). Schützt davor, vorschnell Nährstoffe rauszuziehen — erst Aufbau stoppen, dann beobachten, dann erst abbauen."],
+    deadbandNO3: ["Totband NO₃ (mg/l)", "Toleranz um den Zielwert. Liegt die Messung innerhalb ± diesem Wert, wird NICHT korrigiert — verhindert ständiges Nachregeln auf Mess-Rauschen."],
+    deadbandPO4: ["Totband PO₄ (mg/l)", "Toleranz um den PO₄-Zielwert; innerhalb wird nicht korrigiert (kein Jagen auf Rauschen)."],
+    maxDailyChangeNO3: ["Max NO₃-Änderung/Tag", "Sicherheits-Obergrenze: So viel mg/l darf unsere Dosierung den NO₃-Wert pro Tag höchstens verändern. Deckelt Korrektur und Erhaltungs-Anpassung gegen zu schnelle Sprünge."],
+    maxDailyChangePO4: ["Max PO₄-Änderung/Tag", "Sicherheits-Obergrenze für die tägliche PO₄-Änderung durch unsere Dosierung."],
+    coeffN_NO3: ["N → NO₃", "Herstellerangabe: um wie viel mg/l NO₃ 1 ml N-Lösung pro 100 L anhebt (theoretisch ~1,1). Real meist weniger, weil ein Teil des Stickstoffs verbraucht wird, bevor NO₃ daraus entsteht — der effektive Faktor wird später aus deiner Historie gelernt."],
+    coeffP_PO4: ["P → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml P-Lösung pro 100 L anhebt (~0,1). Direkt und vorhersagbar."],
+    coeffLa_PO4: ["Lanthan → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml Lanthan pro 100 L SENKT (‚bis zu' 0,1 → bewusst konservativ). Lanthan fällt Phosphat physisch aus — potent, daher klein dosieren."],
+    cMinML100: ["C: ml/100 L (min/max)", "Dosier-Hüllkurve der Kohlenstoff-Lösung in ml pro 100 L (Herstellerbereich 0,2–2,0). C wirkt UNSPEZIFISCH auf NO₃ UND PO₄ und abhängig vom Nährstofflevel — deshalb kein fester mg/l-Faktor, sondern eine vorsichtig hochgerampte Rate, nur bei bestätigtem Überschuss."],
+  };
+  let _infoEsc = null;
+  function closeInfo(){ document.querySelectorAll(".info-pop,.info-pop-back").forEach(e=>e.remove()); if(_infoEsc){ document.removeEventListener("keydown",_infoEsc); _infoEsc=null; } }
+  function showInfo(h, anchor){
+    closeInfo();
+    const back=document.createElement("div"); back.className="info-pop-back"; back.onclick=closeInfo;
+    const pop=document.createElement("div"); pop.className="info-pop";
+    pop.innerHTML=`<div class="ttl">${h[0]}</div><div>${h[1]}</div>`;
+    document.body.appendChild(back); document.body.appendChild(pop);
+    const r=anchor.getBoundingClientRect(); const pw=pop.offsetWidth, ph=pop.offsetHeight;
+    let left=r.left, top=r.bottom+6;
+    if(left+pw>window.innerWidth-8) left=window.innerWidth-8-pw;
+    if(left<8) left=8;
+    if(top+ph>window.innerHeight-8) top=Math.max(8, r.top-ph-6);
+    pop.style.left=left+"px"; pop.style.top=top+"px";
+    _infoEsc=(e)=>{ if(e.key==="Escape") closeInfo(); }; document.addEventListener("keydown",_infoEsc);
+  }
+  function injectInfo(){
+    document.querySelectorAll("#tab-settings .field").forEach(f=>{
+      const inp=f.querySelector("[data-setting]"); if(!inp) return;
+      const h=HELP[inp.dataset.setting]; if(!h) return;
+      const lbl=f.querySelector("label"); if(!lbl || lbl.querySelector(".info-i")) return;
+      const i=document.createElement("span"); i.className="info-i"; i.textContent="i"; i.title="Was macht diese Einstellung?";
+      i.onclick=(e)=>{ e.stopPropagation(); showInfo(h,i); };
+      lbl.appendChild(i);
+    });
   }
 
   // ---------- Engine ----------
@@ -397,7 +450,7 @@
         settings=await getSettings(); state=await getState();
         const cL=await getAquariumLiters();
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
-        fillSettings(); bindSettings(); loaded=true;
+        fillSettings(); bindSettings(); injectInfo(); loaded=true;
       }
       await refreshAll();
     } else {
