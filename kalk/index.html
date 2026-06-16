@@ -1813,8 +1813,8 @@
     summary.className = "plan-summary" + (plan.warning ? " warn" : "");
     summary.innerHTML = `
       <div>Aktuell: <strong>${currentKH.toFixed(2)} °dKH</strong> &middot;
-      Ziel: <strong>${(plan.entries[0]?.projectedValue ?? "—")}</strong> &middot;
-      Verbrauch: <strong>${dailyCons.toFixed(1)} ml/Tag</strong> &middot;
+      Ziel: <strong>${plan.entries[0]?.projectedValue != null ? plan.entries[0].projectedValue.toFixed(2) + " °dKH" : "—"}</strong> &middot;
+      Verbrauch: <strong>${dailyCons.toFixed(2)} ml/Tag</strong> &middot;
       ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
       ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
       ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
@@ -1838,7 +1838,7 @@
     summary.className = "plan-summary" + (plan.warning ? " warn" : "");
     summary.innerHTML = `
       <div>Aktuell: <strong>${currentCa.toFixed(0)} mg/L</strong> &middot;
-      Verbrauch: <strong>${dailyCons.toFixed(1)} ml/Tag</strong> &middot;
+      Verbrauch: <strong>${dailyCons.toFixed(2)} ml/Tag</strong> &middot;
       ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
       ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
       ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
