@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nährstoffmanagement</title>
+<style>
+  :root{
+    --bg:#f0f4f8; --card:#fff; --text:#2c3e50; --text-light:#7a8896; --border:#e1e8ed;
+    --blue:#3498db; --blue-dark:#2980b9; --green:#27ae60; --orange:#e8732a; --red:#c0392b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;padding:1rem;max-width:920px;margin:0 auto}
+  header{position:relative;text-align:center;padding:0.5rem 0 1rem}
+  header h1{font-size:1.5rem}
+  header p{color:var(--text-light);font-size:0.9rem}
+  .back-btn{position:absolute;left:0;top:0.3rem;text-decoration:none;color:var(--blue);font-size:1.4rem;font-weight:700}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem;margin-bottom:1rem;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  h2{font-size:1.1rem;margin-bottom:0.8rem}
+  h3{font-size:0.95rem;margin:1rem 0 0.5rem;color:var(--blue-dark)}
+  .tabs{display:flex;gap:0.4rem;margin-bottom:1rem;flex-wrap:wrap}
+  .tab-btn{flex:1;min-width:120px;padding:0.6rem;border:2px solid var(--border);background:#fff;border-radius:8px;font-size:0.92rem;font-weight:600;cursor:pointer;color:var(--text-light)}
+  .tab-btn.active{border-color:var(--blue);color:var(--blue-dark);background:#eaf4fb}
+  .tab-content{display:none}.tab-content.active{display:block}
+  .form-row{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.7rem;flex-wrap:wrap}
+  .form-row label{flex:1;min-width:160px;font-size:0.9rem}
+  .form-row input,.form-row select{padding:0.45rem 0.6rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}}
+  .field label{display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-light);font-weight:600;margin-bottom:0.2rem}
+  .field input,.field select{width:100%;padding:0.45rem 0.55rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
+  .btn{padding:0.55rem 1rem;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.92rem}
+  .btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark)}
+  .btn-ghost{background:#fff;border:2px solid var(--border);color:var(--text)}
+  .btn-danger{background:#fff;border:2px solid var(--red);color:var(--red)}
+  .info-banner{background:#eaf4fb;border:1px solid #b9ddf3;border-radius:8px;padding:0.7rem 0.9rem;font-size:0.85rem;margin-bottom:1rem}
+  .center-state{text-align:center;padding:2rem 1rem;color:var(--text-light)}.center-state .icon{font-size:2rem}
+  .nut-block{border:1px solid var(--border);border-radius:10px;padding:0.9rem;margin-bottom:0.9rem}
+  .nut-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem}
+  .nut-head .name{font-weight:700;font-size:1rem}
+  .nut-val{font-variant-numeric:tabular-nums}
+  .badge{display:inline-block;padding:0.12rem 0.5rem;border-radius:999px;font-size:0.72rem;font-weight:700}
+  .b-ok{background:#e6f6ec;color:var(--green)} .b-low{background:#fdecea;color:var(--red)}
+  .b-high{background:#fef0e6;color:var(--orange)} .b-wait{background:#eef1f4;color:var(--text-light)}
+  .rec{font-size:0.9rem;margin-top:0.4rem}
+  .rec strong{font-variant-numeric:tabular-nums}
+  .muted{color:var(--text-light);font-size:0.82rem}
+  table{width:100%;border-collapse:collapse;font-size:0.88rem}
+  th,td{padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);text-align:left}
+  th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .chart-wrap{margin-top:0.5rem}
+  .chart-title{font-size:0.82rem;color:var(--text-light);margin-bottom:0.2rem}
+  footer{text-align:center;color:var(--text-light);font-size:0.78rem;margin:1.5rem 0 0.5rem}
+  footer a{color:var(--blue)}
+  .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:0.6rem 1rem;border-radius:8px;font-size:0.88rem;z-index:50;transition:opacity .3s}
+  .toast.ok{background:var(--green)} .toast.err{background:var(--red)}
+</style>
+</head>
+<body>
+<header>
+  <a href="../" class="back-btn" title="Zurück">←</a>
+  <h1>Nährstoffmanagement</h1>
+  <p>NO₃ &amp; PO₄ messen · automatisch dosieren</p>
+</header>
+
+<main>
+  <div id="view-loading" class="card"><div class="center-state"><div class="icon">⏳</div><p>Lade …</p></div></div>
+  <div id="view-error" class="card" style="display:none"><div class="center-state"><div class="icon">⚠️</div><h3>Etwas ist schiefgegangen</h3><p id="error-message" style="color:var(--red)"></p><button class="btn btn-primary" onclick="location.reload()">Neu laden</button></div></div>
+  <div id="view-login" class="card" style="display:none"><div class="center-state"><div class="icon">🔐</div><h3>Anmeldung erforderlich</h3><p>Nährstoffmanagement braucht ein Konto (Sync zwischen Geräten und ESP).</p><p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p></div></div>
+
+  <div id="view-main" style="display:none">
+    <div class="info-banner">ℹ️ <strong>In Entwicklung.</strong> Lernt deinen täglichen NO₃/PO₄-Verbrauch aus den Messungen (Ausgleichsgerade über ein Zeitfenster) und schlägt Erhaltungs- und Korrekturdosen vor. Dosiermengen anfangs gegenprüfen.</div>
+
+    <div class="tabs" id="main-tabs">
+      <button class="tab-btn active" data-tab="tab-plan">🧪 Messung &amp; Plan</button>
+      <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+    </div>
+
+    <!-- ===== Tab: Messung & Plan ===== -->
+    <div id="tab-plan" class="tab-content active">
+      <div class="card">
+        <h2>Neue Messung</h2>
+        <div class="form-row"><label>Datum</label><input type="date" id="m-date"></div>
+        <div class="grid2">
+          <div class="field"><label>NO₃ (mg/l)</label><input type="number" id="m-no3" step="0.1" min="0" placeholder="z. B. 5"></div>
+          <div class="field"><label>PO₄ (mg/l)</label><input type="number" id="m-po4" step="0.001" min="0" placeholder="z. B. 0.05"></div>
+        </div>
+        <div style="margin-top:0.8rem"><button class="btn btn-primary" id="m-save">Speichern &amp; berechnen</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Plan / Empfehlung</h2>
+        <div id="plan-out"><p class="muted">Noch keine Auswertung.</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Verlauf</h2>
+        <div class="chart-wrap"><div class="chart-title">NO₃ (mg/l)</div><div id="chart-no3"></div></div>
+        <div class="chart-wrap" style="margin-top:1rem"><div class="chart-title">PO₄ (mg/l)</div><div id="chart-po4"></div></div>
+      </div>
+
+      <div class="card">
+        <h2>Historie</h2>
+        <div id="hist-out"><p class="muted">—</p></div>
+      </div>
+    </div>
+
+    <!-- ===== Tab: Einstellungen ===== -->
+    <div id="tab-settings" class="tab-content">
+      <div class="card">
+        <h2>Einstellungen</h2>
+        <p class="muted" style="margin-bottom:0.8rem">Änderungen werden automatisch gespeichert.</p>
+
+        <h3>Becken &amp; Ziele</h3>
+        <div class="grid2">
+          <div class="field"><label>Nettovolumen (L)</label><input type="number" data-setting="aquariumVolume" step="1" min="1"></div>
+          <div class="field"><label>Dosierungen/Tag</label><input type="number" data-setting="dosingsPerDay" step="1" min="1" max="48"></div>
+          <div class="field"><label>NO₃ Ziel (mg/l)</label><input type="number" data-setting="targetNO3" step="0.1"></div>
+          <div class="field"><label>PO₄ Ziel (mg/l)</label><input type="number" data-setting="targetPO4" step="0.001"></div>
+          <div class="field"><label>NO₃ min / max</label><div style="display:flex;gap:0.3rem"><input type="number" data-setting="no3Min" step="0.1"><input type="number" data-setting="no3Max" step="0.1"></div></div>
+          <div class="field"><label>PO₄ min / max</label><div style="display:flex;gap:0.3rem"><input type="number" data-setting="po4Min" step="0.001"><input type="number" data-setting="po4Max" step="0.001"></div></div>
+        </div>
+
+        <h3>Lernen &amp; Dämpfung</h3>
+        <div class="grid2">
+          <div class="field"><label>Lern-Fenster (Tage)</label><input type="number" data-setting="learnWindowDays" step="1" min="3"></div>
+          <div class="field"><label>Slew-Limit Erhaltung (%)</label><input type="number" data-setting="slewLimitPct" data-pct step="1" min="1" max="100"></div>
+          <div class="field"><label>Korrektur-Verstärkung (%)</label><input type="number" data-setting="correctionGainPct" data-pct step="1" min="1" max="100"></div>
+          <div class="field"><label>Überschuss-Bestätigung (Tage)</label><input type="number" data-setting="surplusConfirmDays" step="1" min="1"></div>
+          <div class="field"><label>Totband NO₃ (mg/l)</label><input type="number" data-setting="deadbandNO3" step="0.1"></div>
+          <div class="field"><label>Totband PO₄ (mg/l)</label><input type="number" data-setting="deadbandPO4" step="0.001"></div>
+          <div class="field"><label>Max NO₃-Änderung/Tag (mg/l)</label><input type="number" data-setting="maxDailyChangeNO3" step="0.1"></div>
+          <div class="field"><label>Max PO₄-Änderung/Tag (mg/l)</label><input type="number" data-setting="maxDailyChangePO4" step="0.001"></div>
+        </div>
+
+        <h3>Wirkfaktoren (mg/l je 1 ml/100 L)</h3>
+        <div class="grid2">
+          <div class="field"><label>N → NO₃</label><input type="number" data-setting="coeffN_NO3" step="0.01"></div>
+          <div class="field"><label>P → PO₄</label><input type="number" data-setting="coeffP_PO4" step="0.01"></div>
+          <div class="field"><label>Lanthan → PO₄ (Abbau)</label><input type="number" data-setting="coeffLa_PO4" step="0.01"></div>
+          <div class="field"><label>C: ml/100 L min / max</label><div style="display:flex;gap:0.3rem"><input type="number" data-setting="cMinML100" step="0.1"><input type="number" data-setting="cMaxML100" step="0.1"></div></div>
+        </div>
+        <p class="muted" style="margin-top:0.5rem">N→NO₃ ist nur der Startwert (real durch Vorverbrauch weniger) — der effektive Faktor wird später aus der Historie gelernt. C wirkt unspezifisch auf NO₃ <em>und</em> PO₄ und wird nur bei bestätigtem Überschuss eingesetzt.</p>
+
+        <div style="margin-top:1.2rem"><button class="btn btn-ghost" id="btn-reset">↺ Auf Standard zurücksetzen</button></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Ohne Gewähr — Nährstoffe mit Augenmaß dosieren.<br>
+  <a href="/impressum.html">Impressum</a> · <a href="/datenschutz.html">Datenschutz</a>
+</footer>
+
+<script type="module">
+  import { initAuthSync } from "/assets/auth-sync.js";
+  import {
+    getAuthInstance, getSettings, saveSettings, defaultSettings,
+    addMeasurement, listMeasurements, deleteMeasurement,
+    listDosings, getState, saveState, PUMP, PUMP_NAMES
+  } from "/nutrient/nutri-store.js";
+
+  const DAY = 86400;
+  const fmt = (v, d = 2) => (v == null || isNaN(v)) ? "–" : Number(v).toFixed(d);
+  function showView(id){ ["view-loading","view-login","view-main","view-error"].forEach(s=>{const e=document.getElementById(s); if(e) e.style.display = s===id?"block":"none";}); }
+  function showError(m){ showView("view-error"); document.getElementById("error-message").textContent = m; }
+  function toast(msg,type=""){ const t=document.createElement("div"); t.className="toast"+(type?" "+type:""); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),300);},2600); }
+  window.addEventListener("error", e=>showError("JS-Fehler: "+(e.message||e.error)));
+  window.addEventListener("unhandledrejection", e=>{ const vis=document.getElementById("view-main")?.style.display==="block"; if(vis){e.preventDefault();return;} showError("Promise-Fehler: "+(e.reason?.message||e.reason)); });
+
+  // Tabs
+  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); }; });
+
+  initAuthSync({ calculatorId:"nutrient", calculatorName:"Nährstoffmanagement", getLocalState:()=>({}), applyState:()=>{}, hostElementSelector:"header", theme:"light", loginOnly:true });
+
+  let settings = defaultSettings();
+  let state = {};
+
+  // ---------- Settings laden/speichern ----------
+  function fillSettings(){
+    document.querySelectorAll("[data-setting]").forEach(inp=>{
+      const k=inp.dataset.setting; let v=settings[k];
+      if(v==null) return;
+      if(inp.dataset.pct!=null) v=Math.round(v*100);
+      inp.value=v;
+    });
+  }
+  function bindSettings(){
+    document.querySelectorAll("[data-setting]").forEach(inp=>{
+      inp.addEventListener("change", async ()=>{
+        let v=parseFloat(inp.value); if(isNaN(v)) return;
+        if(inp.dataset.pct!=null) v=v/100;
+        settings[inp.dataset.setting]=v;
+        try{ await saveSettings(settings); }catch(e){ toast("Speichern fehlgeschlagen","err"); }
+        await refreshAll();
+      });
+    });
+    document.getElementById("btn-reset").onclick=async ()=>{
+      if(!confirm("Einstellungen auf Standard zurücksetzen?")) return;
+      settings=defaultSettings(); await saveSettings(settings); fillSettings(); await refreshAll(); toast("Zurückgesetzt","ok");
+    };
+  }
+
+  // ---------- Engine ----------
+  // Lineare Regression über [{t (Tage), v}] -> {slope /Tag, intercept, atLast}
+  function linReg(pts){
+    const n=pts.length; if(n<2) return null;
+    let sx=0,sy=0,sxy=0,sxx=0;
+    for(const p of pts){ sx+=p.t; sy+=p.v; sxy+=p.t*p.v; sxx+=p.t*p.t; }
+    const den=n*sxx-sx*sx;
+    const slope = Math.abs(den)<1e-9 ? 0 : (n*sxy-sx*sy)/den;
+    const intercept=(sy-slope*sx)/n;
+    const lastT=pts[n-1].t;
+    return { slope, intercept, n, atLast: intercept+slope*lastT, coverage: lastT-pts[0].t };
+  }
+
+  // Regelung pro Nährstoff. cfg: {key,label,up,down,target,min,max,coeffUp,effUp,deadband,maxDaily,downLabel,downSpecific}
+  function controlFor(cfg, measAsc){
+    const now=Date.now()/1000;
+    const cutoff=now - settings.learnWindowDays*DAY;
+    const win=measAsc.filter(m=>m.timestamp>=cutoff);
+    const out={ key:cfg.key, label:cfg.label, target:cfg.target, n:win.length,
+                level:null, slopePerDay:null, coverage:0, status:"nodata", statusText:"Noch keine Messung im Fenster.",
+                maintMl:state[cfg.key+"_maint"]||0, maintPump:cfg.up, action:null, badge:"wait" };
+    if(win.length===0) return out;
+    out.level=win[win.length-1].value;
+    const t0=win[0].timestamp;
+    const pts=win.map(m=>({t:(m.timestamp-t0)/DAY, v:m.value}));
+    const reg=linReg(pts);
+    const effUp=cfg.coeffUp*100/settings.aquariumVolume; // mg/l je ml
+    let D=state[cfg.key+"_maint"]||0;
+
+    // --- 1) Steigung -> Erhaltungsdosis (nur bei genug Zeitabdeckung) ---
+    const minCover=Math.max(2, Math.min(7, settings.learnWindowDays*0.15));
+    let trendNote="";
+    if(reg && reg.coverage>=minCover){
+      out.slopePerDay=reg.slope; out.coverage=reg.coverage;
+      const adjustMl = -reg.slope/effUp;                 // ml/Tag um die Gerade flach zu ziehen
+      const capByConc = settings["maxDailyChange"+cfg.suf]/effUp;
+      const maxStep = Math.max(D*settings.slewLimitPct, 0.25*capByConc, 0.3); // Slew + Mindestschritt
+      let Dnew = D + Math.max(-maxStep, Math.min(maxStep, adjustMl));
+      Dnew = Math.max(0, Dnew);
+      D=Dnew;
+      trendNote = reg.slope<-1e-9 ? "fällt" : reg.slope>1e-9 ? "steigt" : "flach";
+    } else if(reg){
+      out.slopePerDay=reg.slope; out.coverage=reg.coverage||0;
+      trendNote="zu wenig Zeit";
+    }
+    state[cfg.key+"_maint"]=D; out.maintMl=D;
+
+    // --- 2) Höhe -> Status + Korrektur / gegateter Abbau ---
+    const lvl=out.level, gap=cfg.target-lvl;
+    const tooLow  = lvl < cfg.target-cfg.deadband;
+    const tooHigh = lvl > cfg.target+cfg.deadband;
+    const corrCap = settings["maxDailyChange"+cfg.suf]/effUp;
+
+    if(!tooLow && !tooHigh){
+      out.status="ok"; out.badge="ok"; out.statusText=`Im Zielbereich (Gerade ${trendNote||"–"}). Erhaltung deckt den Verbrauch.`;
+      state[cfg.key+"_surplusSince"]=0;
+    } else if(tooLow){
+      out.status="low"; out.badge="low";
+      const corrMl=Math.min(settings.correctionGainPct*gap/effUp, corrCap);
+      out.action={pump:cfg.up, pumpName:PUMP_NAMES[cfg.up], ml:corrMl, kind:"einmalige Korrektur ↑"};
+      out.statusText=`Zu niedrig (${fmt(lvl,cfg.dp)} < Ziel ${fmt(cfg.target,cfg.dp)}). Erhaltung wird erhöht + Korrektur.`;
+      state[cfg.key+"_surplusSince"]=0;
+    } else { // tooHigh -> erst Erhaltung runter (oben passiert), Abbau gegated
+      out.status="high"; out.badge="high";
+      // Erhaltung Richtung 0? -> oben schon via Steigung. Abbau erst bei bestätigtem Überschuss.
+      const falling = out.slopePerDay!=null && out.slopePerDay < -1e-9;
+      if(D>0.01 || falling){
+        out.statusText=`Zu hoch (${fmt(lvl,cfg.dp)} > Ziel). Erhaltung wird zurückgefahren${D>0.01?` (akt. ${fmt(D,2)} ml/Tag)`:""}; ${falling?"Wert fällt bereits — abwarten.":"beobachte, ob es ohne Dosierung fällt."}`;
+        state[cfg.key+"_surplusSince"]=0;
+      } else {
+        // D ~ 0 und fällt nicht -> Überschuss-Bestätigung hochzählen
+        let since=state[cfg.key+"_surplusSince"]||0;
+        if(!since){ since=now; state[cfg.key+"_surplusSince"]=since; }
+        const days=(now-since)/DAY;
+        if(days>=settings.surplusConfirmDays){
+          out.badge="high";
+          if(cfg.downSpecific){
+            const effDown=cfg.coeffDown*100/settings.aquariumVolume;
+            const redMl=Math.min(settings.correctionGainPct*(lvl-cfg.target)/effDown, corrCap);
+            out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:redMl, kind:"Abbau (Überschuss bestätigt) ↓"};
+          } else {
+            const cMl=settings.cMinML100*settings.aquariumVolume/100; // konservativer C-Start
+            out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:cMl, kind:"Abbau mit C – vorsichtig starten ↓ (unspezifisch, senkt auch das andere)"};
+          }
+          out.statusText=`Überschuss bestätigt (${Math.floor(days)} Tage flach bei 0-Dosis) → aktiver Abbau mit ${cfg.downLabel}.`;
+        } else {
+          out.statusText=`Zu hoch, 0-Dosis, Wert fällt nicht → prüfe Überschuss: ${Math.floor(days)}/${settings.surplusConfirmDays} Tage. Noch kein ${cfg.downLabel}.`;
+        }
+      }
+    }
+    return out;
+  }
+
+  function renderNut(o, cfg){
+    const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
+    const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
+    let rec="";
+    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[o.maintPump]} (über ${settings.dosingsPerDay}×/Tag verteilt)</div>`;
+    if(o.action) rec+=`<div class="rec">Empfehlung: <strong>${fmt(o.action.ml,2)} ml</strong> ${o.action.pumpName} — ${o.action.kind}</div>`;
+    const slopeTxt = o.slopePerDay==null ? "–" : `${fmt(o.slopePerDay,3)} mg/l/Tag`;
+    return `<div class="nut-block">
+      <div class="nut-head"><span class="name">${cfg.label}</span><span class="badge ${bcls}">${btxt}</span></div>
+      <div class="muted">Aktuell <span class="nut-val">${fmt(o.level,cfg.dp)}</span> mg/l · Ziel ${fmt(cfg.target,cfg.dp)} · Trend ${slopeTxt} · ${o.n} Messungen / ${fmt(o.coverage,1)} Tage</div>
+      ${rec||'<div class="rec muted">keine Dosier-Empfehlung</div>'}
+      <div class="muted" style="margin-top:0.3rem">${o.statusText}</div>
+    </div>`;
+  }
+
+  // ---------- Chart (SVG, Hex-Farben!) ----------
+  function renderChart(elId, measAsc, cfg){
+    const el=document.getElementById(elId); if(!el) return;
+    if(measAsc.length<1){ el.innerHTML=`<div class="muted" style="padding:1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">Keine Messungen.</div>`; return; }
+    const now=Date.now()/1000, cutoff=now-settings.learnWindowDays*DAY;
+    const pts=measAsc.filter(m=>m.timestamp>=cutoff).map(m=>({ts:m.timestamp,v:m.value}));
+    if(pts.length<1){ el.innerHTML=`<div class="muted" style="padding:1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">Keine Messungen im Fenster.</div>`; return; }
+    const W=600,H=170,pl=48,pr=12,pt=12,pb=22, cw=W-pl-pr, ch=H-pt-pb;
+    const tmin=pts[0].ts, tmax=Math.max(now,pts[pts.length-1].ts), tspan=Math.max(tmax-tmin,1);
+    const vals=pts.map(p=>p.v).concat([cfg.target,cfg.min,cfg.max]);
+    let lo=Math.min(...vals), hi=Math.max(...vals); if(hi-lo<1e-6){lo-=1;hi+=1;} const mg=(hi-lo)*0.12; lo-=mg; hi+=mg;
+    const xOf=t=>pl+((t-tmin)/tspan)*cw, yOf=v=>pt+ch-((v-lo)/(hi-lo))*ch;
+    let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block">`;
+    for(let i=0;i<=2;i++){ const y=pt+(ch/2)*i, val=hi-(hi-lo)*(i/2); s+=`<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#e1e8ed"/><text x="${pl-5}" y="${y+3}" font-size="9" fill="#7a8896" text-anchor="end">${fmt(val,cfg.dp)}</text>`; }
+    // Ziel-Linie (grün gestrichelt) + Band
+    s+=`<rect x="${pl}" y="${yOf(cfg.max).toFixed(1)}" width="${cw}" height="${Math.max(0,yOf(cfg.min)-yOf(cfg.max)).toFixed(1)}" fill="#27ae6010"/>`;
+    s+=`<line x1="${pl}" y1="${yOf(cfg.target).toFixed(1)}" x2="${W-pr}" y2="${yOf(cfg.target).toFixed(1)}" stroke="#27ae60" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    // Mess-Linie + Punkte
+    const sorted=[...pts].sort((a,b)=>a.ts-b.ts);
+    s+=`<path d="${sorted.map((p,i)=>(i?"L":"M")+xOf(p.ts).toFixed(1)+" "+yOf(p.v).toFixed(1)).join(" ")}" stroke="${cfg.color}" stroke-width="2" fill="none"/>`;
+    sorted.forEach(p=>{ s+=`<circle cx="${xOf(p.ts).toFixed(1)}" cy="${yOf(p.v).toFixed(1)}" r="3" fill="${cfg.color}"/>`; });
+    // Ausgleichsgerade (über Datenpunkte)
+    const rpts=sorted.map(p=>({t:(p.ts-tmin)/DAY,v:p.v})); const reg=linReg(rpts);
+    if(reg){ const y1=reg.intercept, y2=reg.intercept+reg.slope*((tmax-tmin)/DAY); s+=`<line x1="${xOf(tmin).toFixed(1)}" y1="${yOf(y1).toFixed(1)}" x2="${xOf(tmax).toFixed(1)}" y2="${yOf(y2).toFixed(1)}" stroke="#2c3e50" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7"/>`; }
+    s+=`<text x="${pl}" y="${H-6}" font-size="9" fill="#7a8896">−${settings.learnWindowDays} T</text><text x="${W-pr}" y="${H-6}" font-size="9" fill="#7a8896" text-anchor="end">jetzt</text>`;
+    s+=`</svg>`;
+    el.innerHTML=s;
+  }
+
+  // ---------- Historie ----------
+  function renderHistory(no3, po4){
+    const all=[...no3.map(m=>({...m,t:"NO₃"})),...po4.map(m=>({...m,t:"PO₄"}))].sort((a,b)=>b.timestamp-a.timestamp).slice(0,40);
+    if(all.length===0){ document.getElementById("hist-out").innerHTML=`<p class="muted">Noch keine Messungen.</p>`; return; }
+    const rows=all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.t}</td><td class="num">${fmt(m.value,m.t==="PO₄"?3:1)}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:0.15rem 0.5rem;font-size:0.75rem" data-del="${m.id}">−</button></td></tr>`).join("");
+    document.getElementById("hist-out").innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
+  }
+
+  // ---------- Konfig pro Nährstoff ----------
+  function cfgs(){
+    return {
+      no3:{ key:"no3", suf:"NO3", label:"NO₃ (Nitrat)", dp:1, color:"#e8732a",
+            target:settings.targetNO3, min:settings.no3Min, max:settings.no3Max, deadband:settings.deadbandNO3,
+            up:PUMP.N, coeffUp:settings.coeffN_NO3, down:PUMP.C, downLabel:"C (Kohlenstoff)", downSpecific:false },
+      po4:{ key:"po4", suf:"PO4", label:"PO₄ (Phosphat)", dp:3, color:"#3498db",
+            target:settings.targetPO4, min:settings.po4Min, max:settings.po4Max, deadband:settings.deadbandPO4,
+            up:PUMP.P, coeffUp:settings.coeffP_PO4, down:PUMP.LA, coeffDown:settings.coeffLa_PO4, downLabel:"Lanthan", downSpecific:true },
+    };
+  }
+
+  // ---------- Refresh ----------
+  async function refreshAll(){
+    const no3=(await listMeasurements("no3",300)).slice().reverse(); // asc
+    const po4=(await listMeasurements("po4",300)).slice().reverse();
+    const C=cfgs();
+    const oNo3=controlFor(C.no3,no3), oPo4=controlFor(C.po4,po4);
+    try{ await saveState(state); }catch(_){}
+    document.getElementById("plan-out").innerHTML = renderNut(oNo3,C.no3)+renderNut(oPo4,C.po4);
+    renderChart("chart-no3",no3,C.no3); renderChart("chart-po4",po4,C.po4);
+    renderHistory(no3,po4);
+  }
+
+  // ---------- Mess-Eingabe ----------
+  document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
+  document.getElementById("m-save").onclick=async ()=>{
+    const ts=Math.floor(new Date(document.getElementById("m-date").value+"T12:00:00").getTime()/1000)||Math.floor(Date.now()/1000);
+    const no3=parseFloat(document.getElementById("m-no3").value), po4=parseFloat(document.getElementById("m-po4").value);
+    if(isNaN(no3)&&isNaN(po4)){ toast("Bitte NO₃ oder PO₄ eingeben","err"); return; }
+    try{
+      if(!isNaN(no3)) await addMeasurement({type:"no3",value:no3,timestamp:ts});
+      if(!isNaN(po4)) await addMeasurement({type:"po4",value:po4,timestamp:ts});
+      document.getElementById("m-no3").value=""; document.getElementById("m-po4").value="";
+      await refreshAll(); toast("Gespeichert","ok");
+    }catch(e){ toast("Fehler: "+e.message,"err"); }
+  };
+
+  // ---------- Auth-getrieben ----------
+  let loaded=false;
+  getAuthInstance().onAuthStateChanged(async (user)=>{
+    if(user){
+      showView("view-main");
+      if(!loaded){ settings=await getSettings(); state=await getState(); fillSettings(); bindSettings(); loaded=true; }
+      await refreshAll();
+    } else {
+      loaded=false; showView("view-login");
+    }
+  });
+</script>
+</body>
+</html>
