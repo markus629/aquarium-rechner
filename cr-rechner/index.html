@@ -1946,17 +1946,28 @@ vorherigen aufbaut.</div>
   <!-- Auth + Cloud-Sync (optional, nur bei Login aktiv) -->
   <script type="module">
     import { initAuthSync } from "../assets/auth-sync.js";
+    import { pb } from "../assets/pb-client.js";
+    import { getAquariumLiters, setAquariumLiters } from "../assets/aquarium-profile.js";
     const api = window.__crRechner;
     if (api) {
+      const volEl = document.getElementById("volume");
+      async function pullCentralVolume() {
+        if (!pb.authStore.isValid || !volEl) return;
+        const cL = await getAquariumLiters();
+        if (cL != null) { if (String(volEl.value) !== String(cL)) volEl.value = cL; }
+        else { const v = parseFloat(volEl.value); if (v > 0) await setAquariumLiters(v); }
+      }
+      volEl?.addEventListener("change", () => { const v = parseFloat(volEl.value); if (v > 0) setAquariumLiters(v); });
       const sync = await initAuthSync({
         calculatorId: "cr-rechner",
         calculatorName: "C&R Aquarium Rechner",
         getLocalState: () => api.collectState(),
-        applyState: (s) => api.applyState(s),
+        applyState: (s) => { api.applyState(s); pullCentralVolume(); },
         hostElementSelector: "header",
         hideWhenLoggedOut: true,
         localStorageKey: "cr-aqua-rechner-v1"
       });
+      pb.authStore.onChange(() => { if (pb.authStore.isValid) pullCentralVolume(); }, true);
       // Debounced Cloud-Sync: bei vielen schnellen Eingaben nur 1× alle 800 ms
       let timer = null;
       window.__crCloudSync = () => {

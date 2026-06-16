@@ -160,6 +160,7 @@
     addMeasurement, listMeasurements, deleteMeasurement,
     listDosings, getState, saveState, PUMP, PUMP_NAMES
   } from "/nutrient/nutri-store.js";
+  import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
 
   const DAY = 86400;
   const fmt = (v, d = 2) => (v == null || isNaN(v)) ? "–" : Number(v).toFixed(d);
@@ -193,6 +194,7 @@
         if(inp.dataset.pct!=null) v=v/100;
         settings[inp.dataset.setting]=v;
         try{ await saveSettings(settings); }catch(e){ toast("Speichern fehlgeschlagen","err"); }
+        if(inp.dataset.setting==="aquariumVolume"){ try{ await setAquariumLiters(v); }catch(_){} }
         await refreshAll();
       });
     });
@@ -391,7 +393,12 @@
   getAuthInstance().onAuthStateChanged(async (user)=>{
     if(user){
       showView("view-main");
-      if(!loaded){ settings=await getSettings(); state=await getState(); fillSettings(); bindSettings(); loaded=true; }
+      if(!loaded){
+        settings=await getSettings(); state=await getState();
+        const cL=await getAquariumLiters();
+        if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
+        fillSettings(); bindSettings(); loaded=true;
+      }
       await refreshAll();
     } else {
       loaded=false; showView("view-login");

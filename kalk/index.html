@@ -695,6 +695,7 @@
     getLatestGithubRelease
   } from "/kalk/pb-store.js";
   import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
+  import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
@@ -773,6 +774,17 @@
       document.querySelectorAll("[data-setting]").forEach(inp => {
         setInputValue(inp, s[inp.dataset.setting]);
       });
+      // Zentrales Beckenvolumen (geteilt über alle Rechner) anwenden
+      try {
+        const cL = await getAquariumLiters();
+        if (cL != null) {
+          if (cL !== s.aquariumVolume) await saveSettings({ aquariumVolume: cL });
+          const volInp = document.querySelector('[data-setting="aquariumVolume"]');
+          if (volInp) volInp.value = cL;
+        } else {
+          await setAquariumLiters(s.aquariumVolume);
+        }
+      } catch (_) {}
       settingsLoaded = true;
       syncDosingsPerDayEnabled();
     } catch (e) {
@@ -807,6 +819,7 @@
     const evt = inp.type === "checkbox" ? "change" : "change"; // bei number-input feuert change beim blur
     inp.addEventListener(evt, () => {
       persistSetting(inp.dataset.setting, getInputValue(inp));
+      if (inp.dataset.setting === "aquariumVolume") { setAquariumLiters(getInputValue(inp)); }
       // Spezialfall: Auto-Dosing-Checkbox steuert das dosingsPerDay-Feld
       if (inp.dataset.setting === "autoDosing") syncDosingsPerDayEnabled();
     });

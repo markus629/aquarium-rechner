@@ -1821,17 +1821,28 @@ init();
 <!-- Auth + Cloud-Sync (optional, nur bei Login aktiv) -->
 <script type="module">
   import { initAuthSync } from "../assets/auth-sync.js";
+  import { pb } from "../assets/pb-client.js";
+  import { getAquariumLiters, setAquariumLiters } from "../assets/aquarium-profile.js";
   const api = window.__spurenRechner;
   if (api) {
+    const volEl = document.getElementById("startVolume");
+    async function pullCentralVolume() {
+      if (!pb.authStore.isValid || !volEl) return;
+      const cL = await getAquariumLiters();
+      if (cL != null) { if (String(volEl.value) !== String(cL)) { volEl.value = cL; volEl.dispatchEvent(new Event("change", { bubbles: true })); } }
+      else { const v = parseFloat(volEl.value); if (v > 0) await setAquariumLiters(v); }
+    }
+    volEl?.addEventListener("change", () => { const v = parseFloat(volEl.value); if (v > 0) setAquariumLiters(v); });
     const sync = await initAuthSync({
       calculatorId: "spurenrechner",
       calculatorName: "Spurenelemente Rechner",
       getLocalState: () => api.collectState(),
-      applyState: (s) => api.applyState(s),
+      applyState: (s) => { api.applyState(s); pullCentralVolume(); },
       hostElementSelector: "header",
       hideWhenLoggedOut: true,
       localStorageKey: "spurenrechner.v1"
     });
+    pb.authStore.onChange(() => { if (pb.authStore.isValid) pullCentralVolume(); }, true);
     let timer = null;
     window.__spurenCloudSync = () => {
       if (!sync.isLoggedIn()) return;
