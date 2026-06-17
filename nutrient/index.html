@@ -48,6 +48,13 @@
   table{width:100%;border-collapse:collapse;font-size:0.88rem}
   th,td{padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);text-align:left}
   th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tbl-scroll{max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+  .tbl-scroll table{font-size:0.86rem}
+  .tbl-scroll thead th{position:sticky;top:0;background:var(--card);box-shadow:0 1px 0 var(--border);z-index:1}
+  .filter-row{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.6rem;font-size:0.88rem}
+  .filter-row label{display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer}
+  .chart-legend{display:flex;gap:0.9rem;flex-wrap:wrap;font-size:0.74rem;color:var(--text-light);margin-top:0.2rem}
+  .chart-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:0.25rem;vertical-align:middle}
   .chart-wrap{margin-top:0.5rem}
   .chart-title{font-size:0.82rem;color:var(--text-light);margin-bottom:0.2rem}
   footer{text-align:center;color:var(--text-light);font-size:0.78rem;margin:1.5rem 0 0.5rem}
@@ -105,8 +112,23 @@
       </div>
 
       <div class="card">
-        <h2>Historie</h2>
-        <div id="hist-out"><p class="muted">—</p></div>
+        <h2>Messwert-Historie</h2>
+        <div class="filter-row">
+          <label><input type="checkbox" data-mf="no3" checked> NO₃</label>
+          <label><input type="checkbox" data-mf="po4" checked> PO₄</label>
+        </div>
+        <div class="tbl-scroll" id="hist-out"><p class="muted" style="padding:0.6rem">—</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Dosier-Historie</h2>
+        <div class="filter-row">
+          <label><input type="checkbox" data-df="0" checked> N</label>
+          <label><input type="checkbox" data-df="1" checked> P</label>
+          <label><input type="checkbox" data-df="3" checked> Lanthan</label>
+          <label><input type="checkbox" data-df="2" checked> C</label>
+        </div>
+        <div class="tbl-scroll" id="dhist-out"><p class="muted" style="padding:0.6rem">—</p></div>
       </div>
     </div>
 
@@ -376,41 +398,67 @@
   }
 
   // ---------- Chart (SVG, Hex-Farben!) ----------
-  function renderChart(elId, measAsc, cfg){
+  function renderChart(elId, measAsc, dosings, cfg, doseDefs){
     const el=document.getElementById(elId); if(!el) return;
-    if(measAsc.length<1){ el.innerHTML=`<div class="muted" style="padding:1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">Keine Messungen.</div>`; return; }
     const now=Date.now()/1000, cutoff=now-settings.learnWindowDays*DAY;
     const pts=measAsc.filter(m=>m.timestamp>=cutoff).map(m=>({ts:m.timestamp,v:m.value}));
-    if(pts.length<1){ el.innerHTML=`<div class="muted" style="padding:1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">Keine Messungen im Fenster.</div>`; return; }
-    const W=600,H=170,pl=48,pr=12,pt=12,pb=22, cw=W-pl-pr, ch=H-pt-pb;
-    const tmin=pts[0].ts, tmax=Math.max(now,pts[pts.length-1].ts), tspan=Math.max(tmax-tmin,1);
+    const dos=(dosings||[]).filter(d=>d.timestamp>=cutoff && d.ml>0);
+    if(pts.length<1 && dos.length<1){ el.innerHTML=`<div class="muted" style="padding:1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">Keine Daten im Fenster.</div>`; return; }
+    const W=600,H=180,pl=46,pr=42,pt=12,pb=22, cw=W-pl-pr, ch=H-pt-pb;
+    const allT=pts.map(p=>p.ts).concat(dos.map(d=>d.timestamp)); allT.push(now);
+    const tmin=Math.min(...allT), tmax=now, tspan=Math.max(tmax-tmin,1);
     const vals=pts.map(p=>p.v).concat([cfg.target,cfg.min,cfg.max]);
     let lo=Math.min(...vals), hi=Math.max(...vals); if(hi-lo<1e-6){lo-=1;hi+=1;} const mg=(hi-lo)*0.12; lo-=mg; hi+=mg;
-    const xOf=t=>pl+((t-tmin)/tspan)*cw, yOf=v=>pt+ch-((v-lo)/(hi-lo))*ch;
+    let dmax=Math.max(0.001, ...dos.map(d=>d.ml)); dmax*=1.15;
+    const xOf=t=>pl+((t-tmin)/tspan)*cw, yL=v=>pt+ch-((v-lo)/(hi-lo))*ch, yR=ml=>pt+ch-(ml/dmax)*ch;
     let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto;display:block">`;
-    for(let i=0;i<=2;i++){ const y=pt+(ch/2)*i, val=hi-(hi-lo)*(i/2); s+=`<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#e1e8ed"/><text x="${pl-5}" y="${y+3}" font-size="9" fill="#7a8896" text-anchor="end">${fmt(val,cfg.dp)}</text>`; }
-    // Ziel-Linie (grün gestrichelt) + Band
-    s+=`<rect x="${pl}" y="${yOf(cfg.max).toFixed(1)}" width="${cw}" height="${Math.max(0,yOf(cfg.min)-yOf(cfg.max)).toFixed(1)}" fill="#27ae6010"/>`;
-    s+=`<line x1="${pl}" y1="${yOf(cfg.target).toFixed(1)}" x2="${W-pr}" y2="${yOf(cfg.target).toFixed(1)}" stroke="#27ae60" stroke-width="1.5" stroke-dasharray="5 4"/>`;
-    // Mess-Linie + Punkte
+    for(let i=0;i<=2;i++){ const y=pt+(ch/2)*i, vl=hi-(hi-lo)*(i/2), vr=dmax-(dmax)*(i/2);
+      s+=`<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#e1e8ed"/>`;
+      s+=`<text x="${pl-5}" y="${y+3}" font-size="9" fill="${cfg.color}" text-anchor="end">${fmt(vl,cfg.dp)}</text>`;
+      s+=`<text x="${W-pr+5}" y="${y+3}" font-size="9" fill="#7a8896" text-anchor="start">${fmt(vr,1)}</text>`;
+    }
+    // Dosier-Balken (rechte Achse)
+    const bw=4;
+    dos.forEach(d=>{ const def=doseDefs.find(x=>x.pump===d.pump); if(!def) return; const x=xOf(d.timestamp), y=yR(d.ml); s+=`<rect x="${(x-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${(pt+ch-y).toFixed(1)}" fill="${def.color}" opacity="0.85"><title>${def.label}: ${fmt(d.ml,2)} ml</title></rect>`; });
+    // Ziel-Band + -Linie (grau)
+    s+=`<rect x="${pl}" y="${yL(cfg.max).toFixed(1)}" width="${cw}" height="${Math.max(0,yL(cfg.min)-yL(cfg.max)).toFixed(1)}" fill="#95a5a614"/>`;
+    s+=`<line x1="${pl}" y1="${yL(cfg.target).toFixed(1)}" x2="${W-pr}" y2="${yL(cfg.target).toFixed(1)}" stroke="#95a5a6" stroke-width="1.3" stroke-dasharray="5 4"/>`;
+    // Mess-Linie + Punkte (linke Achse)
     const sorted=[...pts].sort((a,b)=>a.ts-b.ts);
-    s+=`<path d="${sorted.map((p,i)=>(i?"L":"M")+xOf(p.ts).toFixed(1)+" "+yOf(p.v).toFixed(1)).join(" ")}" stroke="${cfg.color}" stroke-width="2" fill="none"/>`;
-    sorted.forEach(p=>{ s+=`<circle cx="${xOf(p.ts).toFixed(1)}" cy="${yOf(p.v).toFixed(1)}" r="3" fill="${cfg.color}"/>`; });
-    // Ausgleichsgerade (über Datenpunkte)
-    const rpts=sorted.map(p=>({t:(p.ts-tmin)/DAY,v:p.v})); const reg=linReg(rpts);
-    if(reg){ const y1=reg.intercept, y2=reg.intercept+reg.slope*((tmax-tmin)/DAY); s+=`<line x1="${xOf(tmin).toFixed(1)}" y1="${yOf(y1).toFixed(1)}" x2="${xOf(tmax).toFixed(1)}" y2="${yOf(y2).toFixed(1)}" stroke="#2c3e50" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7"/>`; }
+    if(sorted.length){ s+=`<path d="${sorted.map((p,i)=>(i?"L":"M")+xOf(p.ts).toFixed(1)+" "+yL(p.v).toFixed(1)).join(" ")}" stroke="${cfg.color}" stroke-width="2" fill="none"/>`;
+      sorted.forEach(p=>{ s+=`<circle cx="${xOf(p.ts).toFixed(1)}" cy="${yL(p.v).toFixed(1)}" r="3" fill="${cfg.color}"/>`; }); }
+    // Ausgleichsgerade
+    if(sorted.length>=2){ const reg=linReg(sorted.map(p=>({t:(p.ts-tmin)/DAY,v:p.v})));
+      if(reg){ const ta=(sorted[0].ts-tmin)/DAY, tb=(sorted[sorted.length-1].ts-tmin)/DAY;
+        s+=`<line x1="${xOf(sorted[0].ts).toFixed(1)}" y1="${yL(reg.intercept+reg.slope*ta).toFixed(1)}" x2="${xOf(sorted[sorted.length-1].ts).toFixed(1)}" y2="${yL(reg.intercept+reg.slope*tb).toFixed(1)}" stroke="#2c3e50" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.6"/>`; } }
     s+=`<text x="${pl}" y="${H-6}" font-size="9" fill="#7a8896">−${settings.learnWindowDays} T</text><text x="${W-pr}" y="${H-6}" font-size="9" fill="#7a8896" text-anchor="end">jetzt</text>`;
     s+=`</svg>`;
-    el.innerHTML=s;
+    const leg=`<div class="chart-legend"><span><span class="sw" style="background:${cfg.color}"></span>${cfg.label} (links)</span>`
+      + doseDefs.map(d=>`<span><span class="sw" style="background:${d.color}"></span>${d.label} ml (rechts)</span>`).join("")
+      + `<span><span class="sw" style="background:#95a5a6"></span>Ziel</span></div>`;
+    el.innerHTML=s+leg;
   }
 
-  // ---------- Historie ----------
-  function renderHistory(no3, po4){
-    const all=[...no3.map(m=>({...m,t:"NO₃"})),...po4.map(m=>({...m,t:"PO₄"}))].sort((a,b)=>b.timestamp-a.timestamp).slice(0,40);
-    if(all.length===0){ document.getElementById("hist-out").innerHTML=`<p class="muted">Noch keine Messungen.</p>`; return; }
-    const rows=all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.t}</td><td class="num">${fmt(m.value,m.t==="PO₄"?3:1)}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:0.15rem 0.5rem;font-size:0.75rem" data-del="${m.id}">−</button></td></tr>`).join("");
-    document.getElementById("hist-out").innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-    document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
+  // ---------- Historie (gefiltert, scrollbar) ----------
+  let _no3=[], _po4=[], _dosings=[];
+  function renderHistory(){
+    const fNo3=document.querySelector('[data-mf="no3"]')?.checked!==false;
+    const fPo4=document.querySelector('[data-mf="po4"]')?.checked!==false;
+    let all=[];
+    if(fNo3) all=all.concat(_no3.map(m=>({...m,typ:"NO₃",dp:1})));
+    if(fPo4) all=all.concat(_po4.map(m=>({...m,typ:"PO₄",dp:3})));
+    all.sort((a,b)=>b.timestamp-a.timestamp); all=all.slice(0,300);
+    const el=document.getElementById("hist-out");
+    if(all.length===0){ el.innerHTML=`<p class="muted" style="padding:0.6rem">Keine Messungen.</p>`; return; }
+    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.typ}</td><td class="num">${fmt(m.value,m.dp)}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:0.1rem 0.45rem;font-size:0.72rem" data-del="${m.id}">−</button></td></tr>`).join("")}</tbody></table>`;
+    el.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
+  }
+  function renderDosingHistory(){
+    const checked=new Set([...document.querySelectorAll('[data-df]')].filter(c=>c.checked).map(c=>parseInt(c.dataset.df,10)));
+    const rows=_dosings.filter(d=>checked.has(d.pump)).sort((a,b)=>b.timestamp-a.timestamp).slice(0,300);
+    const el=document.getElementById("dhist-out");
+    if(rows.length===0){ el.innerHTML=`<p class="muted" style="padding:0.6rem">Noch keine Dosierungen (kommen vom ESP).</p>`; return; }
+    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Pumpe</th><th class="num">ml</th></tr></thead><tbody>${rows.map(d=>`<tr><td>${new Date(d.timestamp*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td><td>${PUMP_NAMES[d.pump]||("Pumpe "+d.pump)}</td><td class="num">${fmt(d.ml,2)}</td></tr>`).join("")}</tbody></table>`;
   }
 
   // ---------- Konfig pro Nährstoff ----------
@@ -427,14 +475,16 @@
 
   // ---------- Refresh ----------
   async function refreshAll(){
-    const no3=(await listMeasurements("no3",300)).slice().reverse(); // asc
-    const po4=(await listMeasurements("po4",300)).slice().reverse();
+    _no3=(await listMeasurements("no3",300)).slice().reverse(); // asc
+    _po4=(await listMeasurements("po4",300)).slice().reverse();
+    _dosings=await listDosings(800);
     const C=cfgs();
-    const oNo3=controlFor(C.no3,no3), oPo4=controlFor(C.po4,po4);
+    const oNo3=controlFor(C.no3,_no3), oPo4=controlFor(C.po4,_po4);
     try{ await saveState(state); }catch(_){}
     document.getElementById("plan-out").innerHTML = renderNut(oNo3,C.no3)+renderNut(oPo4,C.po4);
-    renderChart("chart-no3",no3,C.no3); renderChart("chart-po4",po4,C.po4);
-    renderHistory(no3,po4);
+    renderChart("chart-no3", _no3, _dosings.filter(d=>d.pump===PUMP.N||d.pump===PUMP.C), C.no3, [{pump:PUMP.N,color:"#e8732a",label:"N"},{pump:PUMP.C,color:"#27ae60",label:"C"}]);
+    renderChart("chart-po4", _po4, _dosings.filter(d=>d.pump===PUMP.P||d.pump===PUMP.LA), C.po4, [{pump:PUMP.P,color:"#3498db",label:"P"},{pump:PUMP.LA,color:"#27ae60",label:"Lanthan"}]);
+    renderHistory(); renderDosingHistory();
   }
 
   // ---------- Mess-Eingabe ----------
@@ -460,7 +510,10 @@
         settings=await getSettings(); state=await getState();
         const cL=await getAquariumLiters();
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
-        fillSettings(); bindSettings(); injectInfo(); loaded=true;
+        fillSettings(); bindSettings(); injectInfo();
+        document.querySelectorAll('[data-mf]').forEach(c=>c.addEventListener('change',renderHistory));
+        document.querySelectorAll('[data-df]').forEach(c=>c.addEventListener('change',renderDosingHistory));
+        loaded=true;
       }
       await refreshAll();
     } else {
