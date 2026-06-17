@@ -211,6 +211,9 @@ export function defaultSettings() {
     learnCoeffN: true,              // effektiven N->NO3-Faktor aus Historie lernen
     // Betrieb
     dosingsPerDay: 12,              // Erhaltungsdosis über den Tag verteilt
+    // Start-Dosis ml/Tag je Pumpe (Warmstart; 0 = von 0 lernen).
+    // N/P seeden die gelernte Erhaltung; C/La sind die Start-Menge beim Abbau.
+    startDoseN: 0, startDoseP: 0, startDoseC: 0, startDoseLa: 0,
     autoDosing: false,
     espOfflineAlert: true,
     containerCapacity: [5000, 5000, 5000, 5000],

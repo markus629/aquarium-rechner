@@ -137,6 +137,14 @@
           <div class="field"><label>Max PO₄-Änderung/Tag (mg/l)</label><input type="number" data-setting="maxDailyChangePO4" step="0.001"></div>
         </div>
 
+        <h3>Start-Dosierung (Warmstart, ml/Tag)</h3>
+        <div class="grid2">
+          <div class="field"><label>Start N (ml/Tag)</label><input type="number" data-setting="startDoseN" step="0.1" min="0"></div>
+          <div class="field"><label>Start P (ml/Tag)</label><input type="number" data-setting="startDoseP" step="0.1" min="0"></div>
+          <div class="field"><label>Start C (ml/Tag)</label><input type="number" data-setting="startDoseC" step="0.1" min="0"></div>
+          <div class="field"><label>Start Lanthan (ml/Tag)</label><input type="number" data-setting="startDoseLa" step="0.1" min="0"></div>
+        </div>
+
         <h3>Wirkfaktoren (mg/l je 1 ml/100 L)</h3>
         <div class="grid2">
           <div class="field"><label>N → NO₃</label><input type="number" data-setting="coeffN_NO3" step="0.01"></div>
@@ -227,6 +235,10 @@
     coeffP_PO4: ["P → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml P-Lösung pro 100 L anhebt (~0,1). Direkt und vorhersagbar."],
     coeffLa_PO4: ["Lanthan → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml Lanthan pro 100 L SENKT (‚bis zu' 0,1 → bewusst konservativ). Lanthan fällt Phosphat physisch aus — potent, daher klein dosieren."],
     cMinML100: ["C: ml/100 L (min/max)", "Dosier-Hüllkurve der Kohlenstoff-Lösung in ml pro 100 L (Herstellerbereich 0,2–2,0). C wirkt UNSPEZIFISCH auf NO₃ UND PO₄ und abhängig vom Nährstofflevel — deshalb kein fester mg/l-Faktor, sondern eine vorsichtig hochgerampte Rate, nur bei bestätigtem Überschuss."],
+    startDoseN: ["Start N (ml/Tag)", "Warmstart-Wert: tägliche N-Dosis, mit der das System startet, statt bei 0 zu beginnen. Aus Erfahrung eintragen (z. B. 2). Das System verfeinert diese Erhaltungsdosis danach selbst anhand der Messungen. 0 = komplett neu lernen."],
+    startDoseP: ["Start P (ml/Tag)", "Warmstart-Wert: tägliche P-Dosis zum Start. Wird danach automatisch nachjustiert. 0 = von 0 lernen."],
+    startDoseC: ["Start C (ml/Tag)", "Start-Menge für die Kohlenstoff-Dosierung, wenn ein NO₃-Überschuss bestätigt ist (statt des konservativen Default-Starts). 0 = vorsichtig mit dem Minimalwert beginnen."],
+    startDoseLa: ["Start Lanthan (ml/Tag)", "Start-Menge für Lanthan, wenn ein PO₄-Überschuss bestätigt ist. 0 = aus der Abweichung berechnen (gedeckelt)."],
   };
   let _infoEsc = null;
   function closeInfo(){ document.querySelectorAll(".info-pop,.info-pop-back").forEach(e=>e.remove()); if(_infoEsc){ document.removeEventListener("keydown",_infoEsc); _infoEsc=null; } }
@@ -275,14 +287,14 @@
     const win=measAsc.filter(m=>m.timestamp>=cutoff);
     const out={ key:cfg.key, label:cfg.label, target:cfg.target, n:win.length,
                 level:null, slopePerDay:null, coverage:0, status:"nodata", statusText:"Noch keine Messung im Fenster.",
-                maintMl:state[cfg.key+"_maint"]||0, maintPump:cfg.up, action:null, badge:"wait" };
+                maintMl:(cfg.key+"_maint" in state)?state[cfg.key+"_maint"]:(cfg.startUp||0), maintPump:cfg.up, action:null, badge:"wait" };
     if(win.length===0) return out;
     out.level=win[win.length-1].value;
     const t0=win[0].timestamp;
     const pts=win.map(m=>({t:(m.timestamp-t0)/DAY, v:m.value}));
     const reg=linReg(pts);
     const effUp=cfg.coeffUp*100/settings.aquariumVolume; // mg/l je ml
-    let D=state[cfg.key+"_maint"]||0;
+    let D=(cfg.key+"_maint" in state) ? state[cfg.key+"_maint"] : (cfg.startUp||0);
 
     // --- 1) Steigung -> Erhaltungsdosis (nur bei genug Zeitabdeckung) ---
     const minCover=Math.max(2, Math.min(7, settings.learnWindowDays*0.15));
@@ -333,10 +345,10 @@
           out.badge="high";
           if(cfg.downSpecific){
             const effDown=cfg.coeffDown*100/settings.aquariumVolume;
-            const redMl=Math.min((lvl-cfg.target)/effDown, corrCap);
+            const redMl=Math.min(cfg.startDown>0 ? cfg.startDown : (lvl-cfg.target)/effDown, corrCap);
             out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:redMl, kind:"Abbau (Überschuss bestätigt) ↓"};
           } else {
-            const cMl=settings.cMinML100*settings.aquariumVolume/100; // konservativer C-Start
+            const cMl=cfg.startDown>0 ? cfg.startDown : settings.cMinML100*settings.aquariumVolume/100; // Start-Dosis oder konservativer C-Start
             out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:cMl, kind:"Abbau mit C – vorsichtig starten ↓ (unspezifisch, senkt auch das andere)"};
           }
           out.statusText=`Überschuss bestätigt (${Math.floor(days)} Tage flach bei 0-Dosis) → aktiver Abbau mit ${cfg.downLabel}.`;
@@ -406,10 +418,10 @@
     return {
       no3:{ key:"no3", suf:"NO3", label:"NO₃ (Nitrat)", dp:1, color:"#e8732a",
             target:settings.targetNO3, min:settings.no3Min, max:settings.no3Max, deadband:settings.deadbandNO3,
-            up:PUMP.N, coeffUp:settings.coeffN_NO3, down:PUMP.C, downLabel:"C (Kohlenstoff)", downSpecific:false },
+            up:PUMP.N, coeffUp:settings.coeffN_NO3, down:PUMP.C, downLabel:"C (Kohlenstoff)", downSpecific:false, startUp:settings.startDoseN, startDown:settings.startDoseC },
       po4:{ key:"po4", suf:"PO4", label:"PO₄ (Phosphat)", dp:3, color:"#3498db",
             target:settings.targetPO4, min:settings.po4Min, max:settings.po4Max, deadband:settings.deadbandPO4,
-            up:PUMP.P, coeffUp:settings.coeffP_PO4, down:PUMP.LA, coeffDown:settings.coeffLa_PO4, downLabel:"Lanthan", downSpecific:true },
+            up:PUMP.P, coeffUp:settings.coeffP_PO4, down:PUMP.LA, coeffDown:settings.coeffLa_PO4, downLabel:"Lanthan", downSpecific:true, startUp:settings.startDoseP, startDown:settings.startDoseLa },
     };
   }
 
