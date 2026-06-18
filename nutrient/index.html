@@ -150,6 +150,30 @@
       </div>
 
       <div class="card">
+        <h2>Manuelle Einzeldosis</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Eine Pumpe sofort eine bestimmte Menge laufen lassen — praktisch zum <strong>Kalibrieren testen</strong>
+          (z. B. 5 ml dosieren und mit dem Messbecher vergleichen). Der ESP muss online sein.
+        </p>
+        <div class="grid2">
+          <div class="field">
+            <label>Pumpe</label>
+            <select id="md-pump">
+              <option value="0">Stickstoff (N)</option>
+              <option value="1">Phosphat (P)</option>
+              <option value="2">Kohlenstoff (C)</option>
+              <option value="3">Lanthan (La)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Menge (ml)</label>
+            <input type="number" id="md-ml" step="0.1" min="0.1" max="500" placeholder="z. B. 5">
+          </div>
+        </div>
+        <div style="margin-top:0.8rem"><button class="btn btn-primary" id="md-dose" style="width:100%">Dosieren</button></div>
+      </div>
+
+      <div class="card">
         <h2>ESP einrichten</h2>
         <p class="muted" style="margin-bottom:0.8rem">So verbindest du einen ESP32 mit deinem Account:</p>
         <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:0.5rem">
@@ -233,7 +257,8 @@
   import {
     getAuthInstance, getSettings, saveSettings, defaultSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
-    listDosings, getState, saveState, savePlan, getNutriDoc, PUMP, PUMP_NAMES
+    listDosings, getState, saveState, savePlan, getNutriDoc,
+    sendCommand, watchCommand, PUMP, PUMP_NAMES
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
   import { renderDeviceRegistry } from "/assets/device-registry.js";
@@ -268,6 +293,48 @@
           <div class="field"><label>Letzte 24 h</label><div>${(d.dosesOk24h||0)} / ${((d.dosesOk24h||0)+(d.dosesFail24h||0))} Dosen ok</div></div>
         </div>`;
     } catch(e){ statusEl.innerHTML = `<p class="muted">ESP-Status nicht ladbar: ${e.message}</p>`; }
+  }
+
+  // ---------- Manuelle Einzeldosis (Command an ESP) ----------
+  let _mdUnsub = null;
+  function bindManualDose(){
+    const btn = document.getElementById("md-dose");
+    if(!btn) return;
+    btn.onclick = async ()=>{
+      const pump = parseInt(document.getElementById("md-pump").value, 10);
+      const ml = parseFloat(document.getElementById("md-ml").value);
+      if(isNaN(ml) || ml <= 0){ alert("Bitte gültige ml-Menge eingeben."); return; }
+      if(_mdUnsub){ _mdUnsub(); _mdUnsub = null; }
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = "Sende an ESP …";
+      try {
+        const cmdId = await sendCommand({ action:"dose", pump, ml });
+        btn.textContent = "Wartet auf ESP …";
+        const to = setTimeout(()=>{
+          if(_mdUnsub){ _mdUnsub(); _mdUnsub = null; }
+          btn.disabled = false; btn.textContent = orig;
+          alert('⚠️ ESP antwortet nicht. Ist er online und hat die Rolle „Nährstoffmanagement"?');
+        }, 60000);
+        _mdUnsub = watchCommand(cmdId, async (data)=>{
+          if(!data) return;
+          if(data.status === "running"){ btn.textContent = "Pumpe läuft …"; }
+          else if(data.status === "done"){
+            clearTimeout(to); _mdUnsub(); _mdUnsub = null;
+            btn.disabled = false; btn.textContent = orig;
+            document.getElementById("md-ml").value = "";
+            toast("Dosierung erledigt","ok");
+            await refreshAll();   // Dosier-Historie aktualisieren
+          } else if(data.status === "failed"){
+            clearTimeout(to); _mdUnsub(); _mdUnsub = null;
+            btn.disabled = false; btn.textContent = orig;
+            alert("Dosierung fehlgeschlagen: " + (data.result?.error || "unbekannt"));
+          }
+        });
+      } catch(e){
+        btn.disabled = false; btn.textContent = orig;
+        alert("Fehler: " + e.message);
+      }
+    };
   }
 
   initAuthSync({ calculatorId:"nutrient", calculatorName:"Nährstoffmanagement", getLocalState:()=>({}), applyState:()=>{}, hostElementSelector:"header", theme:"light", loginOnly:true });
@@ -605,7 +672,7 @@
         settings=await getSettings(); state=await getState();
         const cL=await getAquariumLiters();
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
-        fillSettings(); bindSettings(); injectInfo();
+        fillSettings(); bindSettings(); injectInfo(); bindManualDose();
         document.querySelectorAll('[data-mf]').forEach(c=>c.addEventListener('change',renderHistory));
         document.querySelectorAll('[data-df]').forEach(c=>c.addEventListener('change',renderDosingHistory));
         loaded=true;
