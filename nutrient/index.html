@@ -114,6 +114,14 @@
     <!-- ===== Tab: Messung & Plan ===== -->
     <div id="tab-plan" class="tab-content active">
       <div class="card">
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.98rem;font-weight:600">
+          <input type="checkbox" data-setting="autoDosing">
+          <span>Automatische Dosierung aktivieren</span>
+        </label>
+        <p class="muted" style="margin-top:0.4rem">Wenn AN: der ESP führt den Dosierplan selbständig aus. Aus = nur Berechnung &amp; Anzeige, der ESP dosiert nicht.</p>
+      </div>
+
+      <div class="card">
         <h2>Neue Messung</h2>
         <div class="form-row"><label>Datum</label><input type="date" id="m-date"></div>
         <div class="grid2">
