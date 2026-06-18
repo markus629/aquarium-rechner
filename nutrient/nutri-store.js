@@ -208,7 +208,6 @@ export function defaultSettings() {
     coeffP_PO4: 0.1,                // P-Pumpe: +0,1 PO4
     coeffLa_PO4: 0.1,               // Lanthan: -0,1 PO4 ("bis zu" -> konservativ)
     cMinML100: 0.2, cMaxML100: 2.0, // C-Pumpe: Dosier-Hüllkurve ml/100 L (unspezifisch)
-    learnCoeffN: true,              // effektiven N->NO3-Faktor aus Historie lernen
     // Betrieb
     dosingsPerDay: 12,              // Erhaltungsdosis über den Tag verteilt
     // Start-Dosis ml/Tag je Pumpe (Warmstart; 0 = von 0 lernen).
