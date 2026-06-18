@@ -85,6 +85,7 @@
 
     <div class="tabs" id="main-tabs">
       <button class="tab-btn active" data-tab="tab-plan">🧪 Messung &amp; Plan</button>
+      <button class="tab-btn" data-tab="tab-device">📟 Gerät</button>
       <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
     </div>
 
@@ -129,6 +130,46 @@
           <label><input type="checkbox" data-df="2" checked> C</label>
         </div>
         <div class="tbl-scroll" id="dhist-out"><p class="muted" style="padding:0.6rem">—</p></div>
+      </div>
+    </div>
+
+    <!-- ===== Tab: Gerät ===== -->
+    <div id="tab-device" class="tab-content">
+      <div class="card">
+        <h2>Geräte &amp; Rollen</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Jeder ESP wählt über seine <strong>Rolle</strong>, welchen Dosierplan er ausführt — Kalk (Ca/KH) oder Nährstoffe (NO₃/PO₄).
+          Setze hier die Rolle <strong>Nährstoffmanagement</strong> für deinen Nährstoff-ESP. Er übernimmt sie beim nächsten Abgleich.
+        </p>
+        <div id="device-registry"></div>
+      </div>
+
+      <div class="card">
+        <h2>ESP-Status</h2>
+        <div id="device-status-display"><p class="muted">Noch nichts vom ESP empfangen. Sobald er online ist, erscheinen hier Live-Werte.</p></div>
+      </div>
+
+      <div class="card">
+        <h2>ESP einrichten</h2>
+        <p class="muted" style="margin-bottom:0.8rem">So verbindest du einen ESP32 mit deinem Account:</p>
+        <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:0.5rem">
+          <li><strong>Account-Zugang bereithalten</strong> — dieselbe E-Mail + Passwort wie beim Web-Login.</li>
+          <li><strong>ESP flashen</strong> mit der gemeinsamen Firmware (<a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README</a>).</li>
+          <li><strong>ESP einschalten</strong> — beim ersten Start öffnet er ein WLAN <code>AquariumRechner-Setup</code>.</li>
+          <li>Verbinden → Setup-Portal (sonst <code>http://192.168.4.1</code>) → WLAN + E-Mail + Passwort eintragen.</li>
+          <li>ESP startet neu und erscheint oben unter <strong>Geräte &amp; Rollen</strong> — dort die Rolle <strong>Nährstoffmanagement</strong> wählen.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Ausfall-Benachrichtigung</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Bleibt der Heartbeat des ESP länger als 5 Minuten aus, bekommst du eine E-Mail an deine Konto-Adresse.
+        </p>
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.95rem">
+          <input type="checkbox" data-setting="espOfflineAlert">
+          <span>E-Mail senden, wenn der ESP ausfällt</span>
+        </label>
       </div>
     </div>
 
@@ -192,9 +233,10 @@
   import {
     getAuthInstance, getSettings, saveSettings, defaultSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
-    listDosings, getState, saveState, savePlan, PUMP, PUMP_NAMES
+    listDosings, getState, saveState, savePlan, getNutriDoc, PUMP, PUMP_NAMES
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
+  import { renderDeviceRegistry } from "/assets/device-registry.js";
 
   const DAY = 86400;
   const fmt = (v, d = 2) => (v == null || isNaN(v)) ? "–" : Number(v).toFixed(d);
@@ -205,7 +247,28 @@
   window.addEventListener("unhandledrejection", e=>{ const vis=document.getElementById("view-main")?.style.display==="block"; if(vis){e.preventDefault();return;} showError("Promise-Fehler: "+(e.reason?.message||e.reason)); });
 
   // Tabs
-  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); }; });
+  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); }; });
+
+  async function refreshDeviceTab(){
+    renderDeviceRegistry(document.getElementById("device-registry"), { highlightRole:"nutrient" }).catch(e=>console.warn("Registry:",e));
+    const statusEl = document.getElementById("device-status-display");
+    if(!statusEl) return;
+    try {
+      const infoDoc = await getNutriDoc("info");
+      if(!infoDoc || !infoDoc.data){ statusEl.innerHTML = `<p class="muted">Noch nichts vom ESP empfangen.</p>`; return; }
+      const d = infoDoc.data;
+      const lastSeenMs = d.lastSeen ? (d.lastSeen < 1e12 ? d.lastSeen*1000 : d.lastSeen) : 0;
+      const online = lastSeenMs && (Date.now()-lastSeenMs) < 120000;
+      const seen = lastSeenMs ? new Date(lastSeenMs).toLocaleString("de-DE") : "nie";
+      statusEl.innerHTML = `
+        <div class="grid2" style="gap:0.7rem">
+          <div class="field"><label>Status</label><div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${online?"#27ae60":"#c2ccd6"};margin-right:0.4rem"></span>${online?"online":"offline"} <span class="muted" style="font-size:0.78rem">(${seen})</span></div></div>
+          <div class="field"><label>Firmware</label><div>${d.firmware||"—"}</div></div>
+          <div class="field"><label>WLAN</label><div>${d.rssi!=null?d.rssi+" dBm":"—"} <span class="muted">${d.ip||""}</span></div></div>
+          <div class="field"><label>Letzte 24 h</label><div>${(d.dosesOk24h||0)} / ${((d.dosesOk24h||0)+(d.dosesFail24h||0))} Dosen ok</div></div>
+        </div>`;
+    } catch(e){ statusEl.innerHTML = `<p class="muted">ESP-Status nicht ladbar: ${e.message}</p>`; }
+  }
 
   initAuthSync({ calculatorId:"nutrient", calculatorName:"Nährstoffmanagement", getLocalState:()=>({}), applyState:()=>{}, hostElementSelector:"header", theme:"light", loginOnly:true });
 
@@ -217,6 +280,7 @@
     document.querySelectorAll("[data-setting]").forEach(inp=>{
       const k=inp.dataset.setting; let v=settings[k];
       if(v==null) return;
+      if(inp.type==="checkbox"){ inp.checked=!!v; return; }
       if(inp.dataset.pct!=null) v=Math.round(v*100);
       inp.value=v;
     });
@@ -224,6 +288,11 @@
   function bindSettings(){
     document.querySelectorAll("[data-setting]").forEach(inp=>{
       inp.addEventListener("change", async ()=>{
+        if(inp.type==="checkbox"){
+          settings[inp.dataset.setting]=inp.checked;
+          try{ await saveSettings(settings); }catch(e){ toast("Speichern fehlgeschlagen","err"); }
+          return;
+        }
         let v=parseFloat(inp.value); if(isNaN(v)) return;
         if(inp.dataset.pct!=null) v=v/100;
         settings[inp.dataset.setting]=v;

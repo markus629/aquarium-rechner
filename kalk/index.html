@@ -468,6 +468,15 @@
     </div>
     <div id="tab-device" class="tab-content">
       <div class="card">
+        <h2>Geräte &amp; Rollen</h2>
+        <p style="color:var(--text-light);margin-bottom:0.8rem">
+          Jeder ESP wählt über seine <strong>Rolle</strong>, welchen Dosierplan er ausführt — Kalk (Ca/KH) oder Nährstoffe (NO₃/PO₄).
+          Du kannst die Rolle hier jederzeit umstellen; der ESP übernimmt sie beim nächsten Abgleich.
+        </p>
+        <div id="device-registry"></div>
+      </div>
+
+      <div class="card">
         <h2>ESP-Status</h2>
         <div id="device-status-display">
           <div class="center-state">
@@ -696,6 +705,7 @@
   } from "/kalk/pb-store.js";
   import { calculateKHPlan, calculateCaPlan, khPerML, caPerML, estimateDailyConsumption } from "/kalk/calc.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
+  import { renderDeviceRegistry } from "/assets/device-registry.js";
 
   // Robuste Fehler-Anzeige: jeder Fehler im Module-Code wird sichtbar
   function showError(msg) {
@@ -2055,6 +2065,10 @@
   async function refreshDeviceTab() {
     const user = getAuthInstance().currentUser;
     if (!user) return;
+
+    // Geräte-Registry (rollen-Zuweisung) — läuft unabhängig vom ESP-Status
+    renderDeviceRegistry(document.getElementById("device-registry"), { highlightRole: "kalk" }).catch(e => console.warn("Registry:", e));
+
     const info = document.getElementById("device-pw-info");
     const btn = document.getElementById("device-pw-reset");
 
