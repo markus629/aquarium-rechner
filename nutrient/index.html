@@ -675,6 +675,27 @@
     }
     state[cfg.key+"_maint"]=D; out.maintMl=D;
 
+    // --- Dosier-Wirkung (nur INFO, kein Stellhebel) ---
+    // Vergleicht in AUFDOSIER-Phasen (Dosis über Erhaltung hinaus) den tatsächlichen
+    // mit dem laut Flasche erwarteten Anstieg. ~1 = wirkt wie erwartet; >1 = mehr im
+    // Becken als dosiert → externer Eintrag (Futter); <1 = weniger → Ausfällung/Bindung
+    // (läuft sonst unbemerkt als "Verbrauch" mit). Pumpe + Flasche gelten als korrekt.
+    out.effFactor=null;
+    if(reg && reg.coverage>=minCover && win.length>=2 && effUp>0){
+      let sumAct=0, sumExp=0;
+      for(let i=1;i<win.length;i++){
+        const t1=win[i-1].timestamp, t2=win[i].timestamp, dt=(t2-t1)/DAY;
+        if(dt<=0) continue;
+        const upMl=(dosingsAsc||[]).reduce((s,d)=>(d.pump===cfg.up && d.timestamp>t1 && d.timestamp<=t2)?s+(d.ml||0):s,0);
+        const expExtra=(upMl - D*dt)*effUp;          // erwarteter Extra-Anstieg (über Erhaltung)
+        if(expExtra > 0.5*cfg.deadband){             // nur klare Aufdosier-Phasen zählen
+          sumAct+=(win[i].value - win[i-1].value);
+          sumExp+=expExtra;
+        }
+      }
+      if(sumExp > cfg.deadband) out.effFactor=sumAct/sumExp;
+    }
+
     // --- 2) Höhe -> kalk-style Plan (Erhaltung ∞ + gerampte Anpassung, max/Tag) ---
     const lvl=out.level, V=settings.aquariumVolume;
     const dosesPerDay=Math.max(1, parseInt(settings.dosingsPerDay,10)||12);
@@ -734,6 +755,15 @@
     return out;
   }
 
+  function effFactorInfo(f){
+    if(f==null) return "Dosier-Wirkung: <span class=\"muted\">sammelt noch Daten (braucht eine Aufdosier-Phase)</span>";
+    const pct=Math.round(f*100);
+    let txt, col;
+    if(f>=0.85 && f<=1.15){ txt="wirkt wie erwartet"; col="var(--green)"; }
+    else if(f>1.15){ txt="mehr Anstieg als dosiert → externer Eintrag (Futter)"; col="var(--orange)"; }
+    else { txt="weniger Anstieg als dosiert → Ausfällung/Bindung (läuft sonst als Verbrauch mit)"; col="var(--red)"; }
+    return `Dosier-Wirkung: <strong style="color:${col}">${fmt(f,2)}</strong> <span class="muted">(${pct} %, ideal 100 %) — ${txt}</span>`;
+  }
   function renderNut(o, cfg){
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
@@ -747,6 +777,7 @@
       <div class="nut-head"><span class="name">${cfg.label}</span><span class="badge ${bcls}">${btxt}</span></div>
       <div class="muted">Aktuell <span class="nut-val">${fmt(o.level,cfg.dp)}</span> mg/l · Ziel ${fmt(cfg.target,cfg.dp)} · Trend ${slopeTxt} · ${o.n} Messungen / ${fmt(o.coverage,1)} Tage${balTxt}</div>
       ${rec||'<div class="rec muted">keine Dosier-Empfehlung</div>'}
+      <div class="rec" style="font-size:0.82rem">${effFactorInfo(o.effFactor)}</div>
       <div class="muted" style="margin-top:0.3rem">${o.statusText}</div>
     </div>`;
   }
