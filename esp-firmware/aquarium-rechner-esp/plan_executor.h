@@ -81,6 +81,14 @@ enum DosageType {
 const char* DT_LABELS[DT_COUNT] = { "kh-day", "kh-night", "ca", "mg" };
 time_t lastDosageTimeCache[DT_COUNT] = { 0, 0, 0, 0 };
 
+// Nährstoff-Rolle: dieselben 4 Cache-Slots werden per PUMPEN-Index belegt
+// (0=N, 1=P, 2=C, 3=La). Label hängt also von der Rolle ab.
+const char* NUT_LABELS[4] = { "n", "p", "c", "la" };
+const char* doseLabel(DosageType t) {
+  if (pb_sync::isNutrient()) return NUT_LABELS[((int)t) & 3];
+  return DT_LABELS[t];
+}
+
 // ---------- Aktive Dose / Command ----------
 struct ActiveCmd {
   String cmdId;       // Web-Command ID (leer wenn Plan-Dose)
@@ -142,6 +150,19 @@ void saveLastDosageTime(DosageType t) {
   p.begin(NVS_NAMESPACE, false);
   String key = "lastD" + String((int)t);
   p.putULong(key.c_str(), (unsigned long)lastDosageTimeCache[t]);
+  p.end();
+}
+
+// Dedup-Cache leeren — bei Rollenwechsel, damit alte (Kalk-)Timestamps die
+// neuen (Nährstoff-)Dosen nicht fälschlich für "schon dosiert" halten.
+void clearDoseTimeCache() {
+  Preferences p;
+  p.begin(NVS_NAMESPACE, false);
+  for (int i = 0; i < DT_COUNT; i++) {
+    lastDosageTimeCache[i] = 0;
+    String key = "lastD" + String(i);
+    p.putULong(key.c_str(), 0);
+  }
   p.end();
 }
 
@@ -337,7 +358,7 @@ void abortAll() {
       time_t now; time(&now);
       if (now > 1700000000) recordDose(now, false);
       pb_sync::addDosing(current.pump, current.ml,
-                               current.fromPlan ? DT_LABELS[current.dosageType] : "manual",
+                               current.fromPlan ? doseLabel(current.dosageType) : "manual",
                                current.fromPlan, 1.0f, false);
     }
     current.active = false;
@@ -468,9 +489,9 @@ void finishCommand(bool success, const char* errorMsg = nullptr) {
     // Kanister-Dekrement übernimmt flushBuffer beim Upload der Dose
     // (offline-sicher — geht im Urlaubs-Puffer nicht verloren)
     pb_sync::addDosing(current.pump, current.ml,
-                              DT_LABELS[current.dosageType], true, 1.0f, success);
+                              doseLabel(current.dosageType), true, 1.0f, success);
     Serial.printf("[Plan] DOSE %s %s (%lums)\n",
-                  DT_LABELS[current.dosageType],
+                  doseLabel(current.dosageType),
                   success ? "done" : "FAILED", duration);
   } else {
     JsonDocument result;
@@ -568,6 +589,60 @@ bool sameLocalHour(time_t lastTs, time_t now) {
 
 // (getPlanArray entfällt — Plan-Arrays werden unten direkt mit ArduinoJson iteriert)
 
+// ---------- Nährstoff-Plan für die aktuelle Dosier-Stunde ----------
+// Plan-Format (vom Web): { entries:[{date,pump,ml,maint}] }
+//   pump: 0=N 1=P 2=C 3=La · maint/date==0 = Erhaltung (∞) · date in Stunde = Ausgleich
+// Pro Pumpe: Ausgleich dieser Stunde gewinnt, sonst Erhaltung. Dedup pro
+// Pumpe/Stunde über lastDosageTimeCache[pump]. KEIN Tag/Nacht, keine Halbierung.
+void runNutrientPlanForHour(time_t now, struct tm &t) {
+  JsonDocument doc;
+  if (deserializeJson(doc, cachedPlanJson)) return;
+  JsonArrayConst entries = doc["entries"].as<JsonArrayConst>();
+  if (entries.isNull()) return;
+
+  time_t hourStart = now - t.tm_min * 60 - t.tm_sec;
+  time_t hourEnd   = hourStart + 3600 - 1;
+
+  float pumpML[4]  = { 0, 0, 0, 0 };
+  bool  pumpAdj[4] = { false, false, false, false };
+
+  // 1) Ausgleich-Dosen dieser Stunde
+  for (JsonObjectConst e : entries) {
+    int p = e["pump"] | -1;
+    if (p < 0 || p > 3) continue;
+    bool maint = e["maint"] | false;
+    time_t d = (time_t)(e["date"] | 0L);
+    if (maint || d == 0) continue;
+    if (d >= hourStart && d <= hourEnd && !pumpAdj[p]) {
+      pumpML[p] = e["ml"] | 0.0f;
+      pumpAdj[p] = true;
+    }
+  }
+  // 2) Erhaltung (nur wo kein Ausgleich)
+  for (JsonObjectConst e : entries) {
+    int p = e["pump"] | -1;
+    if (p < 0 || p > 3) continue;
+    bool maint = e["maint"] | false;
+    time_t d = (time_t)(e["date"] | 0L);
+    if (!(maint || d == 0)) continue;
+    if (!pumpAdj[p] && pumpML[p] <= 0.0f) pumpML[p] = e["ml"] | 0.0f;
+  }
+
+  // Dedup + Queue (Reihenfolge N → P → C → La)
+  bool any = false;
+  for (int p = 0; p < 4; p++) {
+    if (pumpML[p] > 0.001f && !sameLocalHour(lastDosageTimeCache[p], now)) {
+      enqueueDose(p, pumpML[p], (DosageType)p);
+      any = true;
+    }
+  }
+  if (any) {
+    Serial.printf("[Plan] Nährstoff-Sequenz Stunde %d: N=%.2f P=%.2f C=%.2f La=%.2f\n",
+                  t.tm_hour, pumpML[0], pumpML[1], pumpML[2], pumpML[3]);
+    startNextQueuedDose();
+  }
+}
+
 // ---------- Auto-Dosing-Sequenz prüfen ----------
 // Wird alle 30s aufgerufen, fired aber nur in Minute 10-15 einer Dosier-Stunde.
 void checkAutoDosingSequence() {
@@ -588,6 +663,9 @@ void checkAutoDosingSequence() {
   if (settings_cache::intervalHours() <= 0) return;
   if (t.tm_hour % settings_cache::intervalHours() != 0 ||
       t.tm_min < 10 || t.tm_min > 15) return;
+
+  // Nährstoff-Rolle: eigenes Plan-Format (entries[]) — danach fertig.
+  if (pb_sync::isNutrient()) { runNutrientPlanForHour(now, t); return; }
 
   JsonDocument doc;
   if (deserializeJson(doc, cachedPlanJson)) return;  // ungültiger Cache → abbrechen
@@ -722,16 +800,22 @@ void syncPhCalibrationOnce() {
 }
 
 void tick() {
+  // Leerlauf (keine Rolle zugewiesen): nichts dosieren/pollen.
+  // Heartbeat in die devices-Collection läuft separat im .ino-Loop.
+  if (pb_sync::isIdle()) return;
+
   checkPumpFinished();
-  tickPhCalibration();             // pH-Kalibrierungs-Sampling
+  if (pb_sync::isKalk()) tickPhCalibration();   // pH-Kalibrierung nur Kalk
   pollCommands();
   syncPumpConfigs();
   settings_cache::sync();
   syncPlan();
-  syncPhCalibrationOnce();         // pH-Kalib aus Cloud falls NVS leer
-  checkPhSampleSchedule();         // pH-Probe um :05 schreiben
-  checkAutoDosingSequence();       // Dosier-Sequenz um :10
-  pb_sync::flushBuffer();    // Backlog-Uploads versuchen
+  if (pb_sync::isKalk()) {
+    syncPhCalibrationOnce();       // pH-Kalib aus Cloud falls NVS leer
+    checkPhSampleSchedule();       // pH-Probe um :05 schreiben
+  }
+  checkAutoDosingSequence();       // Dosier-Sequenz um :10 (branet intern nach Rolle)
+  pb_sync::flushBuffer();          // Backlog-Uploads versuchen
 }
 
 } // namespace plan_executor

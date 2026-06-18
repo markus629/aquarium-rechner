@@ -66,6 +66,14 @@ void setup() {
   // korrekten stepsPerSec/accelPerSec2 Werten den Stepper initialisiert
   settings_cache::loadFromNVS();
 
+  // Geräte-Rolle: chipId berechnen + zuletzt bekannte Rolle aus NVS laden.
+  // So läuft der ESP auch offline sofort in seiner Rolle weiter (Kalk dosiert,
+  // bevor das Backend erreichbar ist). Online wird sie in resolveRole() geprüft.
+  pb_sync::computeChipId();
+  pb_sync::loadRoleFromNVS();
+  Serial.printf("[Role] Start mit Rolle '%s' (chipId=%s)\n",
+                pb_sync::deviceRole.c_str(), pb_sync::chipId.c_str());
+
   // Hardware-Init
   pumps::begin();
   ph_sensor::begin();
@@ -97,6 +105,8 @@ void setup() {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
     if (!pb_sync::begin(fbEmail, fbPass)) {
       Serial.println("[Boot] PocketBase-Login fehlgeschlagen — retry über Loop");
+    } else {
+      pb_sync::resolveRole();   // Rolle aus devices-Collection (chipId→role)
     }
   }
 
@@ -125,11 +135,29 @@ void loop() {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
     String ssid, wifiPass, fbEmail, fbPass;
     setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
-    pb_sync::begin(fbEmail, fbPass);
+    if (pb_sync::begin(fbEmail, fbPass)) {
+      String prev = pb_sync::deviceRole;
+      pb_sync::resolveRole();
+      if (pb_sync::deviceRole != prev) {
+        Serial.println("[Role] DB-Rolle weicht von NVS ab → Reboot");
+        plan_executor::clearDoseTimeCache(); delay(400); ESP.restart();
+      }
+    }
   }
 
-  // pH-Sampling (alle 100 ms)
-  ph_sensor::tick();
+  // Falls Rolle/Device noch nicht aufgelöst (z.B. erst jetzt online) → nachholen.
+  // Weicht die DB-Rolle vom laufenden Stand ab → sauber neu booten.
+  if (pb_sync::isReady() && pb_sync::idDevice.length() == 0) {
+    String prev = pb_sync::deviceRole;
+    pb_sync::resolveRole();
+    if (pb_sync::deviceRole != prev) {
+      Serial.println("[Role] DB-Rolle weicht von NVS ab → Reboot");
+      plan_executor::clearDoseTimeCache(); delay(400); ESP.restart();
+    }
+  }
+
+  // pH-Sampling (alle 100 ms) — nur in der Kalk-Rolle (Nährstoff: pH aus)
+  if (pb_sync::isKalk()) ph_sensor::tick();
 
   // Status-LED Animationen (z.B. Pulsieren während Connect)
   status_led::tick();
@@ -153,7 +181,7 @@ void loop() {
   // pH pushen (flüchtig, eigener Key) — flüssigere Live-Kurve beim Kalibrieren.
   // Präsenz wird sparsam alle 4 s geprüft;
   // ein 30-s-Fenster überbrückt die Lücken zwischen den UI-Auffrischungen.
-  {
+  if (pb_sync::isKalk()) {
     unsigned long ms = millis();
     static unsigned long lastLiveCheckMs = 0, lastLivePushMs = 0, liveUntilMs = 0;
     if (ms - lastLiveCheckMs > 4000) {
@@ -170,10 +198,22 @@ void loop() {
   unsigned long now = millis();
   if (now - lastHeartbeatMs > HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatMs = now;
+
+    // 1) Geräte-Registry-Heartbeat (ALLE Rollen, auch Leerlauf) — hält die
+    //    Online-Anzeige + lastSeen aktuell und liest die Rolle gegen.
+    if (pb_sync::updateDeviceHeartbeat()) {
+      // Rolle wurde im Web umgestellt → Dedup-Cache leeren + sauber neu booten,
+      // damit pH/Pumpen/Collections für die neue Rolle frisch initialisiert sind.
+      Serial.printf("[Role] Wechsel erkannt → '%s' — Reboot\n", pb_sync::deviceRole.c_str());
+      plan_executor::clearDoseTimeCache();
+      delay(400);  // PATCH committen lassen
+      ESP.restart();
+    }
+
     // pH nur alle 10 Heartbeats (= alle 5 min) mitschicken — die Tag/Nacht-Logik
     // läuft ohnehin lokal, das hier ist nur Live-Anzeige im Web-Dashboard.
     static uint8_t hbCount = 0;
-    bool includePh = (hbCount++ % 10 == 0);
+    bool includePh = (hbCount++ % 10 == 0) && pb_sync::isKalk();
     float ph = includePh ? ph_sensor::getPH() : NAN;
     int phSamples = includePh ? ph_sensor::getSampleCount() : 0;
     long uptime = (now - bootMs) / 1000;
@@ -185,9 +225,12 @@ void loop() {
     for (int i = 0; i < 4; i++) {
       stats.pumpsCalibrated[i] = pumps::stepsPerML[i] > 0.0f;
     }
+    // 2) Rollen-Heartbeat in <prefix>docs:info — NUR aktive Rollen (nicht Leerlauf).
     // Ausfall-Erkennung läuft serverseitig (PocketBase-Watchdog prüft den
     // Heartbeat-Zeitstempel und mailt bei Ausbleiben) — kein externer Ping nötig.
-    if (pb_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
+    if (pb_sync::isIdle()) {
+      Serial.println("[HB] Leerlauf — keine Rolle zugewiesen (nur Geräte-Heartbeat)");
+    } else if (pb_sync::sendHeartbeat(ph, phSamples, uptime, stats)) {
       if (includePh) {
         Serial.printf("[HB] OK  up=%lds  pH=%.2f  RSSI=%d  doses24h=%d/%d  bufQ=%d\n",
                       uptime, ph, WiFi.RSSI(),

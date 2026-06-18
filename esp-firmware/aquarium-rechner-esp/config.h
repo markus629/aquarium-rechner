@@ -4,8 +4,19 @@
 #pragma once
 
 // ---------- Firmware ----------
-#define FW_VERSION "0.5.7"
+#define FW_VERSION "0.6.0"
 #define FW_NAME "aquarium-rechner-esp"
+
+// ---------- Geräte-Rolle ----------
+// EINE Firmware für mehrere Geräte. Die Rolle bestimmt, welcher Dosierplan
+// ausgeführt wird und welche Collections genutzt werden:
+//   "kalk"     → aqua_*  (Ca/KH, pH-Sensor, Tag/Nacht)   — wie bisher
+//   "nutrient" → nutri_* (NO3/PO4: N/P/C/La, pH AUS)
+//   ""         → Leerlauf (nur Heartbeat, keine Dosierung)
+// Die Rolle liegt in der devices-Collection (chipId→role), web-umschaltbar.
+// Beim Boot wird sie aus NVS geladen (offline-fähig) und online aus der DB
+// aktualisiert. Rollen-Wechsel zur Laufzeit → sauberer Reboot.
+#define NVS_KEY_ROLE  "devRole"
 
 // OTA-Quelle: GitHub Releases (public, kein Auth nötig)
 // API: https://api.github.com/repos/<OWNER>/<REPO>/releases/latest

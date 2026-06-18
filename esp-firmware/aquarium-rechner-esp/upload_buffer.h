@@ -61,16 +61,23 @@ const unsigned long BACKOFF_AFTER_FAIL_MS = 60UL * 1000;
 unsigned long nextRetryAtMs = 0;
 
 // doseType-String → enum (für pb_sync)
+// 0-4 = Kalk (kh-day/kh-night/ca/mg/manual), 5-8 = Nährstoff (n/p/c/la)
 inline uint8_t doseTypeToCode(const char* s) {
   if (!strcmp(s, "kh-day"))   return 0;
   if (!strcmp(s, "kh-night")) return 1;
   if (!strcmp(s, "ca"))       return 2;
   if (!strcmp(s, "mg"))       return 3;
+  if (!strcmp(s, "n"))        return 5;
+  if (!strcmp(s, "p"))        return 6;
+  if (!strcmp(s, "c"))        return 7;
+  if (!strcmp(s, "la"))       return 8;
   return 4; // manual
 }
 inline const char* doseTypeToStr(uint8_t c) {
   switch (c) { case 0: return "kh-day"; case 1: return "kh-night";
-               case 2: return "ca"; case 3: return "mg"; default: return "manual"; }
+               case 2: return "ca"; case 3: return "mg";
+               case 5: return "n"; case 6: return "p"; case 7: return "c"; case 8: return "la";
+               default: return "manual"; }
 }
 
 // ---------- Persistenz auf FATFS ----------

@@ -20,6 +20,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 #include <time.h>
 #include "config.h"
 #include "upload_buffer.h"
@@ -43,6 +44,40 @@ String authToken;
 String currentUid;
 String credEmail, credPassword;
 bool ready = false;
+
+// ---------- Geräte-Rolle ----------
+// Rolle bestimmt Collection-Präfix (aqua_/nutri_) + Verhalten. Siehe config.h.
+String deviceRole = "";   // "kalk" | "nutrient" | "" (Leerlauf)
+String chipId     = "";   // aus eFuse-MAC, stabil pro Board
+String idDevice   = "";   // devices-Record-ID dieses Geräts
+
+inline bool isKalk()     { return deviceRole == "kalk"; }
+inline bool isNutrient() { return deviceRole == "nutrient"; }
+inline bool isIdle()     { return !isKalk() && !isNutrient(); }
+
+// Collection-Name für die aktuelle Rolle. base z.B. "docs","measurements",
+// "dosings","command" → "aqua_docs" (Kalk) bzw. "nutri_docs" (Nährstoff).
+inline String collName(const char *base) {
+  return (deviceRole == "nutrient") ? (String("nutri_") + base) : (String("aqua_") + base);
+}
+
+void computeChipId() {
+  uint64_t mac = ESP.getEfuseMac();
+  char buf[17];
+  snprintf(buf, sizeof(buf), "%012llX", (unsigned long long)mac);
+  chipId = String(buf);
+}
+
+void loadRoleFromNVS() {
+  Preferences p; p.begin(NVS_NAMESPACE, true);
+  deviceRole = p.getString(NVS_KEY_ROLE, "");
+  p.end();
+}
+void saveRoleToNVS() {
+  Preferences p; p.begin(NVS_NAMESPACE, false);
+  p.putString(NVS_KEY_ROLE, deviceRole);
+  p.end();
+}
 
 // PocketBase identifiziert Records per id (nicht per Pfad) → IDs cachen.
 String idCommand;
@@ -147,7 +182,7 @@ const String& uid() { return currentUid; }
 static String findAquaDocId(const String &key) {
   if (!isReady()) return "";
   String filter = "user='" + currentUid + "' && key='" + key + "'";
-  String path = "/api/collections/aqua_docs/records?perPage=1&filter=" + urlEncode(filter);
+  String path = "/api/collections/" + collName("docs") + "/records?perPage=1&filter=" + urlEncode(filter);
   String resp;
   if (request("GET", path, "", &resp) != 200) return "";
   JsonDocument doc;
@@ -161,7 +196,7 @@ static String findAquaDocId(const String &key) {
 static bool fetchAquaDoc(const String &key, JsonDocument &out) {
   if (!isReady()) return false;
   String filter = "user='" + currentUid + "' && key='" + key + "'";
-  String path = "/api/collections/aqua_docs/records?perPage=1&filter=" + urlEncode(filter);
+  String path = "/api/collections/" + collName("docs") + "/records?perPage=1&filter=" + urlEncode(filter);
   String resp;
   if (request("GET", path, "", &resp) != 200) return false;
   JsonDocument doc;
@@ -184,14 +219,14 @@ static bool upsertAquaDoc(const String &key, JsonVariantConst data) {
   if (cid.length()) {
     JsonDocument body; body["data"] = data;
     String b; serializeJson(body, b);
-    code = request("PATCH", "/api/collections/aqua_docs/records/" + cid, b, &resp);
+    code = request("PATCH", "/api/collections/" + collName("docs") + "/records/" + cid, b, &resp);
     if (code == 404) cid = "";  // Record verschwunden → neu anlegen
   }
   if (cid.length() == 0) {
     JsonDocument body;
     body["user"] = currentUid; body["key"] = key; body["data"] = data;
     String b; serializeJson(body, b);
-    code = request("POST", "/api/collections/aqua_docs/records", b, &resp);
+    code = request("POST", "/api/collections/" + collName("docs") + "/records", b, &resp);
     if (code == 200) {
       JsonDocument d;
       if (!deserializeJson(d, resp)) cid = d["id"].as<String>();
@@ -332,7 +367,7 @@ bool flushBuffer() {
     body["source"]      = "esp";
     if (first.timestamp > 1700000000) body["timestamp"] = (long)first.timestamp;
     String b; serializeJson(body, b);
-    ok = request("POST", "/api/collections/aqua_dosings/records", b, &resp) == 200;
+    ok = request("POST", "/api/collections/" + collName("dosings") + "/records", b, &resp) == 200;
 
   } else if (first.kind == upload_buffer::KIND_PH) {
     JsonDocument body;
@@ -342,7 +377,7 @@ bool flushBuffer() {
     body["source"] = "esp";
     if (first.timestamp > 1700000000) body["timestamp"] = (long)first.timestamp;
     String b; serializeJson(body, b);
-    ok = request("POST", "/api/collections/aqua_measurements/records", b, &resp) == 200;
+    ok = request("POST", "/api/collections/" + collName("measurements") + "/records", b, &resp) == 200;
 
   } else {  // KIND_PHCAL → aqua_docs key="ph-calibration" (Merge mit Bestand)
     JsonDocument data;
@@ -391,7 +426,7 @@ bool fetchPumpStepsPerML(int pumpIdx, float &outStepsPerML) {
 bool fetchActiveCommand(JsonDocument &out) {
   if (!isReady()) return false;
   String filter = "user='" + currentUid + "'";
-  String path = "/api/collections/aqua_command/records?perPage=1&filter=" + urlEncode(filter);
+  String path = "/api/collections/" + collName("command") + "/records?perPage=1&filter=" + urlEncode(filter);
   String resp;
   if (request("GET", path, "", &resp) != 200) return false;
   JsonDocument doc;
@@ -413,9 +448,74 @@ bool updateCommandStatus(const String &status, JsonDocument *resultJson = nullpt
   if (resultJson) body["result"] = *resultJson;
   String b; serializeJson(body, b);
   String resp;
-  bool ok = request("PATCH", "/api/collections/aqua_command/records/" + idCommand, b, &resp) == 200;
+  bool ok = request("PATCH", "/api/collections/" + collName("command") + "/records/" + idCommand, b, &resp) == 200;
   if (!ok) Serial.printf("[Cmd] update FAIL: %s\n", resp.c_str());
   return ok;
+}
+
+// ---------- Geräte-Registry (devices-Collection) ----------
+// Findet den devices-Record dieses Geräts (per chipId) und liest die Rolle.
+// Existiert keiner → legt einen mit role="" (Leerlauf) an. Setzt idDevice +
+// deviceRole und persistiert die Rolle in NVS. Returns true bei Erfolg.
+bool resolveRole() {
+  if (!isReady()) return false;
+  if (chipId.length() == 0) computeChipId();
+  String filter = "user='" + currentUid + "' && chipId='" + chipId + "'";
+  String path = "/api/collections/devices/records?perPage=1&filter=" + urlEncode(filter);
+  String resp;
+  if (request("GET", path, "", &resp) != 200) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return false;
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.size() > 0) {
+    idDevice = items[0]["id"].as<String>();
+    deviceRole = items[0]["role"] | "";
+  } else {
+    // Neues Gerät → Leerlauf-Record anlegen
+    JsonDocument body;
+    body["user"]      = currentUid;
+    body["chipId"]    = chipId;
+    body["role"]      = "";
+    body["name"]      = "Neues Gerät";
+    body["fwVersion"] = FW_VERSION;
+    time_t now; time(&now);
+    if (now > 1700000000) body["lastSeen"] = (long)now;
+    String b; serializeJson(body, b);
+    String r2;
+    if (request("POST", "/api/collections/devices/records", b, &r2) == 200) {
+      JsonDocument d;
+      if (!deserializeJson(d, r2)) idDevice = d["id"].as<String>();
+    }
+    deviceRole = "";
+  }
+  saveRoleToNVS();
+  Serial.printf("[Role] chipId=%s role='%s'\n", chipId.c_str(), deviceRole.c_str());
+  return true;
+}
+
+// Heartbeat in den devices-Record (lastSeen + fwVersion) + Rolle gegenlesen.
+// Returns true, wenn sich die Rolle seit dem letzten Stand GEÄNDERT hat
+// (Aufrufer sollte dann neu booten, um sauber neu zu initialisieren).
+bool updateDeviceHeartbeat() {
+  if (!isReady() || idDevice.length() == 0) return false;
+  JsonDocument body;
+  time_t now; time(&now);
+  if (now > 1700000000) body["lastSeen"] = (long)now;
+  body["fwVersion"] = FW_VERSION;
+  String b; serializeJson(body, b);
+  String resp;
+  int code = request("PATCH", "/api/collections/devices/records/" + idDevice, b, &resp);
+  if (code == 404) { idDevice = ""; return false; }  // Record weg → neu resolven
+  if (code != 200) return false;
+  JsonDocument d;
+  if (deserializeJson(d, resp)) return false;
+  String r = d["role"] | "";
+  if (r != deviceRole) {
+    deviceRole = r;
+    saveRoleToNVS();
+    return true;
+  }
+  return false;
 }
 
 } // namespace pb_sync
