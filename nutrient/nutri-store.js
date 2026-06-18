@@ -194,9 +194,9 @@ export function defaultSettings() {
     // Zielwerte + Bereiche
     targetNO3: 5,   no3Min: 2,    no3Max: 15,    // mg/l
     targetPO4: 0.05, po4Min: 0.02, po4Max: 0.15, // mg/l
-    // Lernen
-    learnWindowDays: 28,            // 4-Wochen-Fenster für die Ausgleichsgerade
-    slewLimitPct: 0.20,             // Erhaltungsdosis max. ±20 % pro Messung nachziehen
+    // Lernen (Ansatz A: Netto-Verbrauch aus Massenbilanz = Dosierrate − Steigung)
+    learnWindowDays: 28,            // 4-Wochen-Fenster für Dosierrate + Steigung
+    learnAlpha: 0.5,               // Glättung der Erhaltungsdosis je neuer Messung (0..1)
     deadbandNO3: 1.0,               // mg/l um Ziel -> keine Korrektur
     deadbandPO4: 0.01,              // mg/l um Ziel -> keine Korrektur
     surplusConfirmDays: 5,          // so lange flach/steigend bei 0-Dosis -> echter Überschuss -> C/Lanthan

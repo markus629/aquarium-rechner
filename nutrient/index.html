@@ -247,7 +247,7 @@
         <h3>Lernen &amp; Dämpfung</h3>
         <div class="grid2">
           <div class="field"><label>Lern-Fenster (Tage)</label><input type="number" data-setting="learnWindowDays" step="1" min="3"></div>
-          <div class="field"><label>Slew-Limit Erhaltung (%)</label><input type="number" data-setting="slewLimitPct" data-pct step="1" min="1" max="100"></div>
+          <div class="field"><label>Lern-Glättung α (%)</label><input type="number" data-setting="learnAlpha" data-pct step="1" min="1" max="100"></div>
           <div class="field"><label>Überschuss-Bestätigung (Tage)</label><input type="number" data-setting="surplusConfirmDays" step="1" min="1"></div>
           <div class="field"><label>Totband NO₃ (mg/l)</label><input type="number" data-setting="deadbandNO3" step="0.1"></div>
           <div class="field"><label>Totband PO₄ (mg/l)</label><input type="number" data-setting="deadbandPO4" step="0.001"></div>
@@ -569,8 +569,8 @@
     targetPO4: ["PO₄-Ziel", "Wunsch-Konzentration Phosphat, auf die die Regelung hinarbeitet."],
     no3Min: ["NO₃-Bereich (min/max)", "Akzeptierter Bereich für Nitrat. Außerhalb wird im Plan deutlich markiert; das Band erscheint grün im Verlauf-Graph."],
     po4Min: ["PO₄-Bereich (min/max)", "Akzeptierter Bereich für Phosphat (grünes Band im Graph)."],
-    learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den die Ausgleichsgerade durch deine Messungen gelegt wird. Nur Messungen aus diesem Fenster zählen für die Verbrauchs-Lernung. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
-    slewLimitPct: ["Slew-Limit Erhaltung (%)", "Wie stark die tägliche Erhaltungsdosis pro Messung HÖCHSTENS nachgezogen wird (in % der aktuellen Dosis). Klein = sanft, keine Sprünge (empfohlen); groß = schneller, aber unruhiger. Verhindert Überreaktion auf eine einzelne Messung."],
+    learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den der Netto-Verbrauch aus der Massenbilanz bestimmt wird: mittlere Dosierrate minus gemessene Steigung. Nur Messungen + Dosierungen aus diesem Fenster zählen. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
+    learnAlpha: ["Lern-Glättung α (%)", "Wie stark die neu gemessene Verbrauchs-Schätzung die Erhaltungsdosis je neuer Messung verschiebt (0–100 %). Klein = sehr glatt, träge; groß = reaktiv, aber unruhiger. Bei 50 % zählt eine neue Messung zur Hälfte. Verhindert Überreaktion auf einen einzelnen Wert."],
     surplusConfirmDays: ["Überschuss-Bestätigung (Tage)", "So viele Tage muss der Wert TROTZ 0-Dosierung flach bleiben oder steigen, bevor aktiv abgebaut wird (C bzw. Lanthan). Schützt davor, vorschnell Nährstoffe rauszuziehen — erst Aufbau stoppen, dann beobachten, dann erst abbauen."],
     deadbandNO3: ["Totband NO₃ (mg/l)", "Toleranz um den Zielwert. Liegt die Messung innerhalb ± diesem Wert, wird NICHT korrigiert — verhindert ständiges Nachregeln auf Mess-Rauschen."],
     deadbandPO4: ["Totband PO₄ (mg/l)", "Toleranz um den PO₄-Zielwert; innerhalb wird nicht korrigiert (kein Jagen auf Rauschen)."],
@@ -632,7 +632,7 @@
   }
 
   // Regelung pro Nährstoff. cfg: {key,label,up,down,target,min,max,coeffUp,effUp,deadband,maxDaily,downLabel,downSpecific}
-  function controlFor(cfg, measAsc){
+  function controlFor(cfg, measAsc, dosingsAsc){
     const now=Date.now()/1000;
     const cutoff=now - settings.learnWindowDays*DAY;
     const win=measAsc.filter(m=>m.timestamp>=cutoff);
@@ -641,23 +641,33 @@
                 maintMl:(cfg.key+"_maint" in state)?state[cfg.key+"_maint"]:(cfg.startUp||0), maintPump:cfg.up, action:null, badge:"wait" };
     if(win.length===0) return out;
     out.level=win[win.length-1].value;
-    const t0=win[0].timestamp;
+    const t0=win[0].timestamp, tLast=win[win.length-1].timestamp;
     const pts=win.map(m=>({t:(m.timestamp-t0)/DAY, v:m.value}));
     const reg=linReg(pts);
     const effUp=cfg.coeffUp*100/settings.aquariumVolume; // mg/l je ml
     let D=(cfg.key+"_maint" in state) ? state[cfg.key+"_maint"] : (cfg.startUp||0);
 
-    // --- 1) Steigung -> Erhaltungsdosis (nur bei genug Zeitabdeckung) ---
+    // --- 1) Netto-Verbrauch lernen (Ansatz A: Massenbilanz) ---
+    // Netto-Bedarf [mg/l/Tag] = mittlere Up-Dosierrate − gemessene Steigung.
+    // Die Steigung enthält unsere eigene Dosierung; durch Abziehen der Dosierrate
+    // bleibt der reine Netto-Verbrauch (Verbrauch − Futter). Robust, weil die
+    // Regression das Messrauschen mittelt. Nachgezogen nur bei NEUER Messung (EMA).
     const minCover=Math.max(2, Math.min(7, settings.learnWindowDays*0.15));
+    const alpha=settings.learnAlpha!=null ? settings.learnAlpha : 0.5;
+    const lastLearnKey=cfg.key+"_lastLearnTs";
     let trendNote="";
     if(reg && reg.coverage>=minCover){
       out.slopePerDay=reg.slope; out.coverage=reg.coverage;
-      const adjustMl = -reg.slope/effUp;                 // ml/Tag um die Gerade flach zu ziehen
-      const capByConc = settings["maxDailyChange"+cfg.suf]/effUp;
-      const maxStep = Math.max(D*settings.slewLimitPct, 0.25*capByConc, 0.3); // Slew + Mindestschritt
-      let Dnew = D + Math.max(-maxStep, Math.min(maxStep, adjustMl));
-      Dnew = Math.max(0, Dnew);
-      D=Dnew;
+      const upMl=(dosingsAsc||[]).reduce((s,d)=>(d.pump===cfg.up && d.timestamp>=t0 && d.timestamp<=tLast)?s+(d.ml||0):s, 0);
+      const days=Math.max(reg.coverage,1e-6);
+      const avgDoseRate=(upMl*effUp)/days;             // mg/l/Tag, die WIR zugeführt haben
+      const netDemandConc=avgDoseRate-reg.slope;       // mg/l/Tag Netto-Verbrauch (Verbrauch − Futter)
+      const netDemandMl=Math.max(0, netDemandConc/effUp);
+      out.netDemandMl=netDemandMl; out.avgDoseRate=avgDoseRate;
+      if((state[lastLearnKey]||0) < tLast){            // nur bei neuer Messung nachziehen
+        D=Math.max(0,(1-alpha)*D + alpha*netDemandMl);
+        state[lastLearnKey]=tLast;
+      }
       trendNote = reg.slope<-1e-9 ? "fällt" : reg.slope>1e-9 ? "steigt" : "flach";
     } else if(reg){
       out.slopePerDay=reg.slope; out.coverage=reg.coverage||0;
@@ -728,13 +738,14 @@
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
     let rec="";
-    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} (über ${settings.dosingsPerDay}×/Tag)</div>`;
+    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis <span class="muted">(gelernter Netto-Verbrauch)</span>: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} (über ${settings.dosingsPerDay}×/Tag)</div>`;
     const adj=(o.entries||[]).filter(e=>!e.isMaintenance);
     if(adj.length) rec+=`<div class="rec">Anpassung: <strong>${adj.length} Dosen</strong> ${PUMP_NAMES[adj[0].pump]} über ${fmt(o.durationDays,1)} Tage → Ziel</div>`;
     const slopeTxt = o.slopePerDay==null ? "–" : `${fmt(o.slopePerDay,3)} mg/l/Tag`;
+    const balTxt = o.netDemandMl==null ? "" : ` · Bilanz: ${fmt(o.avgDoseRate||0,3)} dosiert − ${fmt(o.slopePerDay||0,3)} Trend`;
     return `<div class="nut-block">
       <div class="nut-head"><span class="name">${cfg.label}</span><span class="badge ${bcls}">${btxt}</span></div>
-      <div class="muted">Aktuell <span class="nut-val">${fmt(o.level,cfg.dp)}</span> mg/l · Ziel ${fmt(cfg.target,cfg.dp)} · Trend ${slopeTxt} · ${o.n} Messungen / ${fmt(o.coverage,1)} Tage</div>
+      <div class="muted">Aktuell <span class="nut-val">${fmt(o.level,cfg.dp)}</span> mg/l · Ziel ${fmt(cfg.target,cfg.dp)} · Trend ${slopeTxt} · ${o.n} Messungen / ${fmt(o.coverage,1)} Tage${balTxt}</div>
       ${rec||'<div class="rec muted">keine Dosier-Empfehlung</div>'}
       <div class="muted" style="margin-top:0.3rem">${o.statusText}</div>
     </div>`;
@@ -822,7 +833,7 @@
     _po4=(await listMeasurements("po4",300)).slice().reverse();
     _dosings=await listDosings(800);
     const C=cfgs();
-    const oNo3=controlFor(C.no3,_no3), oPo4=controlFor(C.po4,_po4);
+    const oNo3=controlFor(C.no3,_no3,_dosings), oPo4=controlFor(C.po4,_po4,_dosings);
     try{ await saveState(state); }catch(_){}
     // ausführbaren Plan für den ESP schreiben (kalk-style: Termin-Dosen + Dauer-Erhaltung date:0)
     try{
