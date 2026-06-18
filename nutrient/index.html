@@ -192,7 +192,7 @@
   import {
     getAuthInstance, getSettings, saveSettings, defaultSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
-    listDosings, getState, saveState, PUMP, PUMP_NAMES
+    listDosings, getState, saveState, savePlan, PUMP, PUMP_NAMES
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
 
@@ -301,6 +301,12 @@
     const lastT=pts[n-1].t;
     return { slope, intercept, n, atLast: intercept+slope*lastT, coverage: lastT-pts[0].t };
   }
+  // nächste Dosier-Stunde (Vielfaches von intH, Minute 10) nach now — wie calc.js
+  function nextDoseHour(now, intH){
+    const d=new Date(now*1000); let h=d.getHours(), plus=0;
+    if(h%intH===0){ if(d.getMinutes()>=10) plus=intH; } else { plus=intH-(h%intH); }
+    d.setHours(h+plus,10,0,0); return Math.floor(d.getTime()/1000);
+  }
 
   // Regelung pro Nährstoff. cfg: {key,label,up,down,target,min,max,coeffUp,effUp,deadband,maxDaily,downLabel,downSpecific}
   function controlFor(cfg, measAsc){
@@ -336,49 +342,62 @@
     }
     state[cfg.key+"_maint"]=D; out.maintMl=D;
 
-    // --- 2) Höhe -> Status + Korrektur / gegateter Abbau ---
-    const lvl=out.level, gap=cfg.target-lvl;
-    const tooLow  = lvl < cfg.target-cfg.deadband;
-    const tooHigh = lvl > cfg.target+cfg.deadband;
-    const corrCap = settings["maxDailyChange"+cfg.suf]/effUp;
+    // --- 2) Höhe -> kalk-style Plan (Erhaltung ∞ + gerampte Anpassung, max/Tag) ---
+    const lvl=out.level, V=settings.aquariumVolume;
+    const dosesPerDay=Math.max(1, parseInt(settings.dosingsPerDay,10)||12);
+    const intH=Math.max(1, Math.floor(24/dosesPerDay)), intSec=intH*3600;
+    const maintPerDose=D/dosesPerDay;                                  // Erhaltung je Intervall (Up-Pumpe)
+    const maxPerIntC=settings["maxDailyChange"+cfg.suf]/dosesPerDay;   // max mg/l je Intervall
+    const first=nextDoseHour(now,intH);
+    out.maintPerDose=maintPerDose; out.entries=[]; out.durationDays=0;
+    const tooLow=lvl<cfg.target-cfg.deadband, tooHigh=lvl>cfg.target+cfg.deadband;
 
     if(!tooLow && !tooHigh){
-      out.status="ok"; out.badge="ok"; out.statusText=`Im Zielbereich (Gerade ${trendNote||"–"}). Erhaltung deckt den Verbrauch.`;
-      state[cfg.key+"_surplusSince"]=0;
+      out.status="ok"; out.badge="ok"; state[cfg.key+"_surplusSince"]=0;
+      out.statusText=`Im Zielbereich (Gerade ${trendNote||"–"}). Nur Erhaltungsdosierung.`;
     } else if(tooLow){
-      out.status="low"; out.badge="low";
-      const corrMl=Math.min(gap/effUp, corrCap);
-      out.action={pump:cfg.up, pumpName:PUMP_NAMES[cfg.up], ml:corrMl, kind:"einmalige Korrektur ↑"};
-      out.statusText=`Zu niedrig (${fmt(lvl,cfg.dp)} < Ziel ${fmt(cfg.target,cfg.dp)}). Erhaltung wird erhöht + Korrektur.`;
-      state[cfg.key+"_surplusSince"]=0;
-    } else { // tooHigh -> erst Erhaltung runter (oben passiert), Abbau gegated
+      out.status="low"; out.badge="low"; state[cfg.key+"_surplusSince"]=0;
+      const diffC=cfg.target-lvl, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerIntC,1e-9)));
+      const stepC=diffC/numD, adjMl=stepC/effUp;
+      for(let i=0;i<numD;i++) out.entries.push({date:first+i*intSec, pump:cfg.up, ml:+(adjMl+maintPerDose).toFixed(3), projected:lvl+(i+1)*stepC});
+      out.durationDays=numD*intH/24;
+      out.statusText=`Zu niedrig → in ${fmt(out.durationDays,1)} Tagen auf Ziel anheben (${numD}× ${PUMP_NAMES[cfg.up]}, max ${fmt(settings["maxDailyChange"+cfg.suf],cfg.dp)}/Tag).`;
+    } else {
       out.status="high"; out.badge="high";
-      // Erhaltung Richtung 0? -> oben schon via Steigung. Abbau erst bei bestätigtem Überschuss.
-      const falling = out.slopePerDay!=null && out.slopePerDay < -1e-9;
+      const diffC=lvl-cfg.target, naturalC=maintPerDose*effUp;
+      const falling=out.slopePerDay!=null && out.slopePerDay<-1e-9;
       if(D>0.01 || falling){
-        out.statusText=`Zu hoch (${fmt(lvl,cfg.dp)} > Ziel). Erhaltung wird zurückgefahren${D>0.01?` (akt. ${fmt(D,2)} ml/Tag)`:""}; ${falling?"Wert fällt bereits — abwarten.":"beobachte, ob es ohne Dosierung fällt."}`;
         state[cfg.key+"_surplusSince"]=0;
+        const maxDownC=Math.min(maxPerIntC, naturalC);
+        if(maxDownC>1e-9){
+          const numD=Math.max(1,Math.ceil(diffC/maxDownC)); let rem=diffC;
+          for(let i=0;i<numD;i++){ const req=Math.min(rem,maxDownC); const dose=Math.max(0, maintPerDose-req/effUp); rem-=req; out.entries.push({date:first+i*intSec, pump:cfg.up, ml:+dose.toFixed(3), projected:Math.max(cfg.target, lvl-(diffC-rem))}); if(rem<=1e-9) break; }
+          out.durationDays=out.entries.length*intH/24;
+        }
+        out.statusText=`Zu hoch → Erhaltung gedrosselt, natürlicher Verbrauch senkt (${falling?"fällt bereits":"beobachten"}). ${cfg.downLabel} erst bei bestätigtem Überschuss.`;
       } else {
-        // D ~ 0 und fällt nicht -> Überschuss-Bestätigung hochzählen
         let since=state[cfg.key+"_surplusSince"]||0;
         if(!since){ since=now; state[cfg.key+"_surplusSince"]=since; }
         const days=(now-since)/DAY;
         if(days>=settings.surplusConfirmDays){
-          out.badge="high";
           if(cfg.downSpecific){
-            const effDown=cfg.coeffDown*100/settings.aquariumVolume;
-            const redMl=Math.min(cfg.startDown>0 ? cfg.startDown : (lvl-cfg.target)/effDown, corrCap);
-            out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:redMl, kind:"Abbau (Überschuss bestätigt) ↓"};
+            const effDown=cfg.coeffDown*100/V, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerIntC,1e-9)));
+            const stepC=diffC/numD; let dml=stepC/effDown; if(cfg.startDown>0) dml=Math.min(cfg.startDown, dml);
+            for(let i=0;i<numD;i++) out.entries.push({date:first+i*intSec, pump:cfg.down, ml:+dml.toFixed(3), projected:Math.max(cfg.target, lvl-(i+1)*stepC)});
+            out.durationDays=numD*intH/24;
           } else {
-            const cMl=cfg.startDown>0 ? cfg.startDown : settings.cMinML100*settings.aquariumVolume/100; // Start-Dosis oder konservativer C-Start
-            out.action={pump:cfg.down, pumpName:PUMP_NAMES[cfg.down], ml:cMl, kind:"Abbau mit C – vorsichtig starten ↓ (unspezifisch, senkt auch das andere)"};
+            const cDay=cfg.startDown>0 ? cfg.startDown : settings.cMinML100*V/100, cPer=cDay/dosesPerDay;
+            for(let i=0;i<dosesPerDay;i++) out.entries.push({date:first+i*intSec, pump:cfg.down, ml:+cPer.toFixed(3), projected:lvl});
+            out.durationDays=1;
           }
-          out.statusText=`Überschuss bestätigt (${Math.floor(days)} Tage flach bei 0-Dosis) → aktiver Abbau mit ${cfg.downLabel}.`;
+          out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → aktiver Abbau mit ${cfg.downLabel}.`;
         } else {
-          out.statusText=`Zu hoch, 0-Dosis, Wert fällt nicht → prüfe Überschuss: ${Math.floor(days)}/${settings.surplusConfirmDays} Tage. Noch kein ${cfg.downLabel}.`;
+          out.statusText=`Zu hoch, 0-Dosis, fällt nicht → Überschuss prüfen: ${Math.floor(days)}/${settings.surplusConfirmDays} T.`;
         }
       }
     }
+    // Dauer-Erhaltungsdose (∞)
+    if(maintPerDose>0) out.entries.push({date:0, pump:cfg.up, ml:+maintPerDose.toFixed(3), isMaintenance:true});
     return out;
   }
 
@@ -386,8 +405,9 @@
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
     let rec="";
-    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[o.maintPump]} (über ${settings.dosingsPerDay}×/Tag verteilt)</div>`;
-    if(o.action) rec+=`<div class="rec">Empfehlung: <strong>${fmt(o.action.ml,2)} ml</strong> ${o.action.pumpName} — ${o.action.kind}</div>`;
+    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} (über ${settings.dosingsPerDay}×/Tag)</div>`;
+    const adj=(o.entries||[]).filter(e=>!e.isMaintenance);
+    if(adj.length) rec+=`<div class="rec">Anpassung: <strong>${adj.length} Dosen</strong> ${PUMP_NAMES[adj[0].pump]} über ${fmt(o.durationDays,1)} Tage → Ziel</div>`;
     const slopeTxt = o.slopePerDay==null ? "–" : `${fmt(o.slopePerDay,3)} mg/l/Tag`;
     return `<div class="nut-block">
       <div class="nut-head"><span class="name">${cfg.label}</span><span class="badge ${bcls}">${btxt}</span></div>
@@ -481,6 +501,12 @@
     const C=cfgs();
     const oNo3=controlFor(C.no3,_no3), oPo4=controlFor(C.po4,_po4);
     try{ await saveState(state); }catch(_){}
+    // ausführbaren Plan für den ESP schreiben (kalk-style: Termin-Dosen + Dauer-Erhaltung date:0)
+    try{
+      const dpd=Math.max(1,parseInt(settings.dosingsPerDay,10)||12);
+      await savePlan({ dosesPerDay:dpd, intervalSec:Math.max(1,Math.floor(24/dpd))*3600,
+        entries:[...(oNo3.entries||[]),...(oPo4.entries||[])].map(e=>({date:e.date,pump:e.pump,ml:e.ml,maint:!!e.isMaintenance})) });
+    }catch(_){}
     document.getElementById("plan-out").innerHTML = renderNut(oNo3,C.no3)+renderNut(oPo4,C.po4);
     renderChart("chart-no3", _no3, _dosings.filter(d=>d.pump===PUMP.N||d.pump===PUMP.C), C.no3, [{pump:PUMP.N,color:"#e8732a",label:"N"},{pump:PUMP.C,color:"#27ae60",label:"C"}]);
     renderChart("chart-po4", _po4, _dosings.filter(d=>d.pump===PUMP.P||d.pump===PUMP.LA), C.po4, [{pump:PUMP.P,color:"#3498db",label:"P"},{pump:PUMP.LA,color:"#27ae60",label:"Lanthan"}]);
