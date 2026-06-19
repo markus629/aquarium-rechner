@@ -55,6 +55,14 @@
   .pump-cal-step.idle .num{background:#aabbcc}
   .cal-progress{height:6px;background:#fff;border-radius:3px;overflow:hidden;margin:0.5rem 0}
   .cal-progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue-dark));transition:width 0.3s;width:0%}
+  /* Kanister */
+  .container-item{border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:0.7rem}
+  .container-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+  .container-head .name{font-weight:700;font-size:1rem}
+  .container-meta{font-size:0.78rem;color:var(--text-light);margin-top:0.15rem}
+  .container-bar{height:10px;background:var(--bg);border-radius:5px;overflow:hidden;margin:0.6rem 0}
+  .container-bar-fill{height:100%;background:var(--green);transition:width 0.3s}
+  .container-bar-fill.low{background:var(--red)}
   .info-banner{background:#eaf4fb;border:1px solid #b9ddf3;border-radius:8px;padding:0.7rem 0.9rem;font-size:0.85rem;margin-bottom:1rem}
   .center-state{text-align:center;padding:2rem 1rem;color:var(--text-light)}.center-state .icon{font-size:2rem}
   .nut-block{border:1px solid var(--border);border-radius:10px;padding:0.9rem;margin-bottom:0.9rem}
@@ -108,6 +116,7 @@
     <div class="tabs" id="main-tabs">
       <button class="tab-btn active" data-tab="tab-plan">🧪 Messung &amp; Plan</button>
       <button class="tab-btn" data-tab="tab-device">📟 Gerät</button>
+      <button class="tab-btn" data-tab="tab-container">🛢️ Kanister</button>
       <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
     </div>
 
@@ -236,6 +245,18 @@
       </div>
     </div>
 
+    <!-- ===== Tab: Kanister ===== -->
+    <div id="tab-container" class="tab-content">
+      <div class="card">
+        <h2>Kanister &amp; Füllstände</h2>
+        <p class="muted" style="margin-bottom:1rem">
+          Kapazität und aktueller Füllstand je Pumpe. Der ESP zieht bei jeder Dosierung automatisch ab —
+          beim Nachfüllen hier „Voll auffüllen" drücken.
+        </p>
+        <div id="containers-list"></div>
+      </div>
+    </div>
+
     <!-- ===== Tab: Einstellungen ===== -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -311,7 +332,37 @@
   window.addEventListener("unhandledrejection", e=>{ const vis=document.getElementById("view-main")?.style.display==="block"; if(vis){e.preventDefault();return;} showError("Promise-Fehler: "+(e.reason?.message||e.reason)); });
 
   // Tabs
-  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); }; });
+  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); if(btn.dataset.tab==="tab-container") refreshContainers(); }; });
+
+  // ---------- Kanister / Füllstände ----------
+  async function refreshContainers(){
+    try{
+      settings=await getSettings();   // frisch laden (ESP dekrementiert containerLevel)
+      const pumps=await getPumps();
+      const caps=settings.containerCapacity||[5000,5000,5000,5000];
+      const levels=settings.containerLevel||[...caps];
+      const el=document.getElementById("containers-list");
+      el.innerHTML=pumps.map((p,i)=>{
+        const cap=caps[i]||5000, lvl=levels[i]!=null?levels[i]:cap;
+        const pct=Math.max(0,Math.min(100,(lvl/cap)*100));
+        const low=pct<20?"low":"";
+        return `<div class="container-item">
+          <div class="container-head">
+            <div><div class="name">${p.name||PUMP_NAMES[i]}</div><div class="container-meta">${Math.round(lvl)} / ${Math.round(cap)} ml · ${Math.round(pct)} %</div></div>
+            <button class="btn btn-ghost" data-refill="${i}">Voll auffüllen</button>
+          </div>
+          <div class="container-bar"><div class="container-bar-fill ${low}" style="width:${pct}%"></div></div>
+          <div class="grid2">
+            <div class="field"><label>Kapazität (ml)</label><input type="number" data-cap="${i}" value="${Math.round(cap)}" step="100" min="100" max="20000"></div>
+            <div class="field"><label>Füllstand (ml)</label><input type="number" data-level="${i}" value="${Math.round(lvl)}" step="10" min="0"></div>
+          </div>
+        </div>`;
+      }).join("");
+      el.querySelectorAll("[data-refill]").forEach(b=>b.onclick=async()=>{ const i=+b.dataset.refill; settings.containerLevel=[...levels]; settings.containerLevel[i]=caps[i]||5000; await saveSettings(settings); toast("Aufgefüllt","ok"); await refreshContainers(); });
+      el.querySelectorAll("[data-cap]").forEach(inp=>inp.addEventListener("change",async()=>{ const i=+inp.dataset.cap; settings.containerCapacity=[...caps]; settings.containerCapacity[i]=parseFloat(inp.value)||5000; await saveSettings(settings); await refreshContainers(); }));
+      el.querySelectorAll("[data-level]").forEach(inp=>inp.addEventListener("change",async()=>{ const i=+inp.dataset.level; settings.containerLevel=[...levels]; settings.containerLevel[i]=parseFloat(inp.value)||0; await saveSettings(settings); await refreshContainers(); }));
+    }catch(e){ console.warn("Kanister:",e); }
+  }
 
   async function refreshDeviceTab(){
     renderDeviceRegistry(document.getElementById("device-registry"), { highlightRole:"nutrient" }).catch(e=>console.warn("Registry:",e));
@@ -587,7 +638,7 @@
     coeffN_NO3: ["N → NO₃", "Herstellerangabe: um wie viel mg/l NO₃ 1 ml N-Lösung pro 100 L anhebt (theoretisch ~1,1). Real meist weniger, weil ein Teil des Stickstoffs verbraucht wird, bevor NO₃ daraus entsteht — der effektive Faktor wird später aus deiner Historie gelernt."],
     coeffP_PO4: ["P → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml P-Lösung pro 100 L anhebt (~0,1). Direkt und vorhersagbar."],
     coeffLa_PO4: ["Lanthan → PO₄", "Herstellerangabe: um wie viel mg/l PO₄ 1 ml Lanthan pro 100 L SENKT (‚bis zu' 0,1 → bewusst konservativ). Lanthan fällt Phosphat physisch aus — potent, daher klein dosieren."],
-    cMinML100: ["C: ml/100 L (min/max)", "Dosier-Hüllkurve der Kohlenstoff-Lösung in ml pro 100 L (Herstellerbereich 0,2–2,0). C wirkt UNSPEZIFISCH auf NO₃ UND PO₄ und abhängig vom Nährstofflevel — deshalb kein fester mg/l-Faktor, sondern eine vorsichtig hochgerampte Rate, nur bei bestätigtem Überschuss."],
+    cMinML100: ["C: ml/100 L (min/max)", "Dosier-Hüllkurve der Kohlenstoff-Lösung in ml pro 100 L (Herstellerbereich 0,2–2,0). C wirkt UNSPEZIFISCH auf NO₃ UND PO₄ und abhängig vom Nährstofflevel — deshalb kein fester mg/l-Faktor. Bei bestätigtem Überschuss dosiert das System zwischen min und max: nahe am Ziel = min, je weiter über dem Maximalwert, desto näher an max (nie darüber)."],
     startDoseN: ["Start N (ml/Tag)", "Warmstart-Wert: tägliche N-Dosis, mit der das System startet, statt bei 0 zu beginnen. Aus Erfahrung eintragen (z. B. 2). Das System verfeinert diese Erhaltungsdosis danach selbst anhand der Messungen. 0 = komplett neu lernen."],
     startDoseP: ["Start P (ml/Tag)", "Warmstart-Wert: tägliche P-Dosis zum Start. Wird danach automatisch nachjustiert. 0 = von 0 lernen."],
     startDoseC: ["Start C (ml/Tag)", "Start-Menge für die Kohlenstoff-Dosierung, wenn ein NO₃-Überschuss bestätigt ist (statt des konservativen Default-Starts). 0 = vorsichtig mit dem Minimalwert beginnen."],
@@ -747,12 +798,21 @@
             const stepC=diffC/numD; let dml=stepC/effDown; if(cfg.startDown>0) dml=Math.min(cfg.startDown, dml);
             for(let i=0;i<numD;i++) out.entries.push({date:first+i*intSec, pump:cfg.down, ml:+dml.toFixed(3), projected:Math.max(cfg.target, lvl-(i+1)*stepC)});
             out.durationDays=numD*intH/24;
+            out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → Abbau mit ${cfg.downLabel}.`;
           } else {
-            const cDay=cfg.startDown>0 ? cfg.startDown : settings.cMinML100*V/100, cPer=cDay/dosesPerDay;
+            // C ist unspezifisch → Hüllkurve [cMin..cMax] ml/100 L, skaliert mit der
+            // Überschuss-Stärke (je weiter über Ziel, desto mehr C, aber nie über cMax).
+            const cMin=settings.cMinML100*V/100, cMax=settings.cMaxML100*V/100;
+            const span=Math.max(1e-9, cfg.max-cfg.target);
+            const escalate=Math.max(0, Math.min(1, diffC/span));
+            let cDay=cMin+(cMax-cMin)*escalate;
+            if(cfg.startDown>0) cDay=Math.max(cDay, cfg.startDown);
+            cDay=Math.max(cMin, Math.min(cMax, cDay));   // Hüllkurve erzwingen
+            const cPer=cDay/dosesPerDay;
             for(let i=0;i<dosesPerDay;i++) out.entries.push({date:first+i*intSec, pump:cfg.down, ml:+cPer.toFixed(3), projected:lvl});
             out.durationDays=1;
+            out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → C-Abbau ${fmt(cDay,1)} ml/Tag (Hüllkurve ${fmt(cMin,1)}–${fmt(cMax,1)}).`;
           }
-          out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → aktiver Abbau mit ${cfg.downLabel}.`;
         } else {
           out.statusText=`Zu hoch, 0-Dosis, fällt nicht → Überschuss prüfen: ${Math.floor(days)}/${settings.surplusConfirmDays} T.`;
         }
