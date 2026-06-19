@@ -230,6 +230,35 @@
           </div>
         </div>
       </div>
+      <div class="card kalk-wide beta">
+        <a class="kalk-left" href="nutrient/">
+          <h2>Nährstoffmanagement</h2>
+          <p>NO₃ und PO₄ automatisch versorgen — Stickstoff, Phosphat, Kohlenstoff &amp; Lanthan. Plan, Verlauf, Steuerung deines Aquariums.</p>
+          <span class="arrow" style="margin-top:auto;color:var(--accent);font-weight:600;font-size:0.9rem">Öffnen →</span>
+        </a>
+        <div class="kalk-right">
+          <div id="nut-need-login" class="quick-need-login" style="display:none">
+            Einloggen, dann kannst du hier direkt NO₃/PO₄ eintragen und siehst die Kanister-Stände.
+          </div>
+          <div id="nut-controls" style="display:none">
+            <div class="quick-inputs">
+              <div class="qf">
+                <label>NO₃ (mg/l)</label>
+                <input type="number" id="nut-no3" step="0.1" min="0" max="100" placeholder="5">
+              </div>
+              <div class="qf">
+                <label>PO₄ (mg/l)</label>
+                <input type="number" id="nut-po4" step="0.001" min="0" max="5" placeholder="0.05">
+              </div>
+              <button id="nut-save">Speichern</button>
+            </div>
+            <div class="quick-msg" id="nut-msg"></div>
+            <div class="canister-bars" id="nut-bars">
+              <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <footer>
       Alle Empfehlungen ohne Gewähr — immer mit Augenmaß dosieren.<br>
@@ -243,6 +272,9 @@
     import {
       getAuthInstance, getSettings, addMeasurement
     } from "./kalk/pb-store.js";
+    import {
+      getSettings as getNutSettings, addMeasurement as addNutMeasurement
+    } from "./nutrient/nutri-store.js";
 
     await initAuthSync({
       calculatorId: "_overview",
@@ -319,14 +351,63 @@
       }
     };
 
+    // --- Nährstoff-Kachel (analog Kalk) ---
+    const NUT_PUMP_NAMES = ["Stickstoff (N)", "Phosphat (P)", "Kohlenstoff (C)", "Lanthan"];
+    const nutNeedLogin = document.getElementById("nut-need-login");
+    const nutControls  = document.getElementById("nut-controls");
+    const nutMsg = document.getElementById("nut-msg");
+    const nutNo3 = document.getElementById("nut-no3");
+    const nutPo4 = document.getElementById("nut-po4");
+    const nutSave = document.getElementById("nut-save");
+    const nutBars = document.getElementById("nut-bars");
+
+    function showNutMsg(text, kind) {
+      nutMsg.textContent = text;
+      nutMsg.className = "quick-msg" + (kind ? " " + kind : "");
+      if (text) setTimeout(() => { if (nutMsg.textContent === text) { nutMsg.textContent = ""; nutMsg.className = "quick-msg"; } }, 4000);
+    }
+    function renderNutBars(settings) {
+      const cap = settings.containerCapacity || [5000, 5000, 5000, 5000];
+      const lvl = settings.containerLevel || [5000, 5000, 5000, 5000];
+      nutBars.innerHTML = NUT_PUMP_NAMES.map((name, i) => {
+        const c = Math.max(1, cap[i] || 0), l = Math.max(0, lvl[i] || 0);
+        const pct = Math.min(100, Math.round((l / c) * 100));
+        const cls = pct < 15 ? "fill crit" : pct < 30 ? "fill warn" : "fill";
+        return `<div class="bar"><div class="lbl">${name}</div><div class="track"><div class="${cls}" style="width:${pct}%"></div></div><div class="pct">${pct}%</div></div>`;
+      }).join("");
+    }
+    async function loadNutSettings() {
+      try { renderNutBars(await getNutSettings()); }
+      catch (e) { nutBars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`; }
+    }
+    nutSave.onclick = async () => {
+      const no3 = parseFloat(nutNo3.value), po4 = parseFloat(nutPo4.value);
+      const hasNo3 = !isNaN(no3) && no3 > 0, hasPo4 = !isNaN(po4) && po4 > 0;
+      if (!hasNo3 && !hasPo4) { showNutMsg("Bitte mindestens NO₃ oder PO₄ eingeben.", "err"); return; }
+      nutSave.disabled = true; const o = nutSave.textContent; nutSave.textContent = "…";
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        if (hasNo3) await addNutMeasurement({ type: "no3", value: no3, timestamp: now, source: "manual" });
+        if (hasPo4) await addNutMeasurement({ type: "po4", value: po4, timestamp: now, source: "manual" });
+        nutNo3.value = ""; nutPo4.value = "";
+        showNutMsg(`✓ ${hasNo3 && hasPo4 ? "NO₃ + PO₄" : hasNo3 ? "NO₃" : "PO₄"} gespeichert`, "ok");
+      } catch (e) { showNutMsg("Fehler: " + e.message, "err"); }
+      finally { nutSave.disabled = false; nutSave.textContent = o; }
+    };
+
     getAuthInstance().onAuthStateChanged(user => {
       if (user) {
         needLogin.style.display = "none";
         controls.style.display = "block";
         loadSettings();
+        nutNeedLogin.style.display = "none";
+        nutControls.style.display = "block";
+        loadNutSettings();
       } else {
         needLogin.style.display = "block";
         controls.style.display = "none";
+        nutNeedLogin.style.display = "block";
+        nutControls.style.display = "none";
       }
     });
   </script>
