@@ -5,13 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spurenelemente Rechner</title>
 <style>
-  :root {
-    --blue:#1a73a7; --blue-dark:#125a84; --blue-light:#e8f4fb;
-    --orange:#e8732a; --orange-dark:#c45f1f;
-    --green:#2e9e5a; --yellow:#e6a817; --red:#d94040;
-    --bg:#f0f4f8; --card:#fff; --text:#1a2a3a; --text-light:#5a6a7a;
-    --border:#d0d8e0; --radius:12px; --shadow:0 2px 12px rgba(0,0,0,0.08);
-  }
+  /* Standard-Tokens zentral aus /assets/app.css; hier nur spuren-spezifische */
+  :root { --orange-dark:#c45f1f; --yellow:#e6a817; }
   * { margin:0; padding:0; box-sizing:border-box; }
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
@@ -33,12 +28,7 @@
   .toggle-arrow { font-size:0.85rem; color:var(--text-light); transition:transform 0.2s; cursor:pointer; user-select:none; }
   .collapsible.open .toggle-arrow { transform:rotate(90deg); }
   /* Tabs */
-  .tabs { display:flex; gap:0; margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
-  .tab-btn { flex:1; padding:0.85rem 1rem; border:none; background:var(--card); color:var(--text-light); font-size:0.95rem; font-weight:600; cursor:pointer; border-bottom:3px solid transparent; transition:all 0.2s; }
-  .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
-  .tab-btn:hover:not(.active) { background:var(--bg); }
-  .tab-content { display:none; }
-  .tab-content.active { display:block; }
+  /* Tab-Leiste zentral aus /assets/app.css */
   .element-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
   .element-item { display:flex; flex-direction:column; gap:0.25rem; padding:0.6rem; border-radius:8px; background:var(--bg); }
   .element-label { font-weight:600; font-size:0.85rem; display:flex; justify-content:space-between; }
