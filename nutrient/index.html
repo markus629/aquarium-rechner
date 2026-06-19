@@ -646,11 +646,37 @@
   };
   let _infoEsc = null;
   function closeInfo(){ document.querySelectorAll(".info-pop,.info-pop-back").forEach(e=>e.remove()); if(_infoEsc){ document.removeEventListener("keydown",_infoEsc); _infoEsc=null; } }
-  function showInfo(h, anchor){
+  // Kleine Balkengrafik: wie stark zählt jede der letzten Messungen bei Glättung α.
+  // Gewicht_i = α·(1−α)^i (neueste zuerst). Popover-Hintergrund ist weiß → feste Farben.
+  function alphaWeightChartSVG(pct){
+    const a=Math.max(0.01,Math.min(1,pct/100)), n=8;
+    const w=[]; for(let i=0;i<n;i++) w.push(a*Math.pow(1-a,i));
+    const max=w[0]||1, W=290,H=118,padB=24,padT=16,padL=6,padR=6;
+    const bw=(W-padL-padR)/n, barW=bw*0.64;
+    let bars="";
+    for(let i=0;i<n;i++){
+      const h=(w[i]/max)*(H-padB-padT), x=padL+i*bw+(bw-barW)/2, y=H-padB-h;
+      bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="2" fill="#1D9E75"/>`;
+      if(w[i]>=0.008){ const t=(w[i]*100).toFixed(w[i]>=0.1?0:1); bars+=`<text x="${(x+barW/2).toFixed(1)}" y="${(y-3).toFixed(1)}" font-size="8.5" text-anchor="middle" fill="#5f6e7a">${t}%</text>`; }
+    }
+    const axis=`<line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="#e1e8ed" stroke-width="1"/>`;
+    const lN=`<text x="${(padL+bw/2).toFixed(1)}" y="${H-padB+13}" font-size="8.5" text-anchor="middle" fill="#7a8896">neueste</text>`;
+    const lO=`<text x="${(padL+(n-1)*bw+bw/2).toFixed(1)}" y="${H-padB+13}" font-size="8.5" text-anchor="middle" fill="#7a8896">älteste</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:4px">${axis}${bars}${lN}${lO}</svg>`;
+  }
+  function showInfo(h, anchor, key){
     closeInfo();
     const back=document.createElement("div"); back.className="info-pop-back"; back.onclick=closeInfo;
     const pop=document.createElement("div"); pop.className="info-pop";
-    pop.innerHTML=`<div class="ttl">${h[0]}</div><div>${h[1]}</div>`;
+    let extra="";
+    if(key==="learnAlpha"){
+      const inp=document.querySelector('[data-setting="learnAlpha"]');
+      let pct=inp?parseFloat(inp.value):NaN; if(isNaN(pct)) pct=(settings.learnAlpha!=null?settings.learnAlpha*100:50);
+      pct=Math.max(1,Math.min(100,pct));
+      extra=`<div style="margin-top:0.55rem;font-size:0.74rem;color:var(--text-light)">So stark zählt jede Messung in der gelernten Zahl bei α = ${Math.round(pct)} %:</div>${alphaWeightChartSVG(pct)}`;
+      pop.style.maxWidth="320px";
+    }
+    pop.innerHTML=`<div class="ttl">${h[0]}</div><div>${h[1]}</div>${extra}`;
     document.body.appendChild(back); document.body.appendChild(pop);
     const r=anchor.getBoundingClientRect(); const pw=pop.offsetWidth, ph=pop.offsetHeight;
     let left=r.left, top=r.bottom+6;
@@ -666,7 +692,7 @@
       const h=HELP[inp.dataset.setting]; if(!h) return;
       const lbl=f.querySelector("label"); if(!lbl || lbl.querySelector(".info-i")) return;
       const i=document.createElement("span"); i.className="info-i"; i.textContent="i"; i.title="Was macht diese Einstellung?";
-      i.onclick=(e)=>{ e.stopPropagation(); showInfo(h,i); };
+      i.onclick=(e)=>{ e.stopPropagation(); showInfo(h,i,inp.dataset.setting); };
       lbl.appendChild(i);
     });
   }
