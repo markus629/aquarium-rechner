@@ -71,7 +71,7 @@
 <body>
 <header>
   <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
-  <h1>💧 Kalkmanagement</h1>
+  <h1>Kalkmanagement</h1>
   <p>Ca, Mg und KH (Tag/Nacht) verwalten — mit oder ohne Pumpe</p>
 </header>
 
@@ -79,7 +79,7 @@
   <!-- Loading: initial sichtbar -->
   <div id="view-loading" class="card">
     <div class="center-state">
-      <div class="icon">⏳</div>
+      <div class="icon"></div>
       <p>Lade …</p>
     </div>
   </div>
@@ -87,7 +87,7 @@
   <!-- Fehler-Anzeige (versteckt) -->
   <div id="view-error" class="card" style="display:none">
     <div class="center-state">
-      <div class="icon">⚠️</div>
+      <div class="icon"></div>
       <h3>Etwas ist schiefgegangen</h3>
       <p id="error-message" class="error-box"></p>
       <button class="btn btn-primary" onclick="location.reload()">Neu laden</button>
@@ -97,19 +97,16 @@
   <!-- Nicht eingeloggt -->
   <div id="view-login" class="card" style="display:none">
     <div class="center-state">
-      <div class="icon">🔐</div>
+      <div class="icon"></div>
       <h3>Anmeldung erforderlich</h3>
       <p>Kalkmanagement braucht ein Konto, damit deine Daten zwischen Geräten und dem ESP synchron bleiben.</p>
       <p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p>
-      <p style="font-size:0.82rem;margin-top:1rem">💡 Mehrere Aquarien? Lege einfach mehrere Accounts an.</p>
+      <p style="font-size:0.82rem;margin-top:1rem">Mehrere Aquarien? Lege einfach mehrere Accounts an.</p>
     </div>
   </div>
 
   <!-- Haupt-Ansicht: nach Login -->
   <div id="view-main" style="display:none">
-    <div class="info-banner">
-      ℹ️ <strong>Voll funktionsfähig.</strong> Alle Funktionen — Messwerte, Dosier-Plan, Pumpen-Steuerung und pH-Sensor — sind umgesetzt und im Einsatz. Aktuell im Langzeittest: Dosiermengen anfangs bitte gegenprüfen.
-    </div>
     <div class="tabs" id="main-tabs">
       <button class="tab-btn active" data-tab="tab-dashboard">Dashboard</button>
       <button class="tab-btn" data-tab="tab-kalk">Kalkhaushalt</button>
@@ -395,7 +392,7 @@
           <li><strong>Account-Zugang bereithalten</strong> (E-Mail + Passwort — bei Bedarf hier zurücksetzen):
             <div id="device-pw-section" style="margin:0.6rem 0;padding:0.8rem;background:var(--bg);border-radius:8px">
               <div id="device-pw-info" style="font-size:0.88rem;margin-bottom:0.5rem">Lade Account-Info …</div>
-              <button class="btn btn-primary" id="device-pw-reset" style="display:none">📧 Passwort-Reset-Link senden</button>
+              <button class="btn btn-primary" id="device-pw-reset" style="display:none">Passwort-Reset-Link senden</button>
             </div>
           </li>
           <li><strong>ESP flashen</strong> — siehe <a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README im GitHub-Repo</a></li>
@@ -425,8 +422,8 @@
         </div>
 
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
-          <button class="btn btn-primary" id="fw-update-now">🚀 Jetzt prüfen &amp; updaten</button>
-          <button class="btn btn-ghost" id="fw-refresh">🔄 Status aktualisieren</button>
+          <button class="btn btn-primary" id="fw-update-now">Jetzt prüfen &amp; updaten</button>
+          <button class="btn btn-ghost" id="fw-refresh">Status aktualisieren</button>
         </div>
 
         <div id="fw-status" style="margin-top:0.8rem;font-size:0.88rem"></div>
@@ -513,7 +510,7 @@
             <input type="number" data-setting="phThresholdForKHNight" step="0.1" min="6.0" max="9.0">
           </div>
           <div id="ph-based-disabled-note" style="display:none;font-size:0.82rem;color:var(--orange);margin-top:0.4rem">
-            ⚠️ Erst <a href="#" id="ph-cal-jump" style="color:var(--blue)">pH-Sensor kalibrieren</a> — sonst greift die Uhrzeit-Logik.
+            Erst <a href="#" id="ph-cal-jump" style="color:var(--blue)">pH-Sensor kalibrieren</a> — sonst greift die Uhrzeit-Logik.
           </div>
         </div>
 
@@ -574,8 +571,8 @@
           Messungen, Dosierungen) als JSON-Datei.
         </p>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="kalk-export">⬇️ Export JSON</button>
-          <button class="btn btn-ghost" id="kalk-import">⬆️ Import JSON</button>
+          <button class="btn btn-primary" id="kalk-export">Export JSON</button>
+          <button class="btn btn-ghost" id="kalk-import">Import JSON</button>
           <input type="file" id="kalk-import-file" accept="application/json" style="display:none">
         </div>
         <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.6rem">
@@ -721,7 +718,7 @@
       await saveSettings({ [key]: value });
       flashSaveStatus("✓ gespeichert");
     } catch (e) {
-      flashSaveStatus("⚠️ " + (e.message || "Fehler"), true);
+      flashSaveStatus("" + (e.message || "Fehler"), true);
     }
   }
 
@@ -992,7 +989,7 @@
     }
 
     const timeoutHandle = setTimeout(() => {
-      renderPhCalStep(`<div class="pump-cal-step" style="color:var(--orange)">⚠️ ESP antwortet nicht. Ist er online? (Tab „Gerät" prüfen)</div>`);
+      renderPhCalStep(`<div class="pump-cal-step" style="color:var(--orange)">ESP antwortet nicht. Ist er online? (Tab „Gerät" prüfen)</div>`);
       if (phCalUnsub) { try { phCalUnsub(); } catch(_){} phCalUnsub = null; }
       document.getElementById("ph-cal-4").disabled = false;
       document.getElementById("ph-cal-7").disabled = false;
@@ -1020,7 +1017,7 @@
           <div class="pump-cal-step done">
             <strong>pH-${targetPh} Kalibrierung erfolgreich</strong><br>
             Voltage: <code>${v ? v.toFixed(4) + " V" : "—"}</code>
-            ${fully ? "<br>✅ Beide Punkte kalibriert — Sensor jetzt einsatzbereit." : "<br>ℹ️ Jetzt den anderen Punkt kalibrieren."}
+            ${fully ? "<br>Beide Punkte kalibriert — Sensor jetzt einsatzbereit." : "<br>Jetzt den anderen Punkt kalibrieren."}
           </div>`);
         document.getElementById("ph-cal-4").disabled = false;
         document.getElementById("ph-cal-7").disabled = false;
@@ -1056,17 +1053,17 @@
       const el = document.getElementById("ph-cal-status");
       if (!el) return;
       if (!phDoc) {
-        el.innerHTML = `<div class="info-banner">⚠️ <strong>Noch nicht kalibriert.</strong> Ohne Kalibrierung liefert der Sensor keine pH-Werte und die KH-Tag/Nacht-Entscheidung nutzt die Uhrzeit-Logik.</div>`;
+        el.innerHTML = `<div class="info-banner"><strong>Noch nicht kalibriert.</strong> Ohne Kalibrierung liefert der Sensor keine pH-Werte und die KH-Tag/Nacht-Entscheidung nutzt die Uhrzeit-Logik.</div>`;
       } else {
         const d = phDoc.data;
         const v4 = d.voltage_pH4, v7 = d.voltage_pH7, cal = d.isCalibrated;
         const when = d.lastCalibratedAt ? new Date(d.lastCalibratedAt * 1000).toLocaleString("de-DE") : "—";
         if (cal) {
           isFullyCalibrated = true;
-          el.innerHTML = `<div class="info-banner" style="background:#e8f8ec;border-color:var(--green);color:#1d6a3a">✅ <strong>Voll kalibriert</strong> &middot; pH-4: <code>${v4?.toFixed(4)} V</code> &middot; pH-7: <code>${v7?.toFixed(4)} V</code> &middot; ${when}</div>`;
+          el.innerHTML = `<div class="info-banner" style="background:#e8f8ec;border-color:var(--green);color:#1d6a3a"><strong>Voll kalibriert</strong> &middot; pH-4: <code>${v4?.toFixed(4)} V</code> &middot; pH-7: <code>${v7?.toFixed(4)} V</code> &middot; ${when}</div>`;
         } else {
           const missing = isNaN(v4) ? "pH-4" : "pH-7";
-          el.innerHTML = `<div class="info-banner">⚠️ <strong>Teilweise kalibriert</strong> — ${missing} fehlt noch. Bitte beide Punkte kalibrieren.</div>`;
+          el.innerHTML = `<div class="info-banner"><strong>Teilweise kalibriert</strong> — ${missing} fehlt noch. Bitte beide Punkte kalibrieren.</div>`;
         }
       }
     } catch (e) { console.warn("pH-Cal-Status:", e); }
@@ -1156,7 +1153,7 @@
         if (_manualDoseUnsub) { _manualDoseUnsub(); _manualDoseUnsub = null; }
         btn.disabled = false;
         btn.textContent = origText;
-        alert('⚠️ ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät").');
+        alert('ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät").');
       }, 60000);
       _manualDoseUnsub = watchCommand(cmdId, async (data) => {
         if (!data) return;
@@ -1279,7 +1276,7 @@
         <div class="pump-cal-step active">
           <span class="num">2</span><strong>ESP führt aus</strong> — ${statusText}
           <div class="cal-progress"><div class="cal-progress-fill" style="width:${pct}%"></div></div>
-          ${ctx.timedOut ? `<div style="color:var(--red);font-size:0.82rem;margin-top:0.4rem">⚠️ ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät") und versuche es nochmal.</div>` : ""}
+          ${ctx.timedOut ? `<div style="color:var(--red);font-size:0.82rem;margin-top:0.4rem">ESP antwortet nicht. Prüfe ob er online ist (Tab „Gerät") und versuche es nochmal.</div>` : ""}
           <button class="btn btn-ghost" id="cal-abort-${pumpIdx}" style="margin-top:0.5rem">Abbrechen</button>
         </div>
         <div class="pump-cal-step idle"><span class="num">3</span>Geförderte ml eintragen → speichern</div>
@@ -1430,7 +1427,7 @@
         <td>${PUMP_NAMES[d.pump] || `Pumpe ${d.pump}`}</td>
         <td class="num">${Number(d.ml).toFixed(2)} ml</td>
         <td>${TYPE_LABEL[d.dosageType] || d.dosageType || "—"}</td>
-        <td>${d.isAutomatic ? "Auto" : "Manuell"}${d.success === false ? " ⚠️" : ""}</td>
+        <td>${d.isAutomatic ? "Auto" : "Manuell"}${d.success === false ? " " : ""}</td>
         <td class="act"><button class="row-del" data-del-dos="${d.id}" title="Löschen">✕</button></td>
       </tr>`).join("");
     tbody.querySelectorAll("[data-del-dos]").forEach(btn => {
@@ -1740,8 +1737,8 @@
       Ziel: <strong>${plan.entries[0]?.projectedValue != null ? plan.entries[0].projectedValue.toFixed(2) + " °dKH" : "—"}</strong> &middot;
       Verbrauch: <strong>${dailyCons.toFixed(2)} ml/Tag</strong> &middot;
       ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
-      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
-      ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
+      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">${plan.warning}</div>` : ""}
+      ${plan.info ? `<div style="margin-top:0.4rem">${plan.info}</div>` : ""}
     `;
     tableEl.style.display = "table";
     tbody.innerHTML = plan.entries.map(e => `
@@ -1764,8 +1761,8 @@
       <div>Aktuell: <strong>${currentCa.toFixed(0)} mg/L</strong> &middot;
       Verbrauch: <strong>${dailyCons.toFixed(2)} ml/Tag</strong> &middot;
       ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
-      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">⚠️ ${plan.warning}</div>` : ""}
-      ${plan.info ? `<div style="margin-top:0.4rem">ℹ️ ${plan.info}</div>` : ""}
+      ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">${plan.warning}</div>` : ""}
+      ${plan.info ? `<div style="margin-top:0.4rem">${plan.info}</div>` : ""}
     `;
     tableEl.style.display = "table";
     tbody.innerHTML = plan.entries.map(e => `
@@ -1901,7 +1898,7 @@
         if (uncalibrated.length > 0) {
           warnEl.innerHTML = `
             <div class="info-banner" style="background:#fdf2f0;border-color:var(--red);color:#7a3030">
-              ⚠️ <strong>${uncalibrated.length} Pumpe${uncalibrated.length>1?'n':''} nicht kalibriert</strong>:
+              <strong>${uncalibrated.length} Pumpe${uncalibrated.length>1?'n':''} nicht kalibriert</strong>:
               ${uncalibrated.map(p => p.name).join(", ")} —
               Auto-Dosierung läuft für diese Pumpen <strong>nicht</strong>.
               Im Tab <strong>Manuell</strong> kalibrieren.
@@ -1973,19 +1970,19 @@
     const info = document.getElementById("device-pw-info");
     const btn = document.getElementById("device-pw-reset");
 
-    info.innerHTML = `✅ <strong>Dein Konto:</strong> <code>${user.email}</code>. Diese E-Mail und dein Passwort verwendest du auch im ESP-Setup.`;
+    info.innerHTML = `<strong>Dein Konto:</strong> <code>${user.email}</code>. Diese E-Mail und dein Passwort verwendest du auch im ESP-Setup.`;
     btn.style.display = "inline-block";
-    btn.textContent = "📧 Passwort zurücksetzen (falls vergessen)";
+    btn.textContent = "Passwort zurücksetzen (falls vergessen)";
 
     btn.onclick = async () => {
       try {
         btn.disabled = true;
-        btn.textContent = "📤 Sende …";
+        btn.textContent = "Sende …";
         await pb.collection("users").requestPasswordReset(user.email);
-        info.innerHTML = `✅ <strong>Reset-Link gesendet!</strong> Prüfe dein Postfach (auch Spam) für die Mail mit Link zum Passwort setzen.`;
+        info.innerHTML = `<strong>Reset-Link gesendet!</strong> Prüfe dein Postfach (auch Spam) für die Mail mit Link zum Passwort setzen.`;
         btn.style.display = "none";
       } catch (e) {
-        info.innerHTML = `❌ Fehler: ${e.message}`;
+        info.innerHTML = `Fehler: ${e.message}`;
         btn.disabled = false;
       }
     };
@@ -2077,11 +2074,11 @@
     try {
       const latest = await getLatestGithubRelease(GH_OWNER, GH_REPO);
       if (!latest || !latest.version) {
-        cur.innerHTML = `📦 <strong>ESP-Version:</strong> ${espV} &nbsp;·&nbsp; <em>noch kein GitHub-Release vorhanden</em>`;
+        cur.innerHTML = `<strong>ESP-Version:</strong> ${espV} &nbsp;·&nbsp; <em>noch kein GitHub-Release vorhanden</em>`;
         return;
       }
       if (!latest.url) {
-        cur.innerHTML = `📦 <strong>Release v${latest.version}</strong> gefunden — aber keine <code>.bin</code> als Asset angehängt!`;
+        cur.innerHTML = `<strong>Release v${latest.version}</strong> gefunden — aber keine <code>.bin</code> als Asset angehängt!`;
         return;
       }
       const published = latest.publishedAt ? new Date(latest.publishedAt).toLocaleString("de-DE") : "—";
@@ -2091,17 +2088,17 @@
         cmp = `<span style="color:var(--text-light)">ESP-Status unbekannt (offline?)</span>`;
       } else {
         const c = semverCompare(espVersion, latest.version);
-        if (c < 0)      cmp = `<span style="color:var(--orange)">⏳ ESP hat noch ${espV} — Update verfügbar</span>`;
-        else if (c === 0) cmp = `<span style="color:var(--green)">✅ ESP ist aktuell</span>`;
+        if (c < 0)      cmp = `<span style="color:var(--orange)">ESP hat noch ${espV} — Update verfügbar</span>`;
+        else if (c === 0) cmp = `<span style="color:var(--green)">ESP ist aktuell</span>`;
         else            cmp = `<span style="color:var(--text-light)">ESP läuft auf neuerer Version (${espV})</span>`;
       }
       cur.innerHTML = `
-        📦 <strong>GitHub-Release:</strong> <a href="${latest.htmlUrl}" target="_blank" style="color:var(--blue)">v${latest.version}</a>
+        <strong>GitHub-Release:</strong> <a href="${latest.htmlUrl}" target="_blank" style="color:var(--blue)">v${latest.version}</a>
         &nbsp;·&nbsp; ${sizeKb} &nbsp;·&nbsp; ${published}<br>
-        🛰️ <strong>ESP-Version:</strong> ${espV} — ${cmp}
+        <strong>ESP-Version:</strong> ${espV} — ${cmp}
       `;
     } catch (e) {
-      cur.innerHTML = `📦 <strong>ESP-Version:</strong> ${espV} &nbsp;·&nbsp; <span style="color:var(--red)">GitHub-Abruf fehlgeschlagen: ${e.message}</span>`;
+      cur.innerHTML = `<strong>ESP-Version:</strong> ${espV} &nbsp;·&nbsp; <span style="color:var(--red)">GitHub-Abruf fehlgeschlagen: ${e.message}</span>`;
     }
   }
 
@@ -2127,7 +2124,7 @@
           if (_otaCheckUnsub) { _otaCheckUnsub(); _otaCheckUnsub = null; }
           btnUpdate.disabled = false;
           btnUpdate.textContent = orig;
-          status.innerHTML = `<span style="color:var(--orange)">⚠️ ESP antwortet nicht. Ist er online?</span>`;
+          status.innerHTML = `<span style="color:var(--orange)">ESP antwortet nicht. Ist er online?</span>`;
         }, 90000);
         _otaCheckUnsub = watchCommand(cmdId, async (data) => {
           if (!data) return;
@@ -2145,10 +2142,10 @@
                            : info.includes("verschoben") ? "var(--orange)"
                            : info.includes("fehlgeschlagen") ? "var(--red)"
                            : "var(--text-light)";
-              const icon = info.includes("läuft") ? "🚀" : info.includes("verschoben") ? "⏳" : info.includes("fehlgeschlagen") ? "❌" : "✓";
+              const icon = info.includes("läuft") ? "" : info.includes("verschoben") ? "" : info.includes("fehlgeschlagen") ? "" : "✓";
               status.innerHTML = `<span style="color:${color}">${icon} ${info} (lokal v${cur}, verfügbar v${av})</span>`;
             } else if (av && av !== cur && semverCompare(cur, av) < 0) {
-              status.innerHTML = `<span style="color:var(--green)">🚀 Update auf v${av} läuft — ESP startet gleich neu.</span>`;
+              status.innerHTML = `<span style="color:var(--green)">Update auf v${av} läuft — ESP startet gleich neu.</span>`;
             } else {
               status.innerHTML = `<span style="color:var(--text-light)">✓ ESP ist bereits aktuell (v${cur}).</span>`;
             }
@@ -2158,13 +2155,13 @@
           } else if (data.status === "failed") {
             clearTimeout(timeout);
             _otaCheckUnsub(); _otaCheckUnsub = null;
-            status.innerHTML = `<span style="color:var(--red)">❌ ${data.result?.error || "Update fehlgeschlagen"}</span>`;
+            status.innerHTML = `<span style="color:var(--red)">${data.result?.error || "Update fehlgeschlagen"}</span>`;
             btnUpdate.disabled = false;
             btnUpdate.textContent = orig;
           }
         });
       } catch (e) {
-        status.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+        status.innerHTML = `<span style="color:var(--red)">${e.message}</span>`;
         btnUpdate.disabled = false;
         btnUpdate.textContent = orig;
       }

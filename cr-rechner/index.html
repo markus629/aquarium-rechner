@@ -7,10 +7,7 @@
   <style>
     /* Standard-Tokens zentral aus /assets/app.css; hier nur cr-spezifische */
     :root { --orange-dark: #c45f1f; --yellow: #e6a817; }
-    /* Basis (*, Spinner, body): zentral aus /assets/app.css */
-    header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; overflow:hidden; }
-    header::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:20px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 20'%3E%3Cpath d='M0,10 C200,0 400,20 600,10 C800,0 1000,20 1200,10 L1200,20 L0,20 Z' fill='%23f0f4f8'/%3E%3C/svg%3E") no-repeat; background-size:cover; }
-    /* Header-Texte, Back-Btn, main, Karten: zentral aus /assets/app.css */
+    /* Basis, Header (blaue Leiste), Back-Btn, main, Karten: zentral aus /assets/app.css */
     .param-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; }
     .param-row label { font-weight:600; white-space:nowrap; min-width:180px; }
     .param-row input { width:120px; padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; text-align:right; }
@@ -224,8 +221,8 @@
 
         <h3 style="margin-top:1.5rem;margin-bottom:0.75rem">Einstellungen sichern</h3>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <button class="btn-export" id="exportBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">⬇️ Export JSON</button>
-          <button class="btn-export" id="importBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">⬆️ Import JSON</button>
+          <button class="btn-export" id="exportBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">Export JSON</button>
+          <button class="btn-export" id="importBtn" style="padding:0.55rem 1rem;background:#fff;border:2px solid var(--blue);color:var(--blue-dark);border-radius:8px;font-weight:600;cursor:pointer;font-size:0.9rem;">Import JSON</button>
           <input type="file" id="importFile" accept="application/json" style="display:none;">
         </div>
         <p style="font-size:0.78rem;color:var(--text-light);margin-top:0.6rem;">Sichert alle Einstellungen (Volumen, PSU, Element-Bereiche, C&amp;R Lösungen, ICP-Messwerte) als JSON-Datei. Beim Import werden alle aktuellen Werte überschrieben.</p>
@@ -249,10 +246,10 @@
     <div class="help-diagram">Beispiel: Ca = 390 (opt: 425)
 
 → CaCl2-Lösung direkt ins Becken dosieren
-→ Ca steigt auf ~420 ✅
+→ Ca steigt auf ~420 
 
 Aber: CaCl2 bringt auch Cl mit!
-→ Cl steigt leicht mit ⚠️</div>
+→ Cl steigt leicht mit </div>
     <p>Elemente die bereits <strong>über Optimal</strong> liegen, können ohne Wasserwechsel nicht gesenkt werden. Der Solver ignoriert Überschüsse und gleicht nur Defizite aus, soweit möglich.</p>
   </div>
 
@@ -275,7 +272,7 @@ WC 2: entnehmen → mischen → zugeben
 Die Rezepte unterscheiden sich pro WC,
 weil jeder auf dem Ergebnis des
 vorherigen aufbaut.</div>
-    <p style="margin-top:0.6rem;font-size:0.8rem;color:#6b5900">⚠️ Konzentrierte Lösungen <strong>nicht</strong> direkt ins Becken geben — lokale Spitzen können SPS-Korallen schädigen.</p>
+    <p style="margin-top:0.6rem;font-size:0.8rem;color:#6b5900">Konzentrierte Lösungen <strong>nicht</strong> direkt ins Becken geben — lokale Spitzen können SPS-Korallen schädigen.</p>
   </div>
 
   <footer>
@@ -981,7 +978,7 @@ vorherigen aufbaut.</div>
 
       if (cost(cur, sEL) < 0.0005) {
         const out = document.getElementById('results');
-        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>✅ Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
+        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
         out.classList.remove('hidden');
         out.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
@@ -1074,7 +1071,7 @@ vorherigen aufbaut.</div>
 
       if (cost(cur, sEL) < 0.0005) {
         const out = document.getElementById('results');
-        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>✅ Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
+        out.innerHTML = '<div class="card" style="text-align:center;color:var(--green)"><h2>Alle Werte sind bereits optimal</h2><p>Keine Anpassung nötig.</p></div>';
         out.classList.remove('hidden');
         out.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
@@ -1093,7 +1090,7 @@ vorherigen aufbaut.</div>
 
         // Wir vertrauen dem gewichteten Solver — keine externe Wächter-Logik.
         // Elemente, die nach der Dosierung außerhalb [min,max] landen, werden
-        // im Ergebnis mit ⚠️ markiert (siehe render).
+        // im Ergebnis mit markiert (siehe render).
 
         // Fortschritt prüfen: wird es insgesamt besser?
         const costBefore = cost(curVals, sEL);
@@ -1108,7 +1105,7 @@ vorherigen aufbaut.</div>
 
       if (allSteps.length === 0 && !allGreen(cur, sEL)) {
         const out = document.getElementById('results');
-        out.innerHTML = '<div class="card" style="text-align:center"><h2 style="color:#c0392b">⚠️ Keine Dosierung möglich</h2><p style="margin-top:0.5rem;color:var(--text-light)">Einige Werte liegen außerhalb des Optimums, können aber nicht durch Dosierung verbessert werden, ohne andere Werte zu verschlechtern.<br><strong>Empfehlung:</strong> Nutze „Berechnen" für einen Wasserwechsel.</p></div>';
+        out.innerHTML = '<div class="card" style="text-align:center"><h2 style="color:#c0392b">Keine Dosierung möglich</h2><p style="margin-top:0.5rem;color:var(--text-light)">Einige Werte liegen außerhalb des Optimums, können aber nicht durch Dosierung verbessert werden, ohne andere Werte zu verschlechtern.<br><strong>Empfehlung:</strong> Nutze „Berechnen" für einen Wasserwechsel.</p></div>';
         out.classList.remove('hidden');
         out.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
@@ -1137,7 +1134,7 @@ vorherigen aufbaut.</div>
           <div style="text-align:center;padding:1rem 0">
             <span class="score-big good">0.0%</span>
             <div style="font-size:0.9rem;color:var(--text-light);margin-top:0.25rem">Gesamtabweichung</div>
-            <div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:0.75rem">✅ Alle Werte sind optimal — kein Wasserwechsel nötig!</div>
+            <div style="font-size:1.1rem;font-weight:700;color:var(--green);margin-top:0.75rem">Alle Werte sind optimal — kein Wasserwechsel nötig!</div>
           </div>
         </div>`;
 
@@ -1176,7 +1173,7 @@ vorherigen aufbaut.</div>
       html += `<div class="card summary-card"><h2>${modeLabel}</h2>`;
       if (psuChanged) {
         html += `<div style="background:#e8f4fb;border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:0.75rem;font-size:0.85rem;color:var(--blue-dark)">
-          🧂 Salinität: <strong>${psuVor.toFixed(2)} PSU</strong> (aus ICP) → Ziel <strong>${zielPsu.toFixed(2)} PSU</strong> → erreicht <strong>${psuNach.toFixed(2)} PSU</strong>
+          Salinität: <strong>${psuVor.toFixed(2)} PSU</strong> (aus ICP) → Ziel <strong>${zielPsu.toFixed(2)} PSU</strong> → erreicht <strong>${psuNach.toFixed(2)} PSU</strong>
         </div>`;
       }
       // Zusammenfassung der Phasen
@@ -1276,7 +1273,7 @@ vorherigen aufbaut.</div>
       html += `</tr></thead><tbody>`;
 
       if (hasAnyWC) {
-        html += `<tr style="background:#e8f4fb"><td style="font-weight:700;background:#e8f4fb">💧 Osmosewasser</td>`;
+        html += `<tr style="background:#e8f4fb"><td style="font-weight:700;background:#e8f4fb">Osmosewasser</td>`;
         let sumOsmo = 0;
         steps.forEach(st => {
           if (st.R > 0) sumOsmo += st.osmosis * 1000;
@@ -1331,7 +1328,7 @@ vorherigen aufbaut.</div>
       });
       if (endWarnings.length > 0) {
         const intro = defizitMode
-          ? `⚠️ <strong>Diese Elemente liegen nach der Dosierung außerhalb des Bereichs.</strong> Beim Ausgleich nur über Dosierung (ohne Wasserwechsel) lässt sich das nicht immer vermeiden, weil jede Lösung zwei Ionen einbringt. Falls die Überschreitung kritisch ist, einen Wasserwechsel einplanen.`
+          ? `<strong>Diese Elemente liegen nach der Dosierung außerhalb des Bereichs.</strong> Beim Ausgleich nur über Dosierung (ohne Wasserwechsel) lässt sich das nicht immer vermeiden, weil jede Lösung zwei Ionen einbringt. Falls die Überschreitung kritisch ist, einen Wasserwechsel einplanen.`
           : `<strong>Hinweis:</strong> Einige Werte liegen nach allen Ausgleichen noch außerhalb des Bereichs:`;
         html += `<div class="hint">${intro}<br>${endWarnings.join('<br>')}</div>`;
       }
@@ -1454,11 +1451,11 @@ vorherigen aufbaut.</div>
         const px = v => springL + ((v - lo) / span) * (springR - springL);
         const xMin = px(e.min), xMax = px(e.max), xOpt = px(e.opt);
 
-        // Label (mit ⚠️-Markierung wenn Nachher-Wert außerhalb [min,max])
+        // Label (mit -Markierung wenn Nachher-Wert außerhalb [min,max])
         const outOfRange = av < e.min - 0.001 || av > e.max + 0.001;
         svg += `<text x="33" y="${y+4}" text-anchor="end" font-size="11" font-weight="700" fill="${EL_COLORS[e.key]}">${e.key}</text>`;
         if (outOfRange) {
-          svg += `<text x="40" y="${y+4}" text-anchor="start" font-size="11">⚠️</text>`;
+          svg += `<text x="40" y="${y+4}" text-anchor="start" font-size="11"></text>`;
         }
         // Track + grüner Bereich
         svg += `<rect x="${springL}" y="${y-5}" width="${springR-springL}" height="10" rx="5" fill="#e8ecf0"/>`;

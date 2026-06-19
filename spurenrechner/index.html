@@ -153,13 +153,13 @@
 <main>
 
 <div class="tabs">
-  <button class="tab-btn active" data-tab="tab-main">🧪 Rechner</button>
-  <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+  <button class="tab-btn active" data-tab="tab-main">Rechner</button>
+  <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
 </div>
 
 <div id="tab-settings" class="tab-content">
 <div class="card" id="settingsCard">
-  <h2><span>⚙️ Einstellungen</span></h2>
+  <h2><span>Einstellungen</span></h2>
   <div>
     <p class="info-line">Vorbelegt mit den Werten aus der Excel-Vorlage (normal besetzt). Änderungen werden automatisch gespeichert.</p>
 
@@ -232,7 +232,7 @@
 
 <div id="tab-main" class="tab-content active">
 <div class="card">
-  <h2>🧪 Neue ICP-Messung</h2>
+  <h2>Neue ICP-Messung</h2>
   <div class="form-row">
     <label>Datum</label>
     <input type="date" id="measureDate">
@@ -253,15 +253,15 @@
 
 <div class="card">
   <h2>
-    <span>📋 Historie</span>
+    <span>Historie</span>
     <span style="font-size:0.8rem; font-weight:400; color:var(--text-light);" id="historyCount"></span>
   </h2>
   <div id="historyContainer"></div>
   <div class="btn-row">
-    <button class="btn btn-secondary" id="exportBtn">⬇️ Export JSON</button>
-    <button class="btn btn-secondary" id="importBtn">⬆️ Import JSON</button>
+    <button class="btn btn-secondary" id="exportBtn">Export JSON</button>
+    <button class="btn btn-secondary" id="importBtn">Import JSON</button>
     <input type="file" id="importFile" accept="application/json" style="display:none;">
-    <button class="btn btn-danger" id="clearAllBtn">🗑 Alle löschen</button>
+    <button class="btn btn-danger" id="clearAllBtn">Alle löschen</button>
   </div>
 </div>
 </div>
@@ -1225,7 +1225,7 @@ function renderResults(measured, calc) {
     </table>
 
     <div class="btn-row">
-      <button class="btn btn-primary" id="saveBtn">💾 In Historie speichern</button>
+      <button class="btn btn-primary" id="saveBtn">In Historie speichern</button>
       <button class="btn btn-ghost" id="discardBtn">Verwerfen</button>
     </div>
   `;

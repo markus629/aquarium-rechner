@@ -72,24 +72,22 @@
 </head>
 <body>
 <header>
-  <a href="../" class="back-btn" title="Zurück">←</a>
+  <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
   <h1>Nährstoffmanagement</h1>
   <p>NO₃ &amp; PO₄ messen · automatisch dosieren</p>
 </header>
 
 <main>
-  <div id="view-loading" class="card"><div class="center-state"><div class="icon">⏳</div><p>Lade …</p></div></div>
-  <div id="view-error" class="card" style="display:none"><div class="center-state"><div class="icon">⚠️</div><h3>Etwas ist schiefgegangen</h3><p id="error-message" style="color:var(--red)"></p><button class="btn btn-primary" onclick="location.reload()">Neu laden</button></div></div>
-  <div id="view-login" class="card" style="display:none"><div class="center-state"><div class="icon">🔐</div><h3>Anmeldung erforderlich</h3><p>Nährstoffmanagement braucht ein Konto (Sync zwischen Geräten und ESP).</p><p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p></div></div>
+  <div id="view-loading" class="card"><div class="center-state"><div class="icon"></div><p>Lade …</p></div></div>
+  <div id="view-error" class="card" style="display:none"><div class="center-state"><div class="icon"></div><h3>Etwas ist schiefgegangen</h3><p id="error-message" style="color:var(--red)"></p><button class="btn btn-primary" onclick="location.reload()">Neu laden</button></div></div>
+  <div id="view-login" class="card" style="display:none"><div class="center-state"><div class="icon"></div><h3>Anmeldung erforderlich</h3><p>Nährstoffmanagement braucht ein Konto (Sync zwischen Geräten und ESP).</p><p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p></div></div>
 
   <div id="view-main" style="display:none">
-    <div class="info-banner">ℹ️ <strong>In Entwicklung.</strong> Lernt deinen täglichen NO₃/PO₄-Verbrauch aus den Messungen (Ausgleichsgerade über ein Zeitfenster) und schlägt Erhaltungs- und Korrekturdosen vor. Dosiermengen anfangs gegenprüfen.</div>
-
     <div class="tabs" id="main-tabs">
-      <button class="tab-btn active" data-tab="tab-plan">🧪 Messung &amp; Plan</button>
-      <button class="tab-btn" data-tab="tab-device">📟 Gerät</button>
-      <button class="tab-btn" data-tab="tab-container">🛢️ Kanister</button>
-      <button class="tab-btn" data-tab="tab-settings">⚙️ Einstellungen</button>
+      <button class="tab-btn active" data-tab="tab-plan">Messung &amp; Plan</button>
+      <button class="tab-btn" data-tab="tab-device">Gerät</button>
+      <button class="tab-btn" data-tab="tab-container">Kanister</button>
+      <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
     </div>
 
     <!-- ===== Tab: Messung & Plan ===== -->
@@ -376,7 +374,7 @@
         const to = setTimeout(()=>{
           if(_mdUnsub){ _mdUnsub(); _mdUnsub = null; }
           btn.disabled = false; btn.textContent = orig;
-          alert('⚠️ ESP antwortet nicht. Ist er online und hat die Rolle „Nährstoffmanagement"?');
+          alert('ESP antwortet nicht. Ist er online und hat die Rolle „Nährstoffmanagement"?');
         }, 60000);
         _mdUnsub = watchCommand(cmdId, async (data)=>{
           if(!data) return;
@@ -476,7 +474,7 @@
         <div class="pump-cal-step active">
           <span class="num">2</span><strong>ESP führt aus</strong> — ${statusText}
           <div class="cal-progress"><div class="cal-progress-fill" style="width:${pct}%"></div></div>
-          ${ctx.timedOut ? `<div style="color:var(--red);font-size:0.82rem;margin-top:0.4rem">⚠️ ESP antwortet nicht. Ist er online und hat die Rolle „Nährstoffmanagement"? Nochmal versuchen.</div>` : ""}
+          ${ctx.timedOut ? `<div style="color:var(--red);font-size:0.82rem;margin-top:0.4rem">ESP antwortet nicht. Ist er online und hat die Rolle „Nährstoffmanagement"? Nochmal versuchen.</div>` : ""}
           <button class="btn btn-ghost" id="cal-abort-${pumpIdx}" style="margin-top:0.5rem">Abbrechen</button>
         </div>
         <div class="pump-cal-step idle"><span class="num">3</span>Geförderte ml eintragen → speichern</div>`;
