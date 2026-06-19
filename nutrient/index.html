@@ -6,28 +6,14 @@
 <title>Nährstoffmanagement</title>
 <style>
   /* Farb-Tokens + Tab-Leiste kommen zentral aus /assets/app.css */
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;padding:1rem;max-width:920px;margin:0 auto}
-  header{position:relative;text-align:center;padding:0.5rem 0 1rem}
-  header h1{font-size:1.5rem}
-  header p{color:var(--text-light);font-size:0.9rem}
-  .back-btn{position:absolute;left:0;top:0.3rem;text-decoration:none;color:var(--blue);font-size:1.4rem;font-weight:700}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem;margin-bottom:1rem;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-  h2{font-size:1.1rem;margin-bottom:0.8rem}
-  h3{font-size:0.95rem;margin:1rem 0 0.5rem;color:var(--blue-dark)}
-  .form-row{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.7rem;flex-wrap:wrap}
-  .form-row label{flex:1;min-width:160px;font-size:0.9rem}
-  .form-row input,.form-row select{padding:0.45rem 0.6rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
+  /* Basis, Header, Karten, Buttons, Formular-Basis: zentral aus /assets/app.css */
+  body{max-width:920px;margin:0 auto;padding:1rem}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem}
   @media(max-width:560px){.grid2{grid-template-columns:1fr}}
   .field label{display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-light);font-weight:600;margin-bottom:0.2rem}
   .field input,.field select{width:100%;padding:0.45rem 0.55rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
-  .btn{padding:0.55rem 1rem;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.92rem}
-  .btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-dark)}
-  .btn-ghost{background:#fff;border:2px solid var(--border);color:var(--text)}
-  .btn-danger{background:#fff;border:2px solid var(--red);color:var(--red)}
+  /* Buttons + .hint: zentral aus /assets/app.css */
   /* Pumpen-Kalibrierung (wie Kalk) */
-  .hint{font-weight:400;font-size:0.78rem;color:var(--text-light)}
   .pump-cal{border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:0.7rem}
   .pump-cal .form-row{display:flex;flex-direction:column;align-items:stretch;gap:0.3rem;margin-bottom:0}
   .pump-cal .form-row label{flex:none;min-width:0}
@@ -48,16 +34,8 @@
   .pump-cal-step.idle .num{background:#aabbcc}
   .cal-progress{height:6px;background:#fff;border-radius:3px;overflow:hidden;margin:0.5rem 0}
   .cal-progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue-dark));transition:width 0.3s;width:0%}
-  /* Kanister */
-  .container-item{border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:0.7rem}
-  .container-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
-  .container-head .name{font-weight:700;font-size:1rem}
-  .container-meta{font-size:0.78rem;color:var(--text-light);margin-top:0.15rem}
-  .container-bar{height:10px;background:var(--bg);border-radius:5px;overflow:hidden;margin:0.6rem 0}
-  .container-bar-fill{height:100%;background:var(--green);transition:width 0.3s}
-  .container-bar-fill.low{background:var(--red)}
+  /* Kanister-Balken: zentral aus /assets/app.css */
   .info-banner{background:#eaf4fb;border:1px solid #b9ddf3;border-radius:8px;padding:0.7rem 0.9rem;font-size:0.85rem;margin-bottom:1rem}
-  .center-state{text-align:center;padding:2rem 1rem;color:var(--text-light)}.center-state .icon{font-size:2rem}
   .nut-block{border:1px solid var(--border);border-radius:10px;padding:0.9rem;margin-bottom:0.9rem}
   .nut-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem}
   .nut-head .name{font-weight:700;font-size:1rem}

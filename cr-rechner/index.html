@@ -7,22 +7,10 @@
   <style>
     /* Standard-Tokens zentral aus /assets/app.css; hier nur cr-spezifische */
     :root { --orange-dark: #c45f1f; --yellow: #e6a817; }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
-    input[type="number"] { -moz-appearance:textfield; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    /* Basis (*, Spinner, body): zentral aus /assets/app.css */
     header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; overflow:hidden; }
     header::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:20px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 20'%3E%3Cpath d='M0,10 C200,0 400,20 600,10 C800,0 1000,20 1200,10 L1200,20 L0,20 Z' fill='%23f0f4f8'/%3E%3C/svg%3E") no-repeat; background-size:cover; }
-    header h1 { font-size:1.8rem; font-weight:700; }
-    header p { opacity:0.85; font-size:0.95rem; margin-top:0.25rem; }
-    .back-btn { position:absolute; top:1rem; left:1rem; width:36px; height:36px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5px; background:rgba(255,255,255,0.15); border:none; border-radius:8px; cursor:pointer; padding:0; text-decoration:none; transition:background 0.15s; z-index:2; }
-    .back-btn:hover { background:rgba(255,255,255,0.28); }
-    .back-btn span { display:block; width:18px; height:2px; background:#fff; border-radius:2px; }
-    main { max-width:960px; margin:0 auto; padding:1.5rem 1rem 3rem; }
-    .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
-    .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); }
-    .card h3 { font-size:1rem; color:var(--text); margin:1.25rem 0 0.5rem; }
+    /* Header-Texte, Back-Btn, main, Karten: zentral aus /assets/app.css */
     .param-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; }
     .param-row label { font-weight:600; white-space:nowrap; min-width:180px; }
     .param-row input { width:120px; padding:0.5rem 0.75rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; text-align:right; }

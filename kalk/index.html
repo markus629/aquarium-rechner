@@ -5,59 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kalkmanagement — Aquarium Rechner</title>
 <style>
-  /* Farb-Tokens zentral aus /assets/app.css */
-  * { margin:0; padding:0; box-sizing:border-box; }
-  input[type="number"]::-webkit-inner-spin-button,
-  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
-  input[type="number"] { -moz-appearance:textfield; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
-
-  header { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; padding:1.5rem 2rem; text-align:center; position:relative; }
-  header h1 { font-size:1.6rem; font-weight:700; }
-  header p { opacity:0.85; font-size:0.9rem; margin-top:0.25rem; }
-  footer { text-align:center; padding:1.5rem; font-size:0.8rem; color:var(--text-light); }
-  .back-btn { position:absolute; top:1rem; left:1rem; width:36px; height:36px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:5px; background:rgba(255,255,255,0.15); border:none; border-radius:8px; cursor:pointer; padding:0; text-decoration:none; transition:background 0.15s; z-index:2; }
-  .back-btn:hover { background:rgba(255,255,255,0.28); }
-  .back-btn span { display:block; width:18px; height:2px; background:#fff; border-radius:2px; }
-
-  main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
-  .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
-  .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
-  .card h3 { font-size:0.95rem; color:var(--text-light); margin:1rem 0 0.5rem; text-transform:uppercase; letter-spacing:0.05em; }
-
-  .center-state { text-align:center; padding:2rem 1rem; color:var(--text-light); }
-  .center-state .icon { font-size:3rem; margin-bottom:0.5rem; }
-  .center-state h3 { color:var(--text); margin-bottom:0.5rem; text-transform:none; letter-spacing:0; font-size:1.15rem; }
-  .center-state p { max-width:380px; margin:0 auto 0.6rem; line-height:1.5; }
-
-  .btn { padding:0.6rem 1.2rem; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer; font-family:inherit; transition:transform 0.15s, box-shadow 0.15s; }
-  .btn-primary { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:#fff; box-shadow:0 4px 12px rgba(52,152,219,0.3); }
-  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(52,152,219,0.4); }
-  .btn-ghost { background:#fff; border:2px solid var(--border); color:var(--text); }
-
-  /* Form */
-  .form-row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.9rem; }
-  .form-row label { font-size:0.8rem; font-weight:600; color:#5a6776; }
-  .form-row .hint { font-size:0.72rem; color:var(--text-light); font-weight:400; }
-  .form-row input[type=text], .form-row input[type=number] { padding:0.6rem 0.7rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; }
-  .form-row input[type=text]:focus, .form-row input[type=number]:focus { outline:none; border-color:var(--blue); }
-  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0.9rem 1.2rem; }
-  .form-toggle { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; }
-  .form-toggle input { width:18px; height:18px; cursor:pointer; flex-shrink:0; }
-  .form-toggle label { font-weight:600; font-size:0.88rem; cursor:pointer; flex:1; }
-  .section-title { font-size:0.78rem; font-weight:700; color:var(--blue-dark); text-transform:uppercase; letter-spacing:0.06em; margin:1.3rem 0 0.7rem; padding-bottom:0.3rem; border-bottom:1px solid var(--blue-light); }
-  .section-title:first-child { margin-top:0; }
-  .save-status { font-size:0.78rem; color:var(--green); opacity:0; transition:opacity 0.2s; margin-left:0.5rem; }
-  .save-status.show { opacity:1; }
-
-  /* Tabellen-Look */
-  .data-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
-  .data-table th { text-align:left; padding:0.5rem 0.7rem; background:var(--bg); color:var(--text-light); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid var(--border); }
-  .data-table th.num, .data-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
-  .data-table th.act, .data-table td.act { text-align:center; width:60px; }
-  .data-table td { padding:0.5rem 0.7rem; border-bottom:1px solid #f0f4f8; }
-  .data-table tr:hover td { background:#fafbfc; }
-  .data-table .empty { text-align:center; color:var(--text-light); padding:1.5rem !important; font-style:italic; }
+  /* Basis, Karten, Buttons, Formulare, Tabellen: zentral aus /assets/app.css.
+     Hier nur Kalk-spezifische Komponenten. */
   .row-del { background:none; border:none; color:var(--red); cursor:pointer; font-size:1rem; padding:0.2rem 0.4rem; border-radius:4px; opacity:0.5; }
   .row-del:hover { background:#fadbd8; opacity:1; }
 
@@ -86,20 +35,7 @@
   .inline-form .form-row { margin-bottom:0; flex:1 1 140px; }
   .inline-form button { padding:0.6rem 1.2rem; height:fit-content; }
 
-  /* Chart-Container */
-  .chart-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:0.8rem 1rem; margin-bottom:1rem; }
-  .chart-box svg { width:100%; height:auto; display:block; }
-  .chart-title { font-size:0.85rem; font-weight:600; color:var(--text-light); margin-bottom:0.4rem; display:flex; justify-content:space-between; align-items:center; }
-  .chart-legend { display:flex; gap:1rem; font-size:0.78rem; color:var(--text-light); }
-  .chart-legend-item { display:flex; align-items:center; gap:0.35rem; }
-  .chart-legend-swatch { width:14px; height:3px; border-radius:2px; }
-
-  /* Dashboard Stats */
-  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; }
-  .stat-box { background:var(--bg); border-radius:10px; padding:1rem; text-align:center; }
-  .stat-label { font-size:0.75rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
-  .stat-value { font-size:1.8rem; font-weight:700; color:var(--blue-dark); margin:0.4rem 0 0.2rem; font-variant-numeric:tabular-nums; }
-  .stat-meta { font-size:0.72rem; color:var(--text-light); }
+  /* Charts + Dashboard-Stats: zentral aus /assets/app.css */
 
   /* Plan Summary */
   .plan-summary { background:var(--blue-light); border-radius:8px; padding:0.8rem 1rem; margin-bottom:0.8rem; font-size:0.88rem; }
@@ -126,23 +62,7 @@
   .cal-progress { height:6px; background:#fff; border-radius:3px; overflow:hidden; margin:0.5rem 0; }
   .cal-progress-fill { height:100%; background:linear-gradient(90deg,var(--blue),var(--blue-dark)); transition:width 0.3s; width:0%; }
 
-  /* Container/Pumpen */
-  .container-item { border:1px solid var(--border); border-radius:10px; padding:1rem; margin-bottom:0.8rem; }
-  .container-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; }
-  .container-head .name { font-weight:700; font-size:1rem; }
-  .container-bar { background:var(--bg); border-radius:4px; height:8px; overflow:hidden; margin:0.3rem 0; }
-  .container-bar-fill { background:linear-gradient(90deg,var(--green),var(--blue)); height:100%; transition:width 0.3s; }
-  .container-bar-fill.low { background:linear-gradient(90deg,var(--orange),var(--red)); }
-  .container-meta { font-size:0.78rem; color:var(--text-light); margin-bottom:0.6rem; }
-
-  /* Tab-Leiste zentral aus /assets/app.css */
-
-  .toast { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:#2c3e50; color:#fff; padding:0.7rem 1.2rem; border-radius:8px; font-size:0.9rem; z-index:1001; }
-  .toast.error { background:var(--red); }
-  .toast.success { background:var(--green); }
-
-  .info-banner { background:var(--blue-light); border-left:4px solid var(--blue); padding:0.8rem 1rem; border-radius:6px; font-size:0.88rem; color:var(--blue-dark); margin-bottom:1rem; }
-  .info-banner strong { color:var(--text); }
+  /* Container, Tab-Leiste, Toast, Info-Banner: zentral aus /assets/app.css */
 
   .error-box { background:#fdf2f0; border-left:4px solid var(--red); padding:0.8rem 1rem; border-radius:6px; font-size:0.88rem; color:#7a3030; margin-bottom:1rem; font-family:monospace; }
 </style>
