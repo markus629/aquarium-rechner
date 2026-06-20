@@ -239,6 +239,7 @@
           <div class="field"><label>PO₄ Ziel (mg/l)</label><input type="number" data-setting="targetPO4" step="0.001"></div>
           <div class="field"><label>NO₃ min / max</label><div style="display:flex;gap:0.3rem"><input type="number" data-setting="no3Min" step="0.1"><input type="number" data-setting="no3Max" step="0.1"></div></div>
           <div class="field"><label>PO₄ min / max</label><div style="display:flex;gap:0.3rem"><input type="number" data-setting="po4Min" step="0.001"><input type="number" data-setting="po4Max" step="0.001"></div></div>
+          <div class="field"><label>N:P Zielverhältnis (molar)</label><input type="number" data-setting="npTargetRatio" step="1" min="1" max="60"></div>
         </div>
 
         <h3>Lernen &amp; Dämpfung</h3>
@@ -594,6 +595,7 @@
     dosingsPerDay: ["Dosierungen/Tag", "In wie viele kleine Einzelportionen die tägliche Erhaltungsdosis aufgeteilt wird. Mehr Portionen = gleichmäßigere Nährstoffversorgung über den Tag (weniger Schwankung)."],
     targetNO3: ["NO₃-Ziel", "Wunsch-Konzentration Nitrat, auf die die Regelung hinarbeitet. Die Korrektur zieht den gemessenen Wert dort hin."],
     targetPO4: ["PO₄-Ziel", "Wunsch-Konzentration Phosphat, auf die die Regelung hinarbeitet."],
+    npTargetRatio: ["N:P Zielverhältnis (molar)", "Angestrebtes Verhältnis von Stickstoff zu Phosphat in Mol (Redfield ≈ 16:1). Nur zur INFO/Warnung — die Regelung dosiert weiter auf die NO₃-/PO₄-Ziele. Liegt das gemessene N:P deutlich zu hoch (NO₃ dominiert), droht Phosphat-Limitierung; zu niedrig (PO₄ dominiert) eher Stickstoff-Limitierung/Cyano. Als okay gilt der Bereich Ziel/2 bis Ziel×2."],
     no3Min: ["NO₃-Bereich (min/max)", "Akzeptierter Bereich für Nitrat. Außerhalb wird im Plan deutlich markiert; das Band erscheint grün im Verlauf-Graph."],
     po4Min: ["PO₄-Bereich (min/max)", "Akzeptierter Bereich für Phosphat (grünes Band im Graph)."],
     learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den der Netto-Verbrauch aus der Massenbilanz bestimmt wird: mittlere Dosierrate minus gemessene Steigung. Nur Messungen + Dosierungen aus diesem Fenster zählen. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
@@ -826,6 +828,24 @@
     else { txt="weniger Anstieg als dosiert → Ausfällung/Bindung (läuft sonst als Verbrauch mit)"; col="var(--red)"; }
     return `Dosier-Wirkung: <strong style="color:${col}">${fmt(f,2)}</strong> <span class="muted">(${pct} %, ideal 100 %) — ${txt}</span>`;
   }
+  // N:P-Check (Redfield) — nur Info/Warnung, greift nicht in die Regelung ein.
+  // Molar: N aus NO₃ (÷62·1mol N), P aus PO₄ (÷95·1mol P) → N:P = (NO₃/62)/(PO₄/95).
+  function npCheck(no3, po4){
+    if(no3==null||po4==null||no3<=0||po4<=0)
+      return `<div class="nut-block"><div class="nut-head"><span class="name">N:P-Verhältnis</span><span class="badge b-wait">–</span></div><div class="muted">Noch nicht berechenbar — NO₃ und PO₄ (&gt; 0) nötig.</div></div>`;
+    const molarNP=(no3/62)/(po4/95);
+    const target=parseFloat(settings.npTargetRatio)||16;
+    const lo=target/2, hi=target*2;
+    let cls,txt,btxt;
+    if(molarNP>hi){ cls="b-high"; btxt="NO₃-lastig"; txt="NO₃ hoch im Verhältnis zu PO₄ → Phosphat kann limitieren. Tipp: PO₄-Ziel etwas anheben oder NO₃ senken."; }
+    else if(molarNP<lo){ cls="b-low"; btxt="PO₄-lastig"; txt="PO₄ hoch im Verhältnis zu NO₃ → Stickstoff kann limitieren (Cyano-Risiko). Tipp: NO₃-Ziel anheben oder PO₄ senken."; }
+    else { cls="b-ok"; btxt="ausgewogen"; txt="Ausgewogen — im Redfield-Bereich."; }
+    return `<div class="nut-block">
+      <div class="nut-head"><span class="name">N:P-Verhältnis</span><span class="badge ${cls}">${btxt}</span></div>
+      <div class="muted">Aktuell <strong>${fmt(molarNP, molarNP<10?1:0)} : 1</strong> (molar) · Ziel ~${target}:1 (Redfield, ok ${fmt(lo,0)}–${fmt(hi,0)}) · NO₃ ${fmt(no3,1)} / PO₄ ${fmt(po4,3)} mg/l</div>
+      <div class="rec">${txt}</div>
+    </div>`;
+  }
   function renderNut(o, cfg){
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
@@ -934,7 +954,7 @@
       await savePlan({ dosesPerDay:dpd, intervalSec:Math.max(1,Math.floor(24/dpd))*3600,
         entries:[...(oNo3.entries||[]),...(oPo4.entries||[])].map(e=>({date:e.date,pump:e.pump,ml:e.ml,maint:!!e.isMaintenance})) });
     }catch(_){}
-    document.getElementById("plan-out").innerHTML = renderNut(oNo3,C.no3)+renderNut(oPo4,C.po4);
+    document.getElementById("plan-out").innerHTML = npCheck(oNo3.level, oPo4.level) + renderNut(oNo3,C.no3) + renderNut(oPo4,C.po4);
     renderChart("chart-no3", _no3, _dosings.filter(d=>d.pump===PUMP.N||d.pump===PUMP.C), C.no3, [{pump:PUMP.N,color:"#e8732a",label:"N"},{pump:PUMP.C,color:"#27ae60",label:"C"}]);
     renderChart("chart-po4", _po4, _dosings.filter(d=>d.pump===PUMP.P||d.pump===PUMP.LA), C.po4, [{pump:PUMP.P,color:"#3498db",label:"P"},{pump:PUMP.LA,color:"#27ae60",label:"Lanthan"}]);
     renderHistory(); renderDosingHistory();

@@ -194,6 +194,7 @@ export function defaultSettings() {
     // Zielwerte + Bereiche
     targetNO3: 5,   no3Min: 2,    no3Max: 15,    // mg/l
     targetPO4: 0.05, po4Min: 0.02, po4Max: 0.15, // mg/l
+    npTargetRatio: 16,             // molares Ziel-Verhältnis N:P (Redfield ~16:1)
     // Lernen (Ansatz A: Netto-Verbrauch aus Massenbilanz = Dosierrate − Steigung)
     learnWindowDays: 28,            // 4-Wochen-Fenster für Dosierrate + Steigung
     learnAlpha: 0.5,               // Glättung der Erhaltungsdosis je neuer Messung (0..1)
