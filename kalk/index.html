@@ -466,6 +466,18 @@
             <label>Ziel Calcium (mg/L)</label>
             <input type="number" data-setting="targetCalcium" step="1" min="0" max="1000">
           </div>
+          <div class="form-row">
+            <label>KH min / max (°dKH) <span class="hint">Zielband für „Nächster Test"</span></label>
+            <div style="display:flex;gap:0.4rem"><input type="number" data-setting="khMin" step="0.1" min="0" max="20"><input type="number" data-setting="khMax" step="0.1" min="0" max="20"></div>
+          </div>
+          <div class="form-row">
+            <label>Calcium min / max (mg/L) <span class="hint">Zielband für „Nächster Test"</span></label>
+            <div style="display:flex;gap:0.4rem"><input type="number" data-setting="caMin" step="1" min="0" max="1000"><input type="number" data-setting="caMax" step="1" min="0" max="1000"></div>
+          </div>
+          <div class="form-row">
+            <label>Max-Messintervall (Tage) <span class="hint">spätestens dann messen</span></label>
+            <input type="number" data-setting="maxMeasureDays" step="1" min="1" max="60">
+          </div>
         </div>
 
         <div class="section-title">Maximale Tagesänderung</div>
@@ -1619,6 +1631,40 @@
     } catch (e) { console.warn("Container laden:", e); }
   }
 
+  // Vorhersage „Nächster Test": Drift gegen rechnerischen Soll → Zeit bis Min/Max.
+  // Soll = vom vorletzten Messwert in max-Schritten Richtung Ziel (gilt auch in der
+  // Rampe). Drift/Tag = (Messwert − Soll)/Δt = System-Ungenauigkeit. Gedeckelt durch
+  // Max-Messintervall. items sind absteigend sortiert (items[0] = neueste Messung).
+  function nextTestHTML(items, target, min, max, maxCh, maxMeas, dp, unit){
+    const f=(x,d)=>Number(x).toFixed(d);
+    if(!items || items.length<2)
+      return `<div class="plan-summary" style="font-size:0.85rem;margin-top:0.6rem">Nächster Test: <span style="color:var(--text-light)">– (mind. 2 Messwerte nötig)</span></div>`;
+    const b=items[0], a=items[1];
+    const dt=(b.timestamp-a.timestamp)/86400;
+    if(dt<=0.05) return "";
+    maxMeas=Math.max(1, parseFloat(maxMeas)||7);
+    const gap=target-a.value;
+    const soll=a.value + Math.sign(gap)*Math.min(Math.abs(gap), (maxCh||0)*dt);
+    const drift=(b.value-soll)/dt;
+    let html;
+    if(b.value<min || b.value>max){
+      html=`Nächster Test: <strong style="color:var(--red)">jetzt</strong> — Wert außerhalb ${f(min,dp)}–${f(max,dp)} ${unit}`;
+    } else {
+      let edge=Infinity;
+      if(drift<-1e-9) edge=(b.value-min)/(-drift);
+      else if(drift>1e-9) edge=(max-b.value)/drift;
+      if(!(edge>=0)) edge=Infinity;
+      const days=Math.min(maxMeas, edge);
+      const capped=edge>maxMeas;
+      const d=new Date(Date.now()+days*86400000).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+      const driftTxt=` · Ungenauigkeit ${drift>0?"+":""}${f(drift,dp+1)} ${unit}/Tag`;
+      html = capped
+        ? `Nächster Test: <strong>in ${Math.round(days)} Tagen</strong> <span style="color:var(--text-light)">(${d}, Max-Intervall — sehr stabil)</span>${driftTxt}`
+        : `Nächster Test: <strong>in ${days.toFixed(1)} Tagen</strong> <span style="color:var(--text-light)">(${d})</span>${driftTxt}`;
+    }
+    return `<div class="plan-summary" style="font-size:0.85rem;margin-top:0.6rem">${html}</div>`;
+  }
+
   // ---------- Dosierplan Tab ----------
   async function refreshPlan() {
     try {
@@ -1645,6 +1691,8 @@
         khPlan._currentKH = currentKH;
         khPlan._dailyConsumption = dailyKH;
         renderKHPlan(khPlan, currentKH, dailyKH);
+        document.getElementById("kh-plan-summary").insertAdjacentHTML("beforeend",
+          nextTestHTML(khItems, settings.targetKH, settings.khMin, settings.khMax, settings.maxDailyChangeKH, settings.maxMeasureDays, 1, "°dKH"));
       } else {
         document.getElementById("kh-plan-table").style.display = "none";
         document.getElementById("kh-plan-summary").innerHTML = `<div class="center-state"><p>Erst KH-Messwert eintragen.</p></div>`;
@@ -1664,6 +1712,8 @@
         caPlan._currentCa = currentCa;
         caPlan._dailyConsumption = dailyCa;
         renderCaPlan(caPlan, currentCa, dailyCa);
+        document.getElementById("ca-plan-summary").insertAdjacentHTML("beforeend",
+          nextTestHTML(caItems, settings.targetCalcium, settings.caMin, settings.caMax, settings.maxDailyChangeCalcium, settings.maxMeasureDays, 0, "mg/L"));
       } else {
         document.getElementById("ca-plan-table").style.display = "none";
         document.getElementById("ca-plan-summary").innerHTML = `<div class="center-state"><p>Erst Ca-Messwert eintragen.</p></div>`;

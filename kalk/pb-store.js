@@ -185,6 +185,9 @@ function defaultSettings(volume) {
     aquariumVolume: volume || 450,
     targetKH: 7.5,
     targetCalcium: 420,
+    khMin: 6.5,  khMax: 9.0,        // Zielband KH (°dKH) — für „Nächster Test"
+    caMin: 380,  caMax: 460,        // Zielband Ca (mg/L) — für „Nächster Test"
+    maxMeasureDays: 7,              // spätestens nach so vielen Tagen messen (Cap der Vorhersage)
     historyCount: 5,
     autoDosing: false,
     dosingsPerDay: 12,    // wählbar: 2, 3, 4, 6, 8, 12 (alle teilen 24 sauber)
