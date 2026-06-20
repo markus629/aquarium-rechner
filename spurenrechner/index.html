@@ -205,12 +205,7 @@
         <label>Glättungs-Fenster (Anzahl Messungen)</label>
         <input type="number" id="smoothN" min="1" max="10" step="1" value="3">
       </div>
-      <div class="form-field">
-        <label>Totband (% von Min/Optimal/Max)</label>
-        <input type="number" id="deadbandPct" min="0" max="100" step="5" value="50">
-      </div>
     </div>
-    <p class="info-line" style="font-size:0.78rem;">Ist der Messwert innerhalb dieses Anteils zwischen Optimal und Min/Max, wird die alte Dosis beibehalten (kein Reagieren auf Mess-Rauschen).</p>
 
     <div class="form-row">
       <label>Graph-Zeitraum</label>
@@ -387,22 +382,7 @@ const DEFAULTS = {
   icpIntervalDays: 30, safetyDays: 10,
   capPct: 0.25, chartMonths: 0,
   smoothN: 3,
-  deadbandPct: 0.5,   // 50% des Min/Optimal- bzw. Optimal/Max-Abstands → kein Eingriff
 };
-
-// Asymmetrische Totband-Grenzen (innen halten = keine Korrektur)
-function deadbandBounds(key) {
-  const s = state.settings;
-  const id  = s.ideal[key];
-  const mn  = s.min[key];
-  const mx  = s.max[key];
-  const pct = s.deadbandPct ?? 0;
-  if (id == null || mn == null || mx == null) return null;
-  return {
-    low:  id - pct * (id - mn),
-    high: id + pct * (mx - id)
-  };
-}
 
 // Aus den Mischungs-Settings abgeleitet
 function mixDerived() {
@@ -779,7 +759,7 @@ function buildLimitsTable() {
 
 function bindSettingsScalar(id, field, transform=v=>v) {
   const el = document.getElementById(id);
-  el.value = (field==="capPct" || field==="deadbandPct") ? state.settings[field]*100 : state.settings[field];
+  el.value = (field==="capPct") ? state.settings[field]*100 : state.settings[field];
   el.addEventListener("input", () => {
     let v = parseFloat(el.value);
     if (isNaN(v)) v = 0;
@@ -886,7 +866,6 @@ function renderSettings() {
   buildLimitsTable();
   bindSettingsScalar("capPct",   "capPct", v => v/100);
   bindSettingsScalar("smoothN",  "smoothN");
-  bindSettingsScalar("deadbandPct", "deadbandPct", v => v/100);
   syncStartForm();
   const cm = document.getElementById("chartMonths");
   cm.value = String(state.settings.chartMonths ?? 0);
@@ -1032,8 +1011,7 @@ function calculateAll(measured, measureDate) {
     // Mit hinterlegter Labor-NWG: Annahme Wert = NWG/2 (Analytik-Konvention)
     // → normale Proportional-Rechnung mit dem angenommenen Wert.
     // Ohne NWG: kontrollierter Cap-Schritt nach oben (Fallback).
-    // In beiden Fällen: Totband übersprungen, Glättungs-Paare bleiben sauber
-    // (Annahme ist keine Messung; mess/dose=0 würde das Ansprechverhalten verfälschen).
+    // (Annahme ist keine Messung; mess/dose=0 würde das Ansprechverhalten verfälschen.)
     if (m <= 0) {
       const lo = p * (1 - cap), hi = p * (1 + cap);
       const nwg = state.settings.nwg?.[e.key];
@@ -1064,19 +1042,6 @@ function calculateAll(measured, measureDate) {
         smoothed: null, seriesPoints: 0,
         pairs: [], response: null, raw: hi,
         capLo: lo, capHi: hi, windowN: N,
-        isFirst
-      };
-      return;
-    }
-
-    // Totband: Mess innerhalb [low,high] → keine Korrektur (Anti-Rausch).
-    const db = deadbandBounds(e.key);
-    if (db && m >= db.low && m <= db.high) {
-      out.perElement[e.key] = {
-        value: p, capped: false, unchanged: true, inDeadband: true,
-        prev: p, ideal: id, measured: m,
-        smoothed: null, seriesPoints: 0,
-        deadband: db,
         isFirst
       };
       return;
@@ -1138,8 +1103,6 @@ function renderResults(measured, calc) {
                 ? (r.assumedValue != null
                     ? `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze (${fmt(r.nwg)}). Gerechnet mit NWG/2 = ${fmt(r.assumedValue)} als angenommenem Wert.">${delta > 0.5 ? "▲" : delta < -0.5 ? "▼" : "±"} ${fmt(Math.abs(delta),1)}% &lt;NWG</span>`
                     : `<span class="delta-up" title="Messwert 0 = unter der Nachweisgrenze – ICP kann keine echte Null messen. Keine NWG hinterlegt → Dosis wird kontrolliert um den Cap erhöht. Tipp: NWG des Labors in den Einstellungen eintragen für präzisere Rechnung.">▲ ${fmt(delta,1)}% &lt;NWG</span>`)
-                : r.inDeadband
-                ? `<span style="color:#1a73a7;" title="Messwert im Totband – Dosis unverändert">⊜ Totband</span>`
                 : r.unchanged
                 ? `<span style="color:var(--text-light);" title="kein Messwert eingegeben – Dosis unverändert">unverändert</span>`
                 : delta > 0.5 ? `<span class="delta-up">▲ ${fmt(delta,1)}%</span>`
@@ -1174,7 +1137,7 @@ function renderResults(measured, calc) {
 
   const prevInfo = calc.isFirst
     ? `<em>Erste Messung – Anfangsdosierung wird als Bezug für den Cap (±${fmt(state.settings.capPct*100,0)} %) verwendet.</em>`
-    : `Basis: Dosierung vom ${fmtDate(calc.prevDate)} · Cap ±${fmt(state.settings.capPct*100,0)} % · Glättung über die letzten ${state.settings.smoothN} <em>Messung-Dosis-Paare</em> · Totband ${Math.round(state.settings.deadbandPct*100)} %. Werte in der Spalte <strong>Neue Menge</strong> sind editierbar.`;
+    : `Basis: Dosierung vom ${fmtDate(calc.prevDate)} · Cap ±${fmt(state.settings.capPct*100,0)} % · Glättung über die letzten ${state.settings.smoothN} <em>Messung-Dosis-Paare</em>. Werte in der Spalte <strong>Neue Menge</strong> sind editierbar.`;
 
   root.innerHTML = `
     <h3>Ergebnis</h3>
@@ -1390,16 +1353,6 @@ function buildElementChart(key, name, extras) {
     rangeBand = `<rect x="${ML}" y="${yTop.toFixed(1)}" width="${PW}" height="${(yBot - yTop).toFixed(1)}" fill="#2e9e5a" opacity="0.13"/>`;
   }
 
-  // Totband-Grenzen als blaue gestrichelte Linien
-  let deadbandLines = "";
-  const db = deadbandBounds(key);
-  if (db && db.low > 0 && db.high > db.low) {
-    deadbandLines = `
-      <line x1="${ML}" y1="${yMeas(db.low).toFixed(1)}"  x2="${ML+PW}" y2="${yMeas(db.low).toFixed(1)}"  stroke="#1a73a7" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/>
-      <line x1="${ML}" y1="${yMeas(db.high).toFixed(1)}" x2="${ML+PW}" y2="${yMeas(db.high).toFixed(1)}" stroke="#1a73a7" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/>
-    `;
-  }
-
   // Smoothed (dashed) curves – weighted moving average over last N values up to each point
   let smoothedLines = "";
   let plannedMarker = "";
@@ -1456,7 +1409,6 @@ function buildElementChart(key, name, extras) {
     <svg width="${W}" height="${H}" style="display:block;">
       <rect x="${ML}" y="${MT}" width="${PW}" height="${PH}" fill="#f5f7fa" stroke="#e0e6ec"/>
       ${rangeBand}
-      ${deadbandLines}
       ${idealLine}
       ${measPts ? `<polyline points="${measPts}" fill="none" stroke="#1a73a7" stroke-width="1.5"/>` : ""}
       ${dosePts ? `<polyline points="${dosePts}" fill="none" stroke="#e8732a" stroke-width="1.5"/>` : ""}
@@ -1473,7 +1425,6 @@ function buildElementChart(key, name, extras) {
       <span><span class="ct-swatch" style="background:#e8732a"></span>Dosis (ml/Mischung)</span>
       <span><span class="ct-swatch" style="background:#2e9e5a"></span>Ideal</span>
       ${minVal != null && maxVal != null && maxVal > minVal ? `<span><span class="ct-swatch" style="background:#2e9e5a; opacity:0.25;"></span>Min–Max</span>` : ""}
-      ${db && db.high > db.low ? `<span><span class="ct-swatch" style="background:repeating-linear-gradient(90deg,#1a73a7 0 4px,transparent 4px 7px);"></span>Totband</span>` : ""}
       ${extras.showSmoothed ? `<span><span class="ct-swatch" style="background:repeating-linear-gradient(90deg,#888 0 4px,transparent 4px 7px);"></span>geglättet</span>` : ""}
       ${hasPlanned ? `<span><span class="ct-swatch" style="background:#e8732a; border-radius:50%;"></span>geplante Dosis</span>` : ""}
     </div>
@@ -1534,15 +1485,6 @@ function buildCalcDetail(key, r) {
       <div class="formula">Neue Menge = Vorher × (1 + ${Math.round(state.settings.capPct*100)} %) = ${fmt(r.prev,3)} × ${fmt(1+state.settings.capPct,2)} = <strong>${fmt(r.value,3)} ml</strong></div>
       <p style="font-size:0.72rem;color:var(--text-light);">Tipp: Trage die Nachweisgrenze deines Labors in den Einstellungen (Spalte NWG) ein — dann wird stattdessen mit NWG/2 als angenommenem Wert proportional gerechnet.</p>
       <div class="result-line">→ Neue Menge: ${fmt(r.value,3)} ml</div>
-    </div>`;
-  }
-  if (r.inDeadband) {
-    return `<div class="calc-detail">
-      <h4>${name} (${key})</h4>
-      <p>Messwert <strong>${fmt(r.measured)}</strong> liegt im Totband
-         <strong>${fmt(r.deadband.low,3)} – ${fmt(r.deadband.high,3)}</strong>
-         (${Math.round(state.settings.deadbandPct*100)} % zwischen Optimal ${fmt(r.ideal)} und Min/Max).</p>
-      <p>→ Keine Korrektur. Vorige Dosis bleibt: <strong>${fmt(r.prev,3)} ml</strong>.</p>
     </div>`;
   }
   if (r.unchanged) {

@@ -199,8 +199,6 @@ export function defaultSettings() {
     // Lernen (Ansatz A: Netto-Verbrauch aus Massenbilanz = Dosierrate − Steigung)
     learnWindowDays: 28,            // 4-Wochen-Fenster für Dosierrate + Steigung
     learnAlpha: 0.5,               // Glättung der Erhaltungsdosis je neuer Messung (0..1)
-    deadbandNO3: 1.0,               // mg/l um Ziel -> keine Korrektur
-    deadbandPO4: 0.01,              // mg/l um Ziel -> keine Korrektur
     surplusConfirmDays: 5,          // so lange flach/steigend bei 0-Dosis -> echter Überschuss -> C/Lanthan
     // Sicherheits-Caps (max. Tagesänderung der Konzentration durch unsere Dosis)
     maxDailyChangeNO3: 2.0,         // mg/l/Tag

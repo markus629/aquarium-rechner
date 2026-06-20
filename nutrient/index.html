@@ -248,8 +248,6 @@
           <div class="field"><label>Lern-Glättung α (%)</label><input type="number" data-setting="learnAlpha" data-pct step="1" min="1" max="100"></div>
           <div class="field"><label>Max-Messintervall (Tage)</label><input type="number" data-setting="maxMeasureDays" step="1" min="1" max="60"></div>
           <div class="field"><label>Überschuss-Bestätigung (Tage)</label><input type="number" data-setting="surplusConfirmDays" step="1" min="1"></div>
-          <div class="field"><label>Totband NO₃ (mg/l)</label><input type="number" data-setting="deadbandNO3" step="0.1"></div>
-          <div class="field"><label>Totband PO₄ (mg/l)</label><input type="number" data-setting="deadbandPO4" step="0.001"></div>
           <div class="field"><label>Max NO₃-Änderung/Tag (mg/l)</label><input type="number" data-setting="maxDailyChangeNO3" step="0.1"></div>
           <div class="field"><label>Max PO₄-Änderung/Tag (mg/l)</label><input type="number" data-setting="maxDailyChangePO4" step="0.001"></div>
         </div>
@@ -603,8 +601,6 @@
     learnAlpha: ["Lern-Glättung α (%)", "Wie stark die neu gemessene Verbrauchs-Schätzung die Erhaltungsdosis je neuer Messung verschiebt (0–100 %). Klein = sehr glatt, träge; groß = reaktiv, aber unruhiger. Bei 50 % zählt eine neue Messung zur Hälfte. Verhindert Überreaktion auf einen einzelnen Wert."],
     maxMeasureDays: ["Max-Messintervall (Tage)", "Obergrenze für die Vorhersage „Nächster Test“. Aus den letzten 2 Messungen wird die System-Ungenauigkeit (Drift pro Tag gegen den rechnerischen Soll) bestimmt und hochgerechnet, wann der Wert die Min/Max-Grenze erreicht. Ist das Becken sehr stabil (kaum Drift), würde rechnerisch „nie“ herauskommen — deshalb wird spätestens nach so vielen Tagen zum Messen geraten."],
     surplusConfirmDays: ["Überschuss-Bestätigung (Tage)", "So viele Tage muss der Wert TROTZ 0-Dosierung flach bleiben oder steigen, bevor aktiv abgebaut wird (C bzw. Lanthan). Schützt davor, vorschnell Nährstoffe rauszuziehen — erst Aufbau stoppen, dann beobachten, dann erst abbauen."],
-    deadbandNO3: ["Totband NO₃ (mg/l)", "Toleranz um den Zielwert. Liegt die Messung innerhalb ± diesem Wert, wird NICHT korrigiert — verhindert ständiges Nachregeln auf Mess-Rauschen."],
-    deadbandPO4: ["Totband PO₄ (mg/l)", "Toleranz um den PO₄-Zielwert; innerhalb wird nicht korrigiert (kein Jagen auf Rauschen)."],
     maxDailyChangeNO3: ["Max NO₃-Änderung/Tag", "Sicherheits-Obergrenze: So viel mg/l darf unsere Dosierung den NO₃-Wert pro Tag höchstens verändern. Deckelt Korrektur und Erhaltungs-Anpassung gegen zu schnelle Sprünge."],
     maxDailyChangePO4: ["Max PO₄-Änderung/Tag", "Sicherheits-Obergrenze für die tägliche PO₄-Änderung durch unsere Dosierung."],
     coeffN_NO3: ["N → NO₃", "Herstellerangabe: um wie viel mg/l NO₃ 1 ml N-Lösung pro 100 L anhebt (theoretisch ~1,1). Real meist weniger, weil ein Teil des Stickstoffs verbraucht wird, bevor NO₃ daraus entsteht — der effektive Faktor wird später aus deiner Historie gelernt."],
@@ -688,7 +684,7 @@
     d.setHours(h+plus,10,0,0); return Math.floor(d.getTime()/1000);
   }
 
-  // Regelung pro Nährstoff. cfg: {key,label,up,down,target,min,max,coeffUp,effUp,deadband,maxDaily,downLabel,downSpecific}
+  // Regelung pro Nährstoff. cfg: {key,label,up,down,target,min,max,coeffUp,effUp,maxDaily,downLabel,downSpecific}
   function controlFor(cfg, measAsc, dosingsAsc){
     const now=Date.now()/1000;
     const cutoff=now - settings.learnWindowDays*DAY;
@@ -773,12 +769,12 @@
         if(dt<=0) continue;
         const upMl=(dosingsAsc||[]).reduce((s,d)=>(d.pump===cfg.up && d.timestamp>t1 && d.timestamp<=t2)?s+(d.ml||0):s,0);
         const expExtra=(upMl - D*dt)*effUp;          // erwarteter Extra-Anstieg (über Erhaltung)
-        if(expExtra > 0.5*cfg.deadband){             // nur klare Aufdosier-Phasen zählen
+        if(expExtra > 0.05*cfg.target){              // nur klare Aufdosier-Phasen zählen
           sumAct+=(win[i].value - win[i-1].value);
           sumExp+=expExtra;
         }
       }
-      if(sumExp > cfg.deadband) out.effFactor=sumAct/sumExp;
+      if(sumExp > 0.1*cfg.target) out.effFactor=sumAct/sumExp;
     }
 
     // --- 2) Höhe -> kalk-style Plan (Erhaltung ∞ + gerampte Anpassung, max/Tag) ---
@@ -789,7 +785,7 @@
     const maxPerIntC=settings["maxDailyChange"+cfg.suf]/dosesPerDay;   // max mg/l je Intervall
     const first=nextDoseHour(now,intH);
     out.maintPerDose=maintPerDose; out.entries=[]; out.durationDays=0;
-    const tooLow=lvl<cfg.target-cfg.deadband, tooHigh=lvl>cfg.target+cfg.deadband;
+    const tooLow=lvl<cfg.target, tooHigh=lvl>cfg.target;
 
     if(!tooLow && !tooHigh){
       out.status="ok"; out.badge="ok"; state[cfg.key+"_surplusSince"]=0;
@@ -971,10 +967,10 @@
   function cfgs(){
     return {
       no3:{ key:"no3", suf:"NO3", label:"NO₃ (Nitrat)", dp:1, color:"#e8732a",
-            target:settings.targetNO3, min:settings.no3Min, max:settings.no3Max, deadband:settings.deadbandNO3,
+            target:settings.targetNO3, min:settings.no3Min, max:settings.no3Max,
             up:PUMP.N, coeffUp:settings.coeffN_NO3, down:PUMP.C, downLabel:"C (Kohlenstoff)", downSpecific:false, startUp:settings.startDoseN, startDown:settings.startDoseC },
       po4:{ key:"po4", suf:"PO4", label:"PO₄ (Phosphat)", dp:3, color:"#3498db",
-            target:settings.targetPO4, min:settings.po4Min, max:settings.po4Max, deadband:settings.deadbandPO4,
+            target:settings.targetPO4, min:settings.po4Min, max:settings.po4Max,
             up:PUMP.P, coeffUp:settings.coeffP_PO4, down:PUMP.LA, coeffDown:settings.coeffLa_PO4, downLabel:"Lanthan", downSpecific:true, startUp:settings.startDoseP, startDown:settings.startDoseLa },
     };
   }
