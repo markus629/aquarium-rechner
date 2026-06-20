@@ -246,6 +246,7 @@
         <div class="grid2">
           <div class="field"><label>Lern-Fenster (Tage)</label><input type="number" data-setting="learnWindowDays" step="1" min="3"></div>
           <div class="field"><label>Lern-Glättung α (%)</label><input type="number" data-setting="learnAlpha" data-pct step="1" min="1" max="100"></div>
+          <div class="field"><label>Max-Messintervall (Tage)</label><input type="number" data-setting="maxMeasureDays" step="1" min="1" max="60"></div>
           <div class="field"><label>Überschuss-Bestätigung (Tage)</label><input type="number" data-setting="surplusConfirmDays" step="1" min="1"></div>
           <div class="field"><label>Totband NO₃ (mg/l)</label><input type="number" data-setting="deadbandNO3" step="0.1"></div>
           <div class="field"><label>Totband PO₄ (mg/l)</label><input type="number" data-setting="deadbandPO4" step="0.001"></div>
@@ -600,6 +601,7 @@
     po4Min: ["PO₄-Bereich (min/max)", "Akzeptierter Bereich für Phosphat (grünes Band im Graph)."],
     learnWindowDays: ["Lern-Fenster (Tage)", "Zeitraum, über den der Netto-Verbrauch aus der Massenbilanz bestimmt wird: mittlere Dosierrate minus gemessene Steigung. Nur Messungen + Dosierungen aus diesem Fenster zählen. Größer = stabiler/träger (mittelt Schwankungen), kleiner = reaktiver, aber unruhiger. Ob du 2× oder 8× misst, ist egal — es zählt die abgedeckte Zeit."],
     learnAlpha: ["Lern-Glättung α (%)", "Wie stark die neu gemessene Verbrauchs-Schätzung die Erhaltungsdosis je neuer Messung verschiebt (0–100 %). Klein = sehr glatt, träge; groß = reaktiv, aber unruhiger. Bei 50 % zählt eine neue Messung zur Hälfte. Verhindert Überreaktion auf einen einzelnen Wert."],
+    maxMeasureDays: ["Max-Messintervall (Tage)", "Obergrenze für die Vorhersage „Nächster Test“. Aus den letzten 2 Messungen wird die System-Ungenauigkeit (Drift pro Tag gegen den rechnerischen Soll) bestimmt und hochgerechnet, wann der Wert die Min/Max-Grenze erreicht. Ist das Becken sehr stabil (kaum Drift), würde rechnerisch „nie“ herauskommen — deshalb wird spätestens nach so vielen Tagen zum Messen geraten."],
     surplusConfirmDays: ["Überschuss-Bestätigung (Tage)", "So viele Tage muss der Wert TROTZ 0-Dosierung flach bleiben oder steigen, bevor aktiv abgebaut wird (C bzw. Lanthan). Schützt davor, vorschnell Nährstoffe rauszuziehen — erst Aufbau stoppen, dann beobachten, dann erst abbauen."],
     deadbandNO3: ["Totband NO₃ (mg/l)", "Toleranz um den Zielwert. Liegt die Messung innerhalb ± diesem Wert, wird NICHT korrigiert — verhindert ständiges Nachregeln auf Mess-Rauschen."],
     deadbandPO4: ["Totband PO₄ (mg/l)", "Toleranz um den PO₄-Zielwert; innerhalb wird nicht korrigiert (kein Jagen auf Rauschen)."],
@@ -730,6 +732,34 @@
     }
     state[cfg.key+"_maint"]=D; out.maintMl=D;
 
+    // --- Vorhersage: nächster Messtermin ---
+    // Soll(b) = vom vorletzten Messwert in max-Schritten Richtung Ziel (gilt auch
+    // während der Rampe — wir kennen ja den rechnerischen Soll). Drift/Tag =
+    // (Messwert − Soll)/Δt = System-Ungenauigkeit. Zeit bis Min/Max-Grenze,
+    // gedeckelt durch Max-Messintervall. Ohne Sicherheitspuffer, ohne Rausch-Schwelle.
+    out.nextDays=null; out.driftDay=null; out.cappedMax=false; out.outOfRange=false;
+    const maxMeas=Math.max(1, parseFloat(settings.maxMeasureDays)||7);
+    if(win.length>=2){
+      const a=win[win.length-2], b=win[win.length-1];
+      const dt=(b.timestamp-a.timestamp)/DAY;
+      if(dt>0.05){
+        const maxCh=settings["maxDailyChange"+cfg.suf]||0;
+        const gap=cfg.target-a.value;
+        const soll=a.value + Math.sign(gap)*Math.min(Math.abs(gap), maxCh*dt); // rechnerischer Soll bei b
+        const drift=(b.value-soll)/dt;                                          // mg/l je Tag (Ungenauigkeit)
+        out.driftDay=drift;
+        if(b.value<cfg.min || b.value>cfg.max){ out.nextDays=0; out.outOfRange=true; }
+        else {
+          let edge=Infinity;
+          if(drift<-1e-9) edge=(b.value-cfg.min)/(-drift);     // fällt → Richtung Min
+          else if(drift>1e-9) edge=(cfg.max-b.value)/drift;    // steigt → Richtung Max
+          if(!(edge>=0)) edge=Infinity;
+          out.nextDays=Math.min(maxMeas, edge);
+          out.cappedMax=(edge>maxMeas);
+        }
+      }
+    }
+
     // --- Dosier-Wirkung (nur INFO, kein Stellhebel) ---
     // Vergleicht in AUFDOSIER-Phasen (Dosis über Erhaltung hinaus) den tatsächlichen
     // mit dem laut Flasche erwarteten Anstieg. ~1 = wirkt wie erwartet; >1 = mehr im
@@ -846,6 +876,14 @@
       <div class="rec">${txt}</div>
     </div>`;
   }
+  function nextTestInfo(o, cfg){
+    if(o.outOfRange) return `Nächster Test: <strong style="color:var(--red)">jetzt</strong> — Wert außerhalb ${fmt(cfg.min,cfg.dp)}–${fmt(cfg.max,cfg.dp)}`;
+    if(o.nextDays==null) return `Nächster Test: <span class="muted">– (mind. 2 Messungen nötig)</span>`;
+    const d=new Date(Date.now()+o.nextDays*DAY*1000).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+    const driftTxt = o.driftDay==null ? "" : ` · Ungenauigkeit ${o.driftDay>0?"+":""}${fmt(o.driftDay,3)} mg/l/Tag`;
+    if(o.cappedMax) return `Nächster Test: <strong>in ${fmt(o.nextDays,0)} Tagen</strong> <span class="muted">(${d}, Max-Intervall — sehr stabil)</span>${driftTxt}`;
+    return `Nächster Test: <strong>in ${fmt(o.nextDays,1)} Tagen</strong> <span class="muted">(${d})</span>${driftTxt}`;
+  }
   function renderNut(o, cfg){
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
@@ -860,6 +898,7 @@
       <div class="muted">Aktuell <span class="nut-val">${fmt(o.level,cfg.dp)}</span> mg/l · Ziel ${fmt(cfg.target,cfg.dp)} · Trend ${slopeTxt} · ${o.n} Messungen / ${fmt(o.coverage,1)} Tage${balTxt}</div>
       ${rec||'<div class="rec muted">keine Dosier-Empfehlung</div>'}
       <div class="rec" style="font-size:0.82rem">${effFactorInfo(o.effFactor)}</div>
+      <div class="rec" style="font-size:0.82rem">${nextTestInfo(o,cfg)}</div>
       <div class="muted" style="margin-top:0.3rem">${o.statusText}</div>
     </div>`;
   }
