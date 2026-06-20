@@ -70,13 +70,12 @@
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-<header>
-  <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
-  <h1>Nährstoffmanagement</h1>
-  <p>NO₃ &amp; PO₄ messen · automatisch dosieren</p>
-</header>
-
 <main>
+  <header>
+    <a href="../" class="back-btn" title="Zurück zur Übersicht" aria-label="Zurück zur Übersicht"><span></span><span></span><span></span></a>
+    <h1>Nährstoffmanagement</h1>
+    <p>NO₃ &amp; PO₄ messen · automatisch dosieren</p>
+  </header>
   <div id="view-loading" class="card"><div class="center-state"><div class="icon"></div><p>Lade …</p></div></div>
   <div id="view-error" class="card" style="display:none"><div class="center-state"><div class="icon"></div><h3>Etwas ist schiefgegangen</h3><p id="error-message" style="color:var(--red)"></p><button class="btn btn-primary" onclick="location.reload()">Neu laden</button></div></div>
   <div id="view-login" class="card" style="display:none"><div class="center-state"><div class="icon"></div><h3>Anmeldung erforderlich</h3><p>Nährstoffmanagement braucht ein Konto (Sync zwischen Geräten und ESP).</p><p>Klick oben rechts auf <strong>„Anmelden"</strong>.</p></div></div>
