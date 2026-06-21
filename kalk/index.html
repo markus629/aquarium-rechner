@@ -735,12 +735,13 @@
 
   // Event-Handler für alle Settings-Inputs
   document.querySelectorAll("[data-setting]").forEach(inp => {
-    const evt = inp.type === "checkbox" ? "change" : "change"; // bei number-input feuert change beim blur
-    inp.addEventListener(evt, () => {
-      persistSetting(inp.dataset.setting, getInputValue(inp));
+    inp.addEventListener("change", async () => {   // number-input feuert change beim blur
+      await persistSetting(inp.dataset.setting, getInputValue(inp));
       if (inp.dataset.setting === "aquariumVolume") { setAquariumLiters(getInputValue(inp)); }
       // Spezialfall: Auto-Dosing-Checkbox steuert das dosingsPerDay-Feld
       if (inp.dataset.setting === "autoDosing") syncDosingsPerDayEnabled();
+      // Plan + Vorhersage ("Nächster Test") nach jeder Settings-Änderung neu rechnen
+      refreshPlan();
     });
   });
 
