@@ -73,11 +73,7 @@
   table.limits-table input:focus, table.limits-table select:focus { outline:none; border-color:var(--blue); }
   table.limits-table .el-name { font-weight:600; }
   table.limits-table .el-sym { color:var(--text-light); font-weight:400; font-size:0.8rem; margin-left:0.25rem; }
-  .row-action { width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; font-size:0.95rem; line-height:1; font-weight:700; display:inline-flex; align-items:center; justify-content:center; transition:filter 0.15s; }
-  .row-action.edit   { background:#e8eef5; color:#5a6a7a; }
-  .row-action.danger { background:#f5e3e3; color:#b13030; }
-  .row-action.save   { background:#dff0d8; color:#2e7d32; }
-  .row-action:hover  { filter:brightness(0.92); }
+  /* .row-action (Aktions-Icons) zentral aus /assets/app.css */
   #new-element-row td { background:#f0f7ff; }
   table.limits-table tr.row-editing td { background:#fff8e6; }
   .modal-backdrop { position:fixed; inset:0; background:rgba(20,28,40,0.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
@@ -122,7 +118,6 @@
   .row-actions { display:flex; gap:0.3rem; }
   .icon-btn { background:transparent; border:none; cursor:pointer; padding:0.3rem; font-size:0.95rem; color:var(--text-light); border-radius:4px; }
   .icon-btn:hover { background:var(--bg); color:var(--text); }
-  .icon-btn.del:hover { color:var(--red); }
   .empty { text-align:center; color:var(--text-light); padding:1.5rem; font-style:italic; }
   .info-line { font-size:0.85rem; color:var(--text-light); margin-bottom:0.75rem; }
   .chart-tooltip { position:absolute; z-index:300; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:0.5rem 0.6rem 0.4rem; pointer-events:none; display:none; }
@@ -564,7 +559,7 @@ function buildLimitsTable() {
       <td class="num">${numIn("nwg",     e.key)}</td>
       <td class="action-cell" style="white-space:nowrap;">
         <button type="button" class="row-action save" data-action="save-edit" data-key="${e.key}" title="Speichern">✓</button>
-        <button type="button" class="row-action danger" data-action="delete" data-key="${e.key}" title="Element löschen" style="margin-left:0.2rem;">−</button>
+        <button type="button" class="row-action danger" data-action="delete" data-key="${e.key}" title="Element löschen" style="margin-left:0.2rem;">✕</button>
       </td>
     </tr>`;
   const elementRow = e => editingElementKey === e.key ? elementRowEditable(e) : elementRowReadOnly(e);
@@ -1606,7 +1601,7 @@ function renderHistory() {
       ${measuredCells}
       <td><div class="row-actions">
         <button class="icon-btn expand" data-id="${m.id}" title="Details">▾</button>
-        <button class="icon-btn del" data-id="${m.id}" title="Löschen">✕</button>
+        <button class="row-action danger del" data-id="${m.id}" title="Löschen">✕</button>
       </div></td>
     </tr>${detailRow}`;
   }).join("");
@@ -1630,7 +1625,7 @@ function renderHistory() {
     th.addEventListener("mouseenter", () => showElementChart(th, th.dataset.elkey));
     th.addEventListener("mouseleave", hideElementChart);
   });
-  c.querySelectorAll(".icon-btn.del").forEach(b => b.addEventListener("click", () => {
+  c.querySelectorAll(".row-action.del").forEach(b => b.addEventListener("click", () => {
     const m = state.measurements.find(x => x.id === b.dataset.id);
     if (!m) return;
     if (!confirm(`Messung vom ${fmtDate(m.date)} wirklich löschen?`)) return;

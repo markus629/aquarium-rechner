@@ -49,6 +49,13 @@ main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
 .btn-ghost { background:#fff; border:2px solid var(--border); color:var(--text); }
 .btn-danger { background:#fff; border:2px solid var(--red); color:var(--red); }
 
+/* Tabellen-Aktions-Icons (rund): bearbeiten / speichern / löschen — einheitlich */
+.row-action { width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; font-size:0.95rem; line-height:1; font-weight:700; display:inline-flex; align-items:center; justify-content:center; transition:filter 0.15s; font-family:inherit; padding:0; }
+.row-action.edit { background:#e8eef5; color:#5a6a7a; }
+.row-action.danger { background:#f5e3e3; color:#b13030; }
+.row-action.save { background:#dff0d8; color:#2e7d32; }
+.row-action:hover { filter:brightness(0.92); }
+
 /* Formular */
 .form-row { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.9rem; }
 .form-row label { font-size:0.8rem; font-weight:600; color:#5a6776; }

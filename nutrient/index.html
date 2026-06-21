@@ -952,7 +952,7 @@
     all.sort((a,b)=>b.timestamp-a.timestamp); all=all.slice(0,300);
     const el=document.getElementById("hist-out");
     if(all.length===0){ el.innerHTML=`<p class="muted" style="padding:0.6rem">Keine Messungen.</p>`; return; }
-    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.typ}</td><td class="num">${fmt(m.value,m.dp)}</td><td style="text-align:right"><button class="btn btn-danger" style="padding:0.1rem 0.45rem;font-size:0.72rem" data-del="${m.id}">−</button></td></tr>`).join("")}</tbody></table>`;
+    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.typ}</td><td class="num">${fmt(m.value,m.dp)}</td><td style="text-align:right"><button class="row-action danger" data-del="${m.id}" title="Löschen">✕</button></td></tr>`).join("")}</tbody></table>`;
     el.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
   }
   function renderDosingHistory(){

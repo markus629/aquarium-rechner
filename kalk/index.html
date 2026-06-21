@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kalkmanagement — Aquarium Rechner</title>
 <style>
-  /* Basis, Karten, Buttons, Formulare, Tabellen: zentral aus /assets/app.css.
+  /* Basis, Karten, Buttons, Formulare, Tabellen, Aktions-Icons: zentral aus /assets/app.css.
      Hier nur Kalk-spezifische Komponenten. */
-  .row-del { background:none; border:none; color:var(--red); cursor:pointer; font-size:1rem; padding:0.2rem 0.4rem; border-radius:4px; opacity:0.5; }
-  .row-del:hover { background:#fadbd8; opacity:1; }
 
   /* Collapsible */
   .collapsible { border:1px solid var(--border); border-radius:8px; margin-bottom:0.8rem; overflow:hidden; }
@@ -909,7 +907,7 @@
         <td>${fmtDateTime(m.timestamp)}</td>
         <td class="num">${Number(m.value).toFixed(fractionDigits)}</td>
         <td class="act">
-          <button class="row-del" data-del-id="${m.id}" data-del-type="${type}" title="Löschen">✕</button>
+          <button class="row-action danger" data-del-id="${m.id}" data-del-type="${type}" title="Löschen">✕</button>
         </td>
       </tr>
     `).join("");
@@ -1131,7 +1129,7 @@
             <td>${fmtDateTime(m.timestamp)}</td>
             <td class="num">${Number(m.value).toFixed(2)}</td>
             <td>${m.source === "esp" ? "ESP" : "Manuell"}</td>
-            <td class="act"><button class="row-del" data-del-ph="${m.id}" title="Löschen">✕</button></td>
+            <td class="act"><button class="row-action danger" data-del-ph="${m.id}" title="Löschen">✕</button></td>
           </tr>`;
         }).join("");
         tbody.querySelectorAll("[data-del-ph]").forEach(btn => {
@@ -1440,7 +1438,7 @@
         <td class="num">${Number(d.ml).toFixed(2)} ml</td>
         <td>${TYPE_LABEL[d.dosageType] || d.dosageType || "—"}</td>
         <td>${d.isAutomatic ? "Auto" : "Manuell"}${d.success === false ? " " : ""}</td>
-        <td class="act"><button class="row-del" data-del-dos="${d.id}" title="Löschen">✕</button></td>
+        <td class="act"><button class="row-action danger" data-del-dos="${d.id}" title="Löschen">✕</button></td>
       </tr>`).join("");
     tbody.querySelectorAll("[data-del-dos]").forEach(btn => {
       btn.onclick = async () => {
