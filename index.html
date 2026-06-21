@@ -224,6 +224,7 @@
               <button id="quick-save">Speichern</button>
             </div>
             <div class="quick-msg" id="quick-msg"></div>
+            <div id="kh-next" style="font-size:0.78rem;color:var(--text-light);margin:0.1rem 0 0.4rem"></div>
             <div class="canister-bars" id="canister-bars">
               <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
             </div>
@@ -253,6 +254,7 @@
               <button id="nut-save">Speichern</button>
             </div>
             <div class="quick-msg" id="nut-msg"></div>
+            <div id="nut-next" style="font-size:0.78rem;color:var(--text-light);margin:0.1rem 0 0.4rem"></div>
             <div class="canister-bars" id="nut-bars">
               <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
             </div>
@@ -270,11 +272,40 @@
   <script type="module">
     import { initAuthSync } from "./assets/auth-sync.js";
     import {
-      getAuthInstance, getSettings, addMeasurement
+      getAuthInstance, getSettings, addMeasurement, listMeasurements
     } from "./kalk/pb-store.js";
     import {
-      getSettings as getNutSettings, addMeasurement as addNutMeasurement
+      getSettings as getNutSettings, addMeasurement as addNutMeasurement, listMeasurements as listNutMeasurements
     } from "./nutrient/nutri-store.js";
+
+    // Vorhersage „Nächster Test": Drift gegen rechnerischen Soll (letzte 2 Messwerte)
+    // → Tage bis Min/Max, gedeckelt durch Max-Messintervall. items absteigend (0 = neuste).
+    function nextTestDays(items, target, min, max, maxCh, maxMeas){
+      maxMeas = Math.max(1, parseFloat(maxMeas)||7);
+      if(!items || items.length<2) return null;
+      const b=items[0], a=items[1];
+      const dt=(b.timestamp-a.timestamp)/86400;
+      if(dt<=0.05) return null;
+      if(b.value<min || b.value>max) return { days:0, out:true };
+      const gap=target-a.value;
+      const soll=a.value + Math.sign(gap)*Math.min(Math.abs(gap), (maxCh||0)*dt);
+      const drift=(b.value-soll)/dt;
+      let edge=Infinity;
+      if(drift<-1e-9) edge=(b.value-min)/(-drift);
+      else if(drift>1e-9) edge=(max-b.value)/drift;
+      if(!(edge>=0)) edge=Infinity;
+      return { days:Math.min(maxMeas, edge), capped:edge>maxMeas };
+    }
+    // kürzeste Vorhersage über mehrere Elemente als grauer Text
+    function nextTestText(preds){
+      const real=preds.filter(p=>p && p.r).map(p=>({label:p.label, ...p.r}));
+      if(!real.length) return "";
+      if(real.some(p=>p.out)){ const o=real.find(p=>p.out); return `Nächster Test: jetzt (${o.label} außerhalb)`; }
+      real.sort((x,y)=>x.days-y.days);
+      const s=real[0];
+      const d=s.days>=1 ? Math.round(s.days) : s.days.toFixed(1);
+      return `Nächster Test: in ${d} Tagen (${s.label})`;
+    }
 
     await initAuthSync({
       calculatorId: "_overview",
@@ -322,6 +353,15 @@
       try {
         const settings = await getSettings();
         renderBars(settings);
+        try {
+          const kh = await listMeasurements("kh", 5);
+          const ca = await listMeasurements("ca", 5);
+          const txt = nextTestText([
+            { label:"KH", r: nextTestDays(kh, settings.targetKH, settings.khMin, settings.khMax, settings.maxDailyChangeKH, settings.maxMeasureDays) },
+            { label:"Ca", r: nextTestDays(ca, settings.targetCalcium, settings.caMin, settings.caMax, settings.maxDailyChangeCalcium, settings.maxMeasureDays) }
+          ]);
+          document.getElementById("kh-next").textContent = txt;
+        } catch (_) {}
       } catch (e) {
         bars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`;
       }
@@ -352,7 +392,7 @@
     };
 
     // --- Nährstoff-Kachel (analog Kalk) ---
-    const NUT_PUMP_NAMES = ["Stickstoff (N)", "Phosphat (P)", "Kohlenstoff (C)", "Lanthan"];
+    const NUT_PUMP_NAMES = ["Stickstoff", "Phosphat", "Kohlenstoff", "Lanthan"];
     const nutNeedLogin = document.getElementById("nut-need-login");
     const nutControls  = document.getElementById("nut-controls");
     const nutMsg = document.getElementById("nut-msg");
@@ -377,7 +417,19 @@
       }).join("");
     }
     async function loadNutSettings() {
-      try { renderNutBars(await getNutSettings()); }
+      try {
+        const s = await getNutSettings();
+        renderNutBars(s);
+        try {
+          const no3 = (await listNutMeasurements("no3", 5)) || [];
+          const po4 = (await listNutMeasurements("po4", 5)) || [];
+          const txt = nextTestText([
+            { label:"NO₃", r: nextTestDays(no3, s.targetNO3, s.no3Min, s.no3Max, s.maxDailyChangeNO3, s.maxMeasureDays) },
+            { label:"PO₄", r: nextTestDays(po4, s.targetPO4, s.po4Min, s.po4Max, s.maxDailyChangePO4, s.maxMeasureDays) }
+          ]);
+          document.getElementById("nut-next").textContent = txt;
+        } catch (_) {}
+      }
       catch (e) { nutBars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`; }
     }
     nutSave.onclick = async () => {
