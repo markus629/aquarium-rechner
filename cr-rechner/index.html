@@ -19,8 +19,7 @@
     .param-cell .unit { color:var(--text-light); font-size:0.9rem; }
     .toggle-btn { padding:0.45rem 0.8rem; border:2px solid #ccc; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; background:#e8e8e8; color:#888; transition:all 0.2s; }
     .toggle-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
-    .help-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#e0e4ea; color:#5a6a7a; font-size:0.7rem; font-weight:700; cursor:pointer; border:none; margin-left:0.3rem; vertical-align:middle; flex-shrink:0; }
-    .help-btn:hover { background:var(--blue); color:#fff; }
+    /* .info-i (rundes „?"/„i") zentral aus /assets/app.css */
     .help-popup { display:none; position:fixed; z-index:1000; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.2); padding:1rem 1.2rem; max-width:340px; font-size:0.85rem; line-height:1.5; color:var(--text); }
     .help-popup.show { display:block; }
     .help-popup .help-close { position:absolute; top:0.4rem; right:0.6rem; background:none; border:none; font-size:1.2rem; cursor:pointer; color:#aaa; }
@@ -40,8 +39,7 @@
     .input-ok input { border-color:var(--green); }
     .input-warn input { border-color:var(--yellow); }
     .input-bad input { border-color:var(--red); }
-    .btn-calculate { display:block; width:100%; max-width:320px; margin:0 auto 1.5rem; padding:0.85rem 2rem; background:linear-gradient(135deg,var(--orange),var(--orange-dark)); color:#fff; border:none; border-radius:10px; font-size:1.1rem; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(232,115,42,0.3); transition:transform 0.15s,box-shadow 0.15s; }
-    .btn-calculate:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(232,115,42,0.4); }
+    /* .btn-calculate zentral aus /assets/app.css */
     .hidden { display:none !important; }
     .results-section { animation:fadeIn 0.4s ease; }
     @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
@@ -93,8 +91,7 @@
     .sol-item .sol-sep { color:#ccc; text-align:center; }
 
     /* Info-Popup */
-    .info-btn { width:22px; height:22px; border-radius:50%; border:1.5px solid var(--blue); background:none; color:var(--blue); font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
-    .info-btn:hover { background:var(--blue); color:#fff; }
+    /* .info-i zentral aus /assets/app.css (ersetzt .info-btn) */
     circle.sol-info-ring, text.sol-info-txt { transition:all 0.15s; }
     circle[fill="transparent"]:hover + circle.sol-info-ring { fill:var(--blue); stroke:var(--blue); }
     circle[fill="transparent"]:hover + circle.sol-info-ring + text.sol-info-txt { fill:#fff; }
@@ -162,7 +159,7 @@
               <div id="psu-mess-display" style="padding:0.4rem 0.6rem;background:#f0f4f8;border:1px solid #d0d8e0;border-radius:6px;font-weight:600;font-variant-numeric:tabular-nums;min-width:60px;text-align:center">34,50</div>
               <span class="unit">PSU</span>
               <span style="position:relative;display:inline-block">
-                <button class="info-btn" onclick="event.stopPropagation();document.getElementById('psu-info').classList.toggle('open')" title="Info zur berechneten PSU">i</button>
+                <button class="info-i" onclick="event.stopPropagation();document.getElementById('psu-info').classList.toggle('open')" title="Info zur berechneten PSU">i</button>
                 <div id="psu-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
                   <button class="info-close" onclick="document.getElementById('psu-info').classList.remove('open')">&times;</button>
                   Wird automatisch aus der Summe deiner ICP-Messwerte berechnet. Kann von einem Refraktometer-Wert abweichen, weil ICP nur die spezifischen Elemente erfasst, die das Labor analysiert hat.
@@ -194,7 +191,7 @@
             <input type="number" id="opt-tolerance" value="5" min="1" max="50" step="1" style="width:60px;padding:0.3rem 0.4rem;border:1px solid #ccc;border-radius:6px;font-size:0.9rem;text-align:center" onchange="saveState()">
             <span style="font-size:0.8rem;color:var(--text-light)">% — Toleranz vom Optimum für grünen Marker</span>
             <span style="position:relative;display:inline-block">
-              <button class="info-btn" onclick="event.stopPropagation();document.getElementById('tol-info').classList.toggle('open')" title="Info zur Toleranz">i</button>
+              <button class="info-i" onclick="event.stopPropagation();document.getElementById('tol-info').classList.toggle('open')" title="Info zur Toleranz">i</button>
               <div id="tol-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
                 <button class="info-close" onclick="document.getElementById('tol-info').classList.remove('open')">&times;</button>
                 Bei sehr kleinen Werten (unter 3&percnt;) kann es vorkommen, dass nicht alle Elemente exakt im Toleranzbereich landen. Der Solver optimiert alle Elemente gleichzeitig — da jede Lösung zwei Ionen enthält (z.B. CaCl₂ &rarr; Ca + Cl), lässt sich bei enger Toleranz nicht jedes Element unabhängig perfekt einstellen. Die Berechnung stoppt dann beim bestmöglichen Ergebnis.
@@ -206,7 +203,7 @@
             <input type="checkbox" id="maxd-enabled" checked onchange="onMaxDeltaToggle()" style="width:18px;height:18px;cursor:pointer">
             <span style="font-size:0.8rem;color:var(--text-light)">— Wenn aus: Solver springt direkt zum Optimum (weniger Wasserwechsel-Schritte)</span>
             <span style="position:relative;display:inline-block">
-              <button class="info-btn" onclick="event.stopPropagation();document.getElementById('maxd-info').classList.toggle('open')" title="Info zu Max Δ">i</button>
+              <button class="info-i" onclick="event.stopPropagation();document.getElementById('maxd-info').classList.toggle('open')" title="Info zu Max Δ">i</button>
               <div id="maxd-info" class="info-popup" onclick="event.stopPropagation()" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:320px;z-index:100;font-size:0.8rem;color:var(--text-light);line-height:1.5">
                 <button class="info-close" onclick="document.getElementById('maxd-info').classList.remove('open')">&times;</button>
                 Max Δ begrenzt, wie stark sich ein Wert pro Wasserwechsel-Schritt ändern darf. Aktiviert: schonender für empfindliche Korallen, ggf. mehr Schritte. Deaktiviert: weniger Schritte, größere Sprünge — die Max-Δ-Werte unten werden ignoriert.
@@ -396,7 +393,7 @@ vorherigen aufbaut.</div>
 
     // Klick außerhalb schließt Popup
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.help-popup') && !e.target.closest('.help-btn')) {
+      if (!e.target.closest('.help-popup') && !e.target.closest('.info-i')) {
         document.querySelectorAll('.help-popup').forEach(p => p.classList.remove('show'));
       }
     });
@@ -474,7 +471,7 @@ vorherigen aufbaut.</div>
         <input type="number" id="set-max-${e.key}" value="${e.max}" step="any" onchange="updateSetting('${e.key}')">
         <span class="s-lbl" style="margin-left:0.4rem">Max Δ</span>
         <input type="number" id="set-maxd-${e.key}" value="${e.maxDelta}" step="any" onchange="updateSetting('${e.key}')">
-        <button class="info-btn" onclick="toggleInfo('${e.key}')" title="Solver-Parameter anzeigen">i</button>
+        <button class="info-i" onclick="toggleInfo('${e.key}')" title="Solver-Parameter anzeigen">i</button>
       `;
       wrapper.appendChild(d);
       // Info-Popup (hidden by default)
@@ -1258,7 +1255,7 @@ vorherigen aufbaut.</div>
         : `Rezept — ${steps.length} Schritte`;
       html += `<div class="card"><div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
         <h3 style="margin:0">${rezeptTitle}</h3>
-        <button class="help-btn" onclick="showHelp(event,'${!hasAnyWC ? 'help-defizit' : 'help-rezept-anleitung'}')">?</button>
+        <button class="info-i" onclick="showHelp(event,'${!hasAnyWC ? 'help-defizit' : 'help-rezept-anleitung'}')">?</button>
       </div><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">`;
       html += `<table class="sol-table"><thead><tr><th>Bestandteil</th>`;
       if (isMulti) {
