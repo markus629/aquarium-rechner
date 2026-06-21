@@ -90,8 +90,8 @@ void setup() {
   }
 
   // Config laden
-  String ssid, wifiPass, fbEmail, fbPass;
-  setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
+  String ssid, wifiPass, pbEmail, pbPass;
+  setup_portal::getConfig(ssid, wifiPass, pbEmail, pbPass);
 
   // WLAN verbinden. WICHTIG: Bei Fehlschlag NICHT ins Setup-Portal!
   // Szenario Stromausfall: Router bootet langsamer als der ESP → WLAN noch
@@ -103,7 +103,7 @@ void setup() {
     Serial.println("[Boot] WLAN (noch) nicht erreichbar — laufe offline weiter, Watchdog versucht Reconnect");
   } else {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
-    if (!pb_sync::begin(fbEmail, fbPass)) {
+    if (!pb_sync::begin(pbEmail, pbPass)) {
       Serial.println("[Boot] PocketBase-Login fehlgeschlagen — retry über Loop");
     } else {
       pb_sync::resolveRole();   // Rolle aus devices-Collection (chipId→role)
@@ -133,9 +133,9 @@ void loop() {
     lastFbInitTryMs = millis();
     Serial.println("[Boot] WLAN da — hole NTP + PocketBase-Login nach");
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
-    String ssid, wifiPass, fbEmail, fbPass;
-    setup_portal::getConfig(ssid, wifiPass, fbEmail, fbPass);
-    if (pb_sync::begin(fbEmail, fbPass)) {
+    String ssid, wifiPass, pbEmail, pbPass;
+    setup_portal::getConfig(ssid, wifiPass, pbEmail, pbPass);
+    if (pb_sync::begin(pbEmail, pbPass)) {
       String prev = pb_sync::deviceRole;
       pb_sync::resolveRole();
       if (pb_sync::deviceRole != prev) {

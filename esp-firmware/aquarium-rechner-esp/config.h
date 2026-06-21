@@ -82,8 +82,8 @@ const unsigned long OTA_CHECK_INTERVAL_MS    =  6 * 3600UL * 1000UL; // alle 6 h
 #define NVS_NAMESPACE "aqrechner"
 #define NVS_KEY_WIFI_SSID    "wifi_ssid"
 #define NVS_KEY_WIFI_PASS    "wifi_pass"
-#define NVS_KEY_FB_EMAIL     "fb_email"
-#define NVS_KEY_FB_PASSWORD  "fb_password"
+#define NVS_KEY_PB_EMAIL     "pb_email"
+#define NVS_KEY_PB_PASSWORD  "pb_password"
 #define NVS_KEY_BOOT_COUNT   "boot_count"
 
 // ---------- pH-Sensor ----------

@@ -63,9 +63,9 @@ button:hover { box-shadow: 0 4px 12px rgba(52,152,219,0.4); }
     Noch kein Konto? Im Web einmal registrieren (E-Mail + Passwort), dann hier dieselben Daten eintragen.
   </div>
   <label>E-Mail</label>
-  <input type="email" name="fb_email" required autocomplete="email">
+  <input type="email" name="pb_email" required autocomplete="email">
   <label>Passwort</label>
-  <input type="password" name="fb_password" required autocomplete="current-password">
+  <input type="password" name="pb_password" required autocomplete="current-password">
 
   <button type="submit">Speichern & Verbinden</button>
   <p class="note">Falls du das WLAN oder den Account später ändern willst:
@@ -93,10 +93,10 @@ void handleRoot() {
 void handleSave() {
   String ssid = server.arg("ssid");
   String wifiPass = server.arg("wifi_pass");
-  String email = server.arg("fb_email");
-  String fbPass = server.arg("fb_password");
+  String email = server.arg("pb_email");
+  String pbPass = server.arg("pb_password");
 
-  if (ssid.length() == 0 || email.length() == 0 || fbPass.length() == 0) {
+  if (ssid.length() == 0 || email.length() == 0 || pbPass.length() == 0) {
     server.send(400, "text/plain; charset=utf-8", "Bitte alle Pflichtfelder ausfüllen.");
     return;
   }
@@ -104,8 +104,8 @@ void handleSave() {
   prefs.begin(NVS_NAMESPACE, false);
   prefs.putString(NVS_KEY_WIFI_SSID, ssid);
   prefs.putString(NVS_KEY_WIFI_PASS, wifiPass);
-  prefs.putString(NVS_KEY_FB_EMAIL, email);
-  prefs.putString(NVS_KEY_FB_PASSWORD, fbPass);
+  prefs.putString(NVS_KEY_PB_EMAIL, email);
+  prefs.putString(NVS_KEY_PB_PASSWORD, pbPass);
   prefs.end();
 
   server.send(200, "text/html; charset=utf-8",
@@ -127,7 +127,7 @@ void handleNotFound() {
 
 bool hasStoredConfig() {
   prefs.begin(NVS_NAMESPACE, true);
-  bool ok = prefs.isKey(NVS_KEY_WIFI_SSID) && prefs.isKey(NVS_KEY_FB_EMAIL);
+  bool ok = prefs.isKey(NVS_KEY_WIFI_SSID) && prefs.isKey(NVS_KEY_PB_EMAIL);
   prefs.end();
   return ok;
 }
@@ -136,17 +136,17 @@ void clearConfig() {
   prefs.begin(NVS_NAMESPACE, false);
   prefs.remove(NVS_KEY_WIFI_SSID);
   prefs.remove(NVS_KEY_WIFI_PASS);
-  prefs.remove(NVS_KEY_FB_EMAIL);
-  prefs.remove(NVS_KEY_FB_PASSWORD);
+  prefs.remove(NVS_KEY_PB_EMAIL);
+  prefs.remove(NVS_KEY_PB_PASSWORD);
   prefs.end();
 }
 
-void getConfig(String &ssid, String &wifiPass, String &fbEmail, String &fbPass) {
+void getConfig(String &ssid, String &wifiPass, String &pbEmail, String &pbPass) {
   prefs.begin(NVS_NAMESPACE, true);
   ssid = prefs.getString(NVS_KEY_WIFI_SSID, "");
   wifiPass = prefs.getString(NVS_KEY_WIFI_PASS, "");
-  fbEmail = prefs.getString(NVS_KEY_FB_EMAIL, "");
-  fbPass = prefs.getString(NVS_KEY_FB_PASSWORD, "");
+  pbEmail = prefs.getString(NVS_KEY_PB_EMAIL, "");
+  pbPass = prefs.getString(NVS_KEY_PB_PASSWORD, "");
   prefs.end();
 }
 
