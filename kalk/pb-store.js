@@ -146,8 +146,8 @@ export async function sendCommand({ action, pump, ml, steps, phValue }) {
   return cmdId;
 }
 
-// Realtime-Abo auf den Command-Record. Liefert eine synchrone
-// Unsubscribe-Funktion (wie früher onSnapshot).
+// Realtime-Abo (PocketBase subscribe) auf den Command-Record.
+// Liefert eine synchrone Unsubscribe-Funktion.
 export function watchCommand(commandId, callback) {
   let unsub = null;
   let cancelled = false;

@@ -30,7 +30,7 @@ dem Aquarium-Rechner-Web-UI über ein selbst gehostetes **PocketBase**-Backend
    - `RTClib` (von Adafruit)
    - `ArduinoJson` (von Benoit Blanchon) — Version 7.x
    - `Adafruit NeoPixel` (Status-LED)
-   - (Backend läuft über die im ESP32-Core enthaltenen `WiFiClientSecure` + `HTTPClient` — keine extra Firebase-Library nötig)
+   - (Anbindung an PocketBase über die im ESP32-Core enthaltenen `WiFiClientSecure` + `HTTPClient` — keine extra Backend-Bibliothek nötig)
 7. Sketch `aquarium-rechner-esp.ino` öffnen, kompilieren, hochladen
 
 ## Account-Zugang

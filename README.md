@@ -57,7 +57,7 @@ Im Ordner [`esp-firmware/aquarium-rechner-esp/`](esp-firmware/aquarium-rechner-e
 - Board: **ESP32-S3 N16R8** (16 MB Flash, 8 MB OPI PSRAM)
 - IDE: Arduino 2.x mit „ESP32 by Espressif Systems" Boards
 - Partition: `16M Flash (3MB APP/9.9MB FATFS)`
-- Libraries: FastAccelStepper, ArduinoJson (v7), RTClib, Adafruit NeoPixel (keine Firebase-Library mehr nötig — Backend per HTTPS-REST)
+- Libraries: FastAccelStepper, ArduinoJson (v7), RTClib, Adafruit NeoPixel (kein extra Backend-Client nötig — Anbindung an PocketBase per HTTPS-REST)
 
 Pin-Belegung siehe [`config.h`](esp-firmware/aquarium-rechner-esp/config.h).
 
