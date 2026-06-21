@@ -224,7 +224,6 @@
               <button id="quick-save">Speichern</button>
             </div>
             <div class="quick-msg" id="quick-msg"></div>
-            <div id="kh-next" style="font-size:0.78rem;color:var(--text-light);margin:0.1rem 0 0.4rem"></div>
             <div class="canister-bars" id="canister-bars">
               <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
             </div>
@@ -254,7 +253,6 @@
               <button id="nut-save">Speichern</button>
             </div>
             <div class="quick-msg" id="nut-msg"></div>
-            <div id="nut-next" style="font-size:0.78rem;color:var(--text-light);margin:0.1rem 0 0.4rem"></div>
             <div class="canister-bars" id="nut-bars">
               <div class="bar"><div class="lbl">Lade …</div><div class="track"><div class="fill" style="width:0"></div></div><div class="pct">—</div></div>
             </div>
@@ -296,15 +294,13 @@
       if(!(edge>=0)) edge=Infinity;
       return { days:Math.min(maxMeas, edge), capped:edge>maxMeas };
     }
-    // kürzeste Vorhersage über mehrere Elemente als grauer Text
-    function nextTestText(preds){
-      const real=preds.filter(p=>p && p.r).map(p=>({label:p.label, ...p.r}));
-      if(!real.length) return "";
-      if(real.some(p=>p.out)){ const o=real.find(p=>p.out); return `Nächster Test: jetzt (${o.label} außerhalb)`; }
-      real.sort((x,y)=>x.days-y.days);
-      const s=real[0];
-      const d=s.days>=1 ? Math.round(s.days) : s.days.toFixed(1);
-      return `Nächster Test: in ${d} Tagen (${s.label})`;
+    // Platzhalter-Text fürs Eingabefeld: Countdown bis zum nächsten Test.
+    function countdownText(pred, fallback){
+      if(!pred) return fallback;             // zu wenig Daten → Beispielwert
+      if(pred.out) return "jetzt messen!";
+      if(pred.days < 1) return "heute messen";
+      const n=Math.round(pred.days);
+      return `in ${n} Tag${n===1?"":"en"} messen`;
     }
 
     await initAuthSync({
@@ -356,13 +352,11 @@
         try {
           const kh = await listMeasurements("kh", 5);
           const ca = await listMeasurements("ca", 5);
-          const txt = nextTestText([
-            { label:"KH", r: nextTestDays(kh, settings.targetKH, settings.khMin, settings.khMax, settings.maxDailyChangeKH, settings.maxMeasureDays) },
-            { label:"Ca", r: nextTestDays(ca, settings.targetCalcium, settings.caMin, settings.caMax, settings.maxDailyChangeCalcium, settings.maxMeasureDays) }
-          ]);
-          document.getElementById("kh-next").textContent = txt;
+          khIn.placeholder = countdownText(nextTestDays(kh, settings.targetKH, settings.khMin, settings.khMax, settings.maxDailyChangeKH, settings.maxMeasureDays), "z. B. 7.8");
+          caIn.placeholder = countdownText(nextTestDays(ca, settings.targetCalcium, settings.caMin, settings.caMax, settings.maxDailyChangeCalcium, settings.maxMeasureDays), "z. B. 420");
         } catch (_) {}
       } catch (e) {
+        console.error("loadSettings:", e);
         bars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`;
       }
     }
@@ -423,14 +417,11 @@
         try {
           const no3 = (await listNutMeasurements("no3", 5)) || [];
           const po4 = (await listNutMeasurements("po4", 5)) || [];
-          const txt = nextTestText([
-            { label:"NO₃", r: nextTestDays(no3, s.targetNO3, s.no3Min, s.no3Max, s.maxDailyChangeNO3, s.maxMeasureDays) },
-            { label:"PO₄", r: nextTestDays(po4, s.targetPO4, s.po4Min, s.po4Max, s.maxDailyChangePO4, s.maxMeasureDays) }
-          ]);
-          document.getElementById("nut-next").textContent = txt;
+          nutNo3.placeholder = countdownText(nextTestDays(no3, s.targetNO3, s.no3Min, s.no3Max, s.maxDailyChangeNO3, s.maxMeasureDays), "z. B. 5");
+          nutPo4.placeholder = countdownText(nextTestDays(po4, s.targetPO4, s.po4Min, s.po4Max, s.maxDailyChangePO4, s.maxMeasureDays), "z. B. 0.05");
         } catch (_) {}
       }
-      catch (e) { nutBars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`; }
+      catch (e) { console.error("loadNutSettings:", e); nutBars.innerHTML = `<div class="bar"><div class="lbl" style="color:#c0392b">Fehler beim Laden</div><div></div><div></div></div>`; }
     }
     nutSave.onclick = async () => {
       const no3 = parseFloat(nutNo3.value), po4 = parseFloat(nutPo4.value);
