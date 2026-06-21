@@ -763,7 +763,9 @@
     const intH=Math.max(1, Math.floor(24/dosesPerDay)), intSec=intH*3600;
     const maintPerDose=D/dosesPerDay;                                  // Erhaltung je Intervall (Up-Pumpe)
     const maxPerIntC=settings["maxDailyChange"+cfg.suf]/dosesPerDay;   // max mg/l je Intervall
-    const first=nextDoseHour(now,intH);
+    // Anker = letzte Messung (tLast), NICHT "jetzt" — sonst verschiebt sich der
+    // Plan bei jedem Neuberechnen und der ESP rampt endlos statt Erhaltung.
+    const first=nextDoseHour(tLast,intH);
     out.maintPerDose=maintPerDose; out.entries=[]; out.durationDays=0;
     const tooLow=lvl<cfg.target, tooHigh=lvl>cfg.target;
 
