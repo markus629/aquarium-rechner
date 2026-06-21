@@ -1668,7 +1668,10 @@
         });
         const dailyKH = measuredDailyKH || settings.initialKHConsumption || 160;
 
-        khPlan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, now });
+        // Anker = Zeitpunkt der letzten Messung → Plan startet bei der Messung
+        // und verschiebt sich NICHT bei jedem Neuberechnen (erst eine neue
+        // Messung legt den Plan auf ein neues Datum/Uhrzeit).
+        khPlan = calculateKHPlan({ settings, currentKH, dailyConsumption: dailyKH, anchorTime: khItems[0].timestamp });
         khPlan._currentKH = currentKH;
         khPlan._dailyConsumption = dailyKH;
         renderKHPlan(khPlan, currentKH, dailyKH);
@@ -1689,7 +1692,7 @@
         });
         const dailyCa = measuredDailyCa || settings.initialCalciumConsumption || 60;
 
-        caPlan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, now });
+        caPlan = calculateCaPlan({ settings, currentCa, dailyConsumption: dailyCa, anchorTime: caItems[0].timestamp });
         caPlan._currentCa = currentCa;
         caPlan._dailyConsumption = dailyCa;
         renderCaPlan(caPlan, currentCa, dailyCa);
@@ -1764,7 +1767,7 @@
     summary.className = "plan-summary" + (plan.warning ? " warn" : "");
     summary.innerHTML = `
       <div>Aktuell: <strong>${currentKH.toFixed(2)} °dKH</strong> &middot;
-      Ziel: <strong>${plan.entries[0]?.projectedValue != null ? plan.entries[0].projectedValue.toFixed(2) + " °dKH" : "—"}</strong> &middot;
+      Ziel: <strong>${plan.target != null ? plan.target.toFixed(2) + " °dKH" : "—"}</strong> &middot;
       Verbrauch: <strong>${dailyCons.toFixed(2)} ml/Tag</strong> &middot;
       ${plan.numDosages ? `${plan.numDosages} Anpass-Dosierungen über ${plan.durationDays.toFixed(1)} Tage (${goal})` : "Erhaltungsdosierung"}</div>
       ${plan.warning ? `<div style="margin-top:0.4rem;color:var(--orange)">${plan.warning}</div>` : ""}

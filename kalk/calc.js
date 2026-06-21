@@ -56,7 +56,8 @@ export function calculateKHPlan({
   settings,        // SystemSettings-Objekt aus PocketBase
   currentKH,       // letzter gemessener KH-Wert
   dailyConsumption,// ml/Tag (aus Historie oder initialer Wert)
-  now              // Unix-Timestamp Sekunden
+  anchorTime       // Unix-Timestamp Sek: Beginn der Rampe = Zeitpunkt der Messung
+                   // (NICHT "jetzt" — sonst verschiebt sich der Plan bei jedem Neuberechnen)
 } = {}) {
   if (!settings || !settings.aquariumVolume) {
     return { entries: [], maintenance: 0, warning: "Aquariumvolumen fehlt." };
@@ -81,6 +82,7 @@ export function calculateKHPlan({
     return {
       entries: [{ date: 0, dosageML: maintenanceML, projectedValue: startKH, isNightDosage: false, isMaintenanceDose: true }],
       maintenance: maintenanceML,
+      target: targetKH,
       info: "Bereits am Ziel — nur Erhaltungsdosierung."
     };
   }
@@ -111,9 +113,9 @@ export function calculateKHPlan({
     changePerDosage = maxChangePerInterval;
   }
 
-  // Plan-Einträge erstellen
+  // Plan-Einträge erstellen — Rampe startet am Messzeitpunkt (anchorTime)
   const entries = [];
-  let currentTime = getNextDosageHour(now, settings);
+  let currentTime = getNextDosageHour(anchorTime, settings);
   const intSec = intH * 3600;
 
   if (isIncrease) {
@@ -165,7 +167,7 @@ export function calculateKHPlan({
     isMaintenanceDose: true
   });
 
-  return { entries, maintenance: maintenanceML, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
+  return { entries, maintenance: maintenanceML, target: targetKH, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
 }
 
 // ---------- Ca-Plan (analog) ----------
@@ -173,7 +175,7 @@ export function calculateCaPlan({
   settings,
   currentCa,
   dailyConsumption,
-  now
+  anchorTime       // Unix-Timestamp Sek: Rampen-Start = Messzeitpunkt (nicht "jetzt")
 } = {}) {
   if (!settings || !settings.aquariumVolume) {
     return { entries: [], maintenance: 0, warning: "Aquariumvolumen fehlt." };
@@ -194,6 +196,7 @@ export function calculateCaPlan({
     return {
       entries: [{ date: 0, caDosageML: maintenanceCa, mgDosageML: maintenanceCa * mgRatio, projectedValue: startCa, isMaintenanceDose: true }],
       maintenance: maintenanceCa,
+      target: targetCa,
       info: "Bereits am Ziel — nur Erhaltungsdosierung."
     };
   }
@@ -224,7 +227,7 @@ export function calculateCaPlan({
   }
 
   const entries = [];
-  let currentTime = getNextDosageHour(now, settings);
+  let currentTime = getNextDosageHour(anchorTime, settings);  // Rampe ab Messzeitpunkt
   const intSec = intH * 3600;
 
   if (isIncrease) {
@@ -275,7 +278,7 @@ export function calculateCaPlan({
     isMaintenanceDose: true
   });
 
-  return { entries, maintenance: maintenanceCa, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
+  return { entries, maintenance: maintenanceCa, target: targetCa, warning, isIncrease, numDosages, durationDays: numDosages * intH / 24 };
 }
 
 // ---------- Verbrauchs-Schätzung aus Messhistorie ----------
