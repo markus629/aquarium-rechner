@@ -297,6 +297,7 @@
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
   import { renderDeviceRegistry } from "/assets/device-registry.js";
+  import { predictNextTest, nextTestPlaceholder, nextTestText } from "/assets/next-test.js";
 
   const DAY = 86400;
   const fmt = (v, d = 2) => (v == null || isNaN(v)) ? "–" : Number(v).toFixed(d);
@@ -734,33 +735,12 @@
     }
     state[cfg.key+"_maint"]=D; out.maintMl=D;
 
-    // --- Vorhersage: nächster Messtermin ---
-    // Soll(b) = vom vorletzten Messwert in max-Schritten Richtung Ziel (gilt auch
-    // während der Rampe — wir kennen ja den rechnerischen Soll). Drift/Tag =
-    // (Messwert − Soll)/Δt = System-Ungenauigkeit. Zeit bis Min/Max-Grenze,
-    // gedeckelt durch Max-Messintervall. Ohne Sicherheitspuffer, ohne Rausch-Schwelle.
-    out.nextDays=null; out.driftDay=null; out.cappedMax=false; out.outOfRange=false;
-    const maxMeas=Math.max(1, parseFloat(settings.maxMeasureDays)||7);
-    if(win.length>=2){
-      const a=win[win.length-2], b=win[win.length-1];
-      const dt=(b.timestamp-a.timestamp)/DAY;
-      if(dt>0.05){
-        const maxCh=settings["maxDailyChange"+cfg.suf]||0;
-        const gap=cfg.target-a.value;
-        const soll=a.value + Math.sign(gap)*Math.min(Math.abs(gap), maxCh*dt); // rechnerischer Soll bei b
-        const drift=(b.value-soll)/dt;                                          // mg/l je Tag (Ungenauigkeit)
-        out.driftDay=drift;
-        if(b.value<cfg.min || b.value>cfg.max){ out.nextDays=0; out.outOfRange=true; }
-        else {
-          let edge=Infinity;
-          if(drift<-1e-9) edge=(b.value-cfg.min)/(-drift);     // fällt → Richtung Min
-          else if(drift>1e-9) edge=(cfg.max-b.value)/drift;    // steigt → Richtung Max
-          if(!(edge>=0)) edge=Infinity;
-          out.nextDays=Math.min(maxMeas, edge);
-          out.cappedMax=(edge>maxMeas);
-        }
-      }
-    }
+    // --- Vorhersage: nächster Messtermin (zentral aus /assets/next-test.js) ---
+    // win ist aufsteigend → für predictNextTest absteigend übergeben (neueste zuerst).
+    out.pred = predictNextTest(win.slice().reverse(), {
+      target: cfg.target, min: cfg.min, max: cfg.max,
+      maxChangePerDay: settings["maxDailyChange"+cfg.suf], maxMeasureDays: settings.maxMeasureDays
+    });
 
     // --- Dosier-Wirkung (nur INFO, kein Stellhebel) ---
     // Vergleicht in AUFDOSIER-Phasen (Dosis über Erhaltung hinaus) den tatsächlichen
@@ -881,12 +861,7 @@
     </div>`;
   }
   function nextTestInfo(o, cfg){
-    if(o.outOfRange) return `Nächster Test: <strong style="color:var(--red)">jetzt</strong> — Wert außerhalb ${fmt(cfg.min,cfg.dp)}–${fmt(cfg.max,cfg.dp)}`;
-    if(o.nextDays==null) return `Nächster Test: <span class="muted">– (mind. 2 Messungen nötig)</span>`;
-    const d=new Date(Date.now()+o.nextDays*DAY*1000).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
-    const driftTxt = o.driftDay==null ? "" : ` · Ungenauigkeit ${o.driftDay>0?"+":""}${fmt(o.driftDay,3)} mg/l/Tag`;
-    if(o.cappedMax) return `Nächster Test: <strong>in ${fmt(o.nextDays,0)} Tagen</strong> <span class="muted">(${d}, Max-Intervall — sehr stabil)</span>${driftTxt}`;
-    return `Nächster Test: <strong>in ${fmt(o.nextDays,1)} Tagen</strong> <span class="muted">(${d})</span>${driftTxt}`;
+    return nextTestText(o.pred, { dp: cfg.dp, unit: "mg/l", min: cfg.min, max: cfg.max });
   }
   function renderNut(o, cfg){
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
@@ -998,6 +973,10 @@
         entries:[...(oNo3.entries||[]),...(oPo4.entries||[])].map(e=>({date:e.date,pump:e.pump,ml:e.ml,maint:!!e.isMaintenance})) });
     }catch(_){}
     document.getElementById("plan-out").innerHTML = npCheck(oNo3.level, oPo4.level) + renderNut(oNo3,C.no3) + renderNut(oPo4,C.po4);
+    // Countdown-Platzhalter in die Messwert-Eingabefelder (gleicher Text wie Kachel)
+    const no3In=document.getElementById("m-no3"), po4In=document.getElementById("m-po4");
+    if(no3In) no3In.placeholder = nextTestPlaceholder(oNo3.pred, "z. B. 5");
+    if(po4In) po4In.placeholder = nextTestPlaceholder(oPo4.pred, "z. B. 0.05");
     renderChart("chart-no3", _no3, _dosings.filter(d=>d.pump===PUMP.N||d.pump===PUMP.C), C.no3, [{pump:PUMP.N,color:"#e8732a",label:"N"},{pump:PUMP.C,color:"#27ae60",label:"C"}]);
     renderChart("chart-po4", _po4, _dosings.filter(d=>d.pump===PUMP.P||d.pump===PUMP.LA), C.po4, [{pump:PUMP.P,color:"#3498db",label:"P"},{pump:PUMP.LA,color:"#27ae60",label:"Lanthan"}]);
     renderHistory(); renderDosingHistory();
