@@ -160,22 +160,24 @@
           Eine Pumpe sofort eine bestimmte Menge laufen lassen — praktisch zum <strong>Kalibrieren testen</strong>
           (z. B. 5 ml dosieren und mit dem Messbecher vergleichen). Der ESP muss online sein.
         </p>
-        <div class="grid2">
-          <div class="field">
+        <div class="form-grid" style="max-width:600px">
+          <div class="form-row">
             <label>Pumpe</label>
-            <select id="md-pump">
+            <select id="md-pump" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
               <option value="0">Stickstoff (N)</option>
               <option value="1">Phosphat (P)</option>
               <option value="2">Kohlenstoff (C)</option>
               <option value="3">Lanthan (La)</option>
             </select>
           </div>
-          <div class="field">
+          <div class="form-row">
             <label>Menge (ml)</label>
             <input type="number" id="md-ml" step="0.1" min="0.1" max="500" placeholder="z. B. 5">
           </div>
+          <div class="form-row" style="display:flex;align-items:flex-end">
+            <button class="btn btn-primary" id="md-dose" style="width:100%">Dosieren</button>
+          </div>
         </div>
-        <div style="margin-top:0.8rem"><button class="btn btn-primary" id="md-dose" style="width:100%">Dosieren</button></div>
       </div>
 
       <div class="card">
@@ -184,9 +186,9 @@
           Gilt für alle vier Pumpen — direkt in Motor-Schritten, funktioniert auch bei
           unkalibrierten Pumpen (für den Kalibrier-Lauf selbst).
         </p>
-        <div class="grid2">
-          <div class="field"><label>Geschwindigkeit (Schritte/sec) <span class="muted">Default 400 · typisch 200–800</span></label><input type="number" data-setting="stepsPerSec" step="10" min="10" max="5000"></div>
-          <div class="field"><label>Beschleunigung (Schritte/sec²) <span class="muted">0 = quasi sofort · Default 200</span></label><input type="number" data-setting="accelStepsPerSec2" step="10" min="0" max="5000"></div>
+        <div class="form-grid">
+          <div class="form-row"><label>Geschwindigkeit (Schritte/sec) <span class="hint">Default: 400 — typisch 200–800</span></label><input type="number" data-setting="stepsPerSec" step="10" min="10" max="5000"></div>
+          <div class="form-row"><label>Beschleunigung (Schritte/sec²) <span class="hint">0 = quasi sofort; Default: 200</span></label><input type="number" data-setting="accelStepsPerSec2" step="10" min="0" max="5000"></div>
         </div>
       </div>
 
@@ -223,8 +225,8 @@
           <div class="form-row"><label>Aquariumvolumen (Liter)</label><input type="number" data-setting="aquariumVolume" step="1" min="10" max="5000"></div>
           <div class="form-row"><label>Ziel NO₃ (mg/l)</label><input type="number" data-setting="targetNO3" step="0.1"></div>
           <div class="form-row"><label>Ziel PO₄ (mg/l)</label><input type="number" data-setting="targetPO4" step="0.001"></div>
-          <div class="form-row"><label>NO₃ min / max (mg/l)</label><div style="display:flex;gap:0.4rem"><input type="number" data-setting="no3Min" step="0.1"><input type="number" data-setting="no3Max" step="0.1"></div></div>
-          <div class="form-row"><label>PO₄ min / max (mg/l)</label><div style="display:flex;gap:0.4rem"><input type="number" data-setting="po4Min" step="0.001"><input type="number" data-setting="po4Max" step="0.001"></div></div>
+          <div class="form-row"><label>NO₃ min / max (mg/l)</label><div class="minmax"><input type="number" data-setting="no3Min" step="0.1"><input type="number" data-setting="no3Max" step="0.1"></div></div>
+          <div class="form-row"><label>PO₄ min / max (mg/l)</label><div class="minmax"><input type="number" data-setting="po4Min" step="0.001"><input type="number" data-setting="po4Max" step="0.001"></div></div>
           <div class="form-row"><label>N:P Zielverhältnis (molar)</label><input type="number" data-setting="npTargetRatio" step="1" min="1" max="60"></div>
           <div class="form-row"><label>Max-Messintervall (Tage)</label><input type="number" data-setting="maxMeasureDays" step="1" min="1" max="60"></div>
         </div>
@@ -255,7 +257,7 @@
           <div class="form-row"><label>N → NO₃</label><input type="number" data-setting="coeffN_NO3" step="0.01"></div>
           <div class="form-row"><label>P → PO₄</label><input type="number" data-setting="coeffP_PO4" step="0.01"></div>
           <div class="form-row"><label>Lanthan → PO₄ (Abbau)</label><input type="number" data-setting="coeffLa_PO4" step="0.01"></div>
-          <div class="form-row"><label>C: ml/100 L min / max</label><div style="display:flex;gap:0.4rem"><input type="number" data-setting="cMinML100" step="0.1"><input type="number" data-setting="cMaxML100" step="0.1"></div></div>
+          <div class="form-row"><label>C: ml/100 L min / max</label><div class="minmax"><input type="number" data-setting="cMinML100" step="0.1"><input type="number" data-setting="cMaxML100" step="0.1"></div></div>
         </div>
         <p style="font-size:0.82rem;color:var(--text-light);margin-top:0.5rem">N→NO₃ ist nur der Startwert (real durch Vorverbrauch weniger) — der effektive Faktor wird später aus der Historie gelernt. C wirkt unspezifisch auf NO₃ <em>und</em> PO₄ und wird nur bei bestätigtem Überschuss eingesetzt.</p>
 
