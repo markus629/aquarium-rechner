@@ -215,6 +215,14 @@ export function defaultSettings() {
     startDoseN: 0, startDoseP: 0, startDoseC: 0, startDoseLa: 0,
     autoDosing: false,
     espOfflineAlert: true,
+    // Pumpen-Hardware (rollen-spezifisch, gleiche Keys wie Kalk → ESP liest sie
+    // im Nährstoff-Modus aus nutri_docs/settings)
+    stepsPerSec: 400,                 // Hz
+    accelStepsPerSec2: 200,           // Hz/sec (0 = quasi sofort)
+    enableAntiDrip: true,
+    antiDripML: 0.015,                // Rückzugsmenge ml
+    antiDripStepsPerSec: 400,         // Rückzugsgeschwindigkeit Hz
+    antiDripAccelStepsPerSec2: 1000,  // Rückzugs-Beschleunigung Hz/s
     containerCapacity: [5000, 5000, 5000, 5000],
     containerLevel: [5000, 5000, 5000, 5000]
   };

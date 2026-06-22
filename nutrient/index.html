@@ -63,8 +63,9 @@
   <div id="view-main" style="display:none">
     <div class="tabs" id="main-tabs">
       <button class="tab-btn active" data-tab="tab-plan">Messung &amp; Plan</button>
-      <button class="tab-btn" data-tab="tab-device">Gerät</button>
+      <button class="tab-btn" data-tab="tab-manual">Manuell</button>
       <button class="tab-btn" data-tab="tab-container">Kanister</button>
+      <button class="tab-btn" data-tab="tab-device">Gerät</button>
       <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
     </div>
 
@@ -137,7 +138,33 @@
       </div>
 
       <div class="card">
-        <h2>Manuelle Einzeldosis</h2>
+        <h2>ESP einrichten</h2>
+        <p class="muted" style="margin-bottom:0.8rem">So verbindest du einen ESP32 mit deinem Account:</p>
+        <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:0.5rem">
+          <li><strong>Account-Zugang bereithalten</strong> — dieselbe E-Mail + Passwort wie beim Web-Login.</li>
+          <li><strong>ESP flashen</strong> mit der gemeinsamen Firmware (<a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README</a>).</li>
+          <li><strong>ESP einschalten</strong> — beim ersten Start öffnet er ein WLAN <code>AquariumRechner-Setup</code>.</li>
+          <li>Verbinden → Setup-Portal (sonst <code>http://192.168.4.1</code>) → WLAN + E-Mail + Passwort eintragen.</li>
+          <li>ESP startet neu und erscheint oben unter <strong>Geräte &amp; Rollen</strong> — dort die Rolle <strong>Nährstoffmanagement</strong> wählen.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Ausfall-Benachrichtigung</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Bleibt der Heartbeat des ESP länger als 5 Minuten aus, bekommst du eine E-Mail an deine Konto-Adresse.
+        </p>
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.95rem">
+          <input type="checkbox" data-setting="espOfflineAlert">
+          <span>E-Mail senden, wenn der ESP ausfällt</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ===== Tab: Manuell ===== -->
+    <div id="tab-manual" class="tab-content">
+      <div class="card">
+        <h2>Manuelle Dosierung</h2>
         <p class="muted" style="margin-bottom:0.8rem">
           Eine Pumpe sofort eine bestimmte Menge laufen lassen — praktisch zum <strong>Kalibrieren testen</strong>
           (z. B. 5 ml dosieren und mit dem Messbecher vergleichen). Der ESP muss online sein.
@@ -161,35 +188,24 @@
       </div>
 
       <div class="card">
+        <h2>Globale Pumpen-Geschwindigkeit</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Gilt für alle vier Pumpen — direkt in Motor-Schritten, funktioniert auch bei
+          unkalibrierten Pumpen (für den Kalibrier-Lauf selbst).
+        </p>
+        <div class="grid2">
+          <div class="field"><label>Geschwindigkeit (Schritte/sec) <span class="muted">Default 400 · typisch 200–800</span></label><input type="number" data-setting="stepsPerSec" step="10" min="10" max="5000"></div>
+          <div class="field"><label>Beschleunigung (Schritte/sec²) <span class="muted">0 = quasi sofort · Default 200</span></label><input type="number" data-setting="accelStepsPerSec2" step="10" min="0" max="5000"></div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Pumpen-Kalibrierung</h2>
         <p class="muted" style="margin-bottom:1rem">
           Der ESP fährt eine definierte Anzahl Schritte, du misst die geförderte Flüssigkeit
           mit einem Messbecher und gibst die ml ein. Daraus ergibt sich <strong>Schritte pro ml</strong>.
         </p>
         <div id="pump-calibration-list"></div>
-      </div>
-
-      <div class="card">
-        <h2>ESP einrichten</h2>
-        <p class="muted" style="margin-bottom:0.8rem">So verbindest du einen ESP32 mit deinem Account:</p>
-        <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:0.5rem">
-          <li><strong>Account-Zugang bereithalten</strong> — dieselbe E-Mail + Passwort wie beim Web-Login.</li>
-          <li><strong>ESP flashen</strong> mit der gemeinsamen Firmware (<a href="https://github.com/markus629/aquarium-rechner/tree/main/esp-firmware" target="_blank" style="color:var(--blue)">README</a>).</li>
-          <li><strong>ESP einschalten</strong> — beim ersten Start öffnet er ein WLAN <code>AquariumRechner-Setup</code>.</li>
-          <li>Verbinden → Setup-Portal (sonst <code>http://192.168.4.1</code>) → WLAN + E-Mail + Passwort eintragen.</li>
-          <li>ESP startet neu und erscheint oben unter <strong>Geräte &amp; Rollen</strong> — dort die Rolle <strong>Nährstoffmanagement</strong> wählen.</li>
-        </ol>
-      </div>
-
-      <div class="card">
-        <h2>Ausfall-Benachrichtigung</h2>
-        <p class="muted" style="margin-bottom:0.8rem">
-          Bleibt der Heartbeat des ESP länger als 5 Minuten aus, bekommst du eine E-Mail an deine Konto-Adresse.
-        </p>
-        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.95rem">
-          <input type="checkbox" data-setting="espOfflineAlert">
-          <span>E-Mail senden, wenn der ESP ausfällt</span>
-        </label>
       </div>
     </div>
 
@@ -249,6 +265,17 @@
         </div>
         <p class="muted" style="margin-top:0.5rem">N→NO₃ ist nur der Startwert (real durch Vorverbrauch weniger) — der effektive Faktor wird später aus der Historie gelernt. C wirkt unspezifisch auf NO₃ <em>und</em> PO₄ und wird nur bei bestätigtem Überschuss eingesetzt.</p>
 
+        <h3>Anti-Tropf</h3>
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.95rem;margin-bottom:0.6rem">
+          <input type="checkbox" data-setting="enableAntiDrip">
+          <span>Anti-Tropf-Rückzug aktivieren <span class="muted">(Pumpe zieht nach der Dosierung kurz zurück, gegen Nachtropfen)</span></span>
+        </label>
+        <div class="grid2">
+          <div class="field"><label>Rückzugsmenge (ml)</label><input type="number" data-setting="antiDripML" step="0.005" min="0" max="1"></div>
+          <div class="field"><label>Rückzugsgeschwindigkeit (Schritte/sec) <span class="muted">Default 400</span></label><input type="number" data-setting="antiDripStepsPerSec" step="10" min="10" max="5000"></div>
+          <div class="field"><label>Rückzugs-Beschleunigung (Schritte/sec²) <span class="muted">Default 1000</span></label><input type="number" data-setting="antiDripAccelStepsPerSec2" step="100" min="0" max="50000"></div>
+        </div>
+
         <div style="margin-top:1.2rem"><button class="btn btn-ghost" id="btn-reset">↺ Auf Standard zurücksetzen</button></div>
       </div>
     </div>
@@ -280,7 +307,7 @@
   window.addEventListener("unhandledrejection", e=>{ const vis=document.getElementById("view-main")?.style.display==="block"; if(vis){e.preventDefault();return;} showError("Promise-Fehler: "+(e.reason?.message||e.reason)); });
 
   // Tabs
-  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); if(btn.dataset.tab==="tab-container") refreshContainers(); }; });
+  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); if(btn.dataset.tab==="tab-manual") refreshPumpCalibration(); if(btn.dataset.tab==="tab-container") refreshContainers(); }; });
 
   // ---------- Kanister / Füllstände ----------
   async function refreshContainers(){
@@ -314,7 +341,6 @@
 
   async function refreshDeviceTab(){
     renderDeviceRegistry(document.getElementById("device-registry"), { highlightRole:"nutrient" }).catch(e=>console.warn("Registry:",e));
-    refreshPumpCalibration();
     const statusEl = document.getElementById("device-status-display");
     if(!statusEl) return;
     try {
