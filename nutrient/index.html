@@ -131,6 +131,12 @@
       </div>
 
       <div class="card">
+        <h2>Dosierplan</h2>
+        <p class="muted" style="margin-bottom:0.8rem">Was tatsächlich dosiert wird — je Flüssigkeit. Leer = aktuell keine Dosierung geplant.</p>
+        <div id="dosing-plan-out"></div>
+      </div>
+
+      <div class="card">
         <h2>Verlauf</h2>
         <div class="chart-wrap"><div class="chart-title">NO₃ (mg/l)</div><div id="chart-no3"></div></div>
         <div class="chart-wrap" style="margin-top:1rem"><div class="chart-title">PO₄ (mg/l)</div><div id="chart-po4"></div></div>
@@ -1021,6 +1027,33 @@
     };
   }
 
+  // ---------- Dosierplan-Tabellen (je Pumpe/Flüssigkeit, wie Kalk) ----------
+  function planTime(ts){
+    return ts===0
+      ? "<em>Erhaltung (laufend)</em>"
+      : new Date(ts*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+  }
+  function dosingPlanHTML(oNo3, oPo4){
+    const all = [...(oNo3.entries||[]), ...(oPo4.entries||[])];
+    // dp = Nachkommastellen der zugehörigen Größe (N/C → NO₃, P/La → PO₄)
+    const pumps = [
+      { pump: PUMP.N,  name: "Stickstoff (N)",  dp: 1 },
+      { pump: PUMP.P,  name: "Phosphat (P)",    dp: 3 },
+      { pump: PUMP.C,  name: "Kohlenstoff (C)", dp: 1 },
+      { pump: PUMP.LA, name: "Lanthan",         dp: 3 },
+    ];
+    return pumps.map(p=>{
+      const rows = all.filter(e=>e.pump===p.pump)
+        .sort((a,b)=>(a.date===0?Infinity:a.date)-(b.date===0?Infinity:b.date));
+      const body = rows.length
+        ? `<table class="data-table"><thead><tr><th>Zeit</th><th class="num">Menge (ml)</th><th class="num">Prognose (mg/l)</th><th>Typ</th></tr></thead><tbody>`
+          + rows.map(e=>`<tr><td>${planTime(e.date)}</td><td class="num">${fmt(e.ml,2)}</td><td class="num">${e.projected!=null?fmt(e.projected,p.dp):"–"}</td><td>${e.isMaintenance?"Erhaltung":"Anpassung"}</td></tr>`).join("")
+          + `</tbody></table>`
+        : `<div class="muted" style="padding:0.2rem 0 0.1rem">Keine Dosierung geplant.</div>`;
+      return `<div class="nut-block"><div class="nut-head"><span class="name">${p.name}</span></div>${body}</div>`;
+    }).join("");
+  }
+
   // ---------- Dashboard ----------
   async function refreshDashboard(){
     try {
@@ -1112,6 +1145,7 @@
         entries:[...(oNo3.entries||[]),...(oPo4.entries||[])].map(e=>({date:e.date,pump:e.pump,ml:e.ml,maint:!!e.isMaintenance})) });
     }catch(_){}
     document.getElementById("plan-out").innerHTML = npCheck(oNo3.level, oPo4.level) + renderNut(oNo3,C.no3) + renderNut(oPo4,C.po4);
+    document.getElementById("dosing-plan-out").innerHTML = dosingPlanHTML(oNo3, oPo4);
     // Countdown-Platzhalter in die Messwert-Eingabefelder (gleicher Text wie Kachel)
     const no3In=document.getElementById("m-no3"), po4In=document.getElementById("m-po4");
     if(no3In) no3In.placeholder = nextTestPlaceholder(oNo3.pred, "z. B. 5");
