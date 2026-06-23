@@ -60,6 +60,14 @@ Ab da an läuft alles automatisch. Im Web-UI siehst du den ESP als „online" mi
 - **Offline-Fallback**: Plan-Cache in NVS — bei WLAN-Ausfall läuft der Plan bis zu 25 h ohne Server weiter
 - **Auto-OTA**: alle 6 h Check auf neue Firmware in GitHub Releases
 
+## Schnell-Update per OTA-Bootstrap
+
+Statt jedes Mal die neueste `.bin` manuell zu flashen, kann man einmal den Mini-Loader
+[`ota-bootstrap/ota-bootstrap.ino`](ota-bootstrap/ota-bootstrap.ino) aufspielen: Er verbindet sich
+mit dem WLAN (Daten aus NVS, sonst aus dem Sketch), lädt automatisch die **neueste** Release-`.bin`
+von GitHub, flasht sie und startet in die volle Firmware. Gleiche Board-/Partition-Einstellungen wie
+die volle Firmware verwenden (16M, 3MB APP/9.9MB FATFS). Eine PocketBase-Anmeldung ist dafür nicht nötig.
+
 ## Setup-Modus erneut aktivieren
 
 Wenn du WLAN-Daten oder den Account-Login ändern willst:
