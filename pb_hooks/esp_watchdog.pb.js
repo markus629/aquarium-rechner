@@ -2,12 +2,15 @@
 // =============================================================
 // ESP-Ausfall-Watchdog (Totmann-Schalter)
 // =============================================================
-// Prüft alle 2 Minuten den letzten Heartbeat jedes ESP
-// (aqua_docs key="info", Feld data.lastSeen, Unix-Sekunden).
-// Kommt seit > 5 Min keiner mehr → E-Mail-Alarm an den Besitzer.
-// Kommt er zurück → Entwarnung. Alarm-Status liegt persistent in
-// aqua_docs key="_watchdog" (vom ESP nie überschrieben) → keine
-// Mail-Flut, neustart-fest.
+// Prüft alle 2 Minuten den letzten Heartbeat JEDES Geräts in der
+// `devices`-Collection (Feld lastSeen, Unix-Sekunden). Diese wird vom
+// ESP in JEDER Rolle aktualisiert (Kalk, Nährstoff, Leerlauf) — daher
+// die zuverlässige, rollen-unabhängige Quelle.
+//
+// Kommt seit > 5 Min kein Heartbeat → E-Mail-Alarm an den Besitzer.
+// Kommt das Gerät zurück → Entwarnung. Der Alarm-Status liegt pro Gerät
+// persistent in aqua_docs key="_watchdog" (data = { <deviceId>: true/false })
+// → keine Mail-Flut, neustart-fest, mehrere Geräte unabhängig.
 // =============================================================
 
 cronAdd("esp_watchdog", "*/2 * * * *", () => {
@@ -19,40 +22,43 @@ cronAdd("esp_watchdog", "*/2 * * * *", () => {
     return v || {};
   };
 
-  let infos = [];
+  let devices = [];
   try {
-    infos = $app.findRecordsByFilter("aqua_docs", "key = 'info'", "", 200, 0);
+    devices = $app.findRecordsByFilter("devices", "lastSeen > 0", "", 200, 0);
   } catch (e) {
-    console.log("[watchdog] Abfrage-Fehler:", e);
+    console.log("[watchdog] devices-Abfrage-Fehler:", e);
     return;
   }
 
-  for (const rec of infos) {
-    const userId = rec.get("user");
-    const data = asObj(rec.get("data"));
-    const lastSeen = data.lastSeen ? Number(data.lastSeen) : 0;
-    if (!lastSeen) continue;
+  for (const dev of devices) {
+    const userId = dev.get("user");
+    const lastSeen = Number(dev.get("lastSeen")) || 0;
+    if (!userId || !lastSeen) continue;
+    const role = (dev.get("role") || "").toString();
+    const name = (dev.get("name") || "").toString();
+    const deviceId = dev.id;
 
     const age = now - lastSeen;
     const isDown = age > DOWN_AFTER_SEC;
 
-    // Opt-out: nur mailen, wenn der Nutzer espOfflineAlert nicht abgeschaltet hat.
-    // (Kein ESP = kein info-Doc = wir landen hier gar nicht erst.)
+    // Opt-out: Settings der jeweiligen Rolle (Nährstoff → nutri_docs, sonst aqua_docs).
+    const settingsCol = role === "nutrient" ? "nutri_docs" : "aqua_docs";
     let alertEnabled = true;
     try {
-      const s = $app.findFirstRecordByFilter("aqua_docs", "user = {:u} && key = 'settings'", { u: userId });
+      const s = $app.findFirstRecordByFilter(settingsCol, "user = {:u} && key = 'settings'", { u: userId });
       if (asObj(s.get("data")).espOfflineAlert === false) alertEnabled = false;
-    } catch (_) { /* keine Settings gespeichert → Default an */ }
+    } catch (_) { /* keine Settings → Default an */ }
     if (!alertEnabled) continue;
 
-    // Persistenter Alarm-Status
+    // Persistenter Alarm-Status pro Gerät (in aqua_docs key="_watchdog")
     let wd = null;
     try {
       wd = $app.findFirstRecordByFilter("aqua_docs", "user = {:u} && key = '_watchdog'", { u: userId });
     } catch (_) { wd = null; }
-    const wasDown = wd ? !!asObj(wd.get("data")).down : false;
+    const wdData = wd ? asObj(wd.get("data")) : {};
+    const wasDown = wdData[deviceId] === true;
 
-    console.log(`[watchdog] user=${userId} lastSeen vor ${age}s down=${isDown} wasDown=${wasDown}`);
+    console.log(`[watchdog] device=${deviceId} role=${role} lastSeen vor ${age}s down=${isDown} wasDown=${wasDown}`);
 
     if (isDown === wasDown) continue; // keine Zustandsänderung → nichts tun
 
@@ -64,7 +70,8 @@ cronAdd("esp_watchdog", "*/2 * * * *", () => {
         wd.set("user", userId);
         wd.set("key", "_watchdog");
       }
-      wd.set("data", { down: isDown, changedAt: now });
+      wdData[deviceId] = isDown;
+      wd.set("data", wdData);
       $app.save(wd);
     } catch (e) {
       console.log("[watchdog] Status-Speichern fehlgeschlagen:", e);
@@ -76,16 +83,18 @@ cronAdd("esp_watchdog", "*/2 * * * *", () => {
       const email = user.get("email");
       if (!email) continue;
       const mins = Math.round(age / 60);
+      const roleLabel = role === "nutrient" ? "Nährstoff" : (role === "kalk" ? "Kalk" : "");
+      const devLabel = name ? `„${name}"` : (roleLabel ? `${roleLabel}-ESP` : "ESP");
       const msg = new MailerMessage({
         from: { address: "markus@strogg.de", name: "Aquarium Rechner" },
         to: [{ address: email }],
-        subject: isDown ? "⚠️ Aquarium-ESP offline" : "✅ Aquarium-ESP wieder online",
+        subject: isDown ? `⚠️ ${devLabel} offline` : `✅ ${devLabel} wieder online`,
         text: isDown
-          ? `Dein Aquarium-Rechner-ESP hat seit ~${mins} Minuten keinen Heartbeat mehr geschickt.\n\nMögliche Ursachen: Stromausfall, WLAN-Problem oder Absturz. Bitte prüfen.\n\nHinweis: Dank lokalem Plan-Cache dosiert der ESP evtl. weiter, meldet sich aber nicht mehr am Server.`
-          : `Entwarnung: Dein Aquarium-Rechner-ESP meldet sich wieder am Server.`,
+          ? `Dein Aquarium-Rechner-Gerät ${devLabel}${roleLabel ? ` (Rolle: ${roleLabel})` : ""} hat seit ~${mins} Minuten keinen Heartbeat mehr geschickt.\n\nMögliche Ursachen: Stromausfall, WLAN-Problem oder Absturz. Bitte prüfen.\n\nHinweis: Dank lokalem Plan-Cache dosiert der ESP evtl. weiter, meldet sich aber nicht mehr am Server.`
+          : `Entwarnung: Dein Gerät ${devLabel} meldet sich wieder am Server.`,
       });
       $app.newMailClient().send(msg);
-      console.log(`[watchdog] Mail an ${email} gesendet (${isDown ? "OFFLINE" : "online"})`);
+      console.log(`[watchdog] Mail an ${email}: ${devLabel} ${isDown ? "OFFLINE" : "online"}`);
     } catch (e) {
       console.log("[watchdog] Mail-Fehler:", e);
     }
