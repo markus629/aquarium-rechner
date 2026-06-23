@@ -167,14 +167,18 @@
       </div>
 
       <div class="card">
-        <h2>Dosier-Historie</h2>
-        <div class="filter-row">
-          <label><input type="checkbox" data-df="0" checked> N</label>
-          <label><input type="checkbox" data-df="1" checked> P</label>
-          <label><input type="checkbox" data-df="3" checked> Lanthan</label>
-          <label><input type="checkbox" data-df="2" checked> C</label>
-        </div>
-        <div class="tbl-scroll" id="dhist-out"><p class="muted" style="padding:0.6rem">—</p></div>
+        <h2>
+          <span>Dosierungsverlauf</span>
+          <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:400">
+            <button class="btn btn-ghost" id="hist-prev" style="padding:0.3rem 0.6rem">←</button>
+            <span id="hist-day-label" style="min-width:120px;text-align:center">Heute</span>
+            <button class="btn btn-ghost" id="hist-next" style="padding:0.3rem 0.6rem">→</button>
+          </div>
+        </h2>
+        <table class="data-table">
+          <thead><tr><th>Zeit</th><th>Pumpe</th><th class="num">Menge</th><th>Modus</th><th class="act">Löschen</th></tr></thead>
+          <tbody id="dosings-tbody"><tr><td class="empty" colspan="5">Lade …</td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -376,7 +380,7 @@
   import {
     getAuthInstance, getSettings, saveSettings, defaultSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
-    listDosings, getState, saveState, savePlan, getNutriDoc,
+    listDosings, deleteDosing, getState, saveState, savePlan, getNutriDoc,
     sendCommand, watchCommand, deleteCommand, getPumps, savePump, PUMP, PUMP_NAMES
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
@@ -1033,12 +1037,38 @@
     if(c3) c3.textContent=_no3.length;
     if(c4) c4.textContent=_po4.length;
   }
+  // Dosierungsverlauf mit Tages-Navigation + Löschen (wie Kalk)
+  let _histDayOffset=0;   // 0 = heute, -1 = gestern …
+  function dayBucketOf(ts){ const d=new Date(ts*1000); d.setHours(0,0,0,0); return Math.floor(d.getTime()/1000); }
+  function describeDayBucket(bucket){
+    const today=dayBucketOf(Math.floor(Date.now()/1000));
+    const diff=Math.round((today-bucket)/86400);
+    if(diff===0) return "Heute";
+    if(diff===1) return "Gestern";
+    if(diff>1)   return `vor ${diff} Tagen`;
+    return new Date(bucket*1000).toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"});
+  }
   function renderDosingHistory(){
-    const checked=new Set([...document.querySelectorAll('[data-df]')].filter(c=>c.checked).map(c=>parseInt(c.dataset.df,10)));
-    const rows=_dosings.filter(d=>checked.has(d.pump)).sort((a,b)=>b.timestamp-a.timestamp).slice(0,300);
-    const el=document.getElementById("dhist-out");
-    if(rows.length===0){ el.innerHTML=`<p class="muted" style="padding:0.6rem">Noch keine Dosierungen (kommen vom ESP).</p>`; return; }
-    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Pumpe</th><th class="num">ml</th></tr></thead><tbody>${rows.map(d=>`<tr><td>${new Date(d.timestamp*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</td><td>${PUMP_NAMES[d.pump]||("Pumpe "+d.pump)}</td><td class="num">${fmt(d.ml,2)}</td></tr>`).join("")}</tbody></table>`;
+    const tbody=document.getElementById("dosings-tbody"); if(!tbody) return;
+    const lbl=document.getElementById("hist-day-label");
+    if(!_dosings.length){ tbody.innerHTML=`<tr><td class="empty" colspan="5">Noch keine Dosierungen (kommen vom ESP)</td></tr>`; if(lbl) lbl.textContent="Heute"; return; }
+    const buckets=[...new Set(_dosings.map(d=>dayBucketOf(d.timestamp)))].sort((a,b)=>b-a);
+    if(_histDayOffset < -(buckets.length-1)) _histDayOffset=-(buckets.length-1);
+    if(_histDayOffset>0) _histDayOffset=0;
+    const wantBucket=buckets[Math.abs(_histDayOffset)] ?? buckets[0];
+    const items=_dosings.filter(d=>dayBucketOf(d.timestamp)===wantBucket);
+    if(lbl) lbl.textContent=`${describeDayBucket(wantBucket)} (${items.length})`;
+    const hp=document.getElementById("hist-prev"), hn=document.getElementById("hist-next");
+    if(hp) hp.disabled=Math.abs(_histDayOffset)>=buckets.length-1;
+    if(hn) hn.disabled=_histDayOffset>=0;
+    tbody.innerHTML=items.map(d=>`<tr>
+      <td>${new Date(d.timestamp*1000).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</td>
+      <td>${PUMP_NAMES[d.pump]||("Pumpe "+d.pump)}</td>
+      <td class="num">${fmt(d.ml,2)} ml</td>
+      <td>${d.isAutomatic?"Auto":"Manuell"}</td>
+      <td class="act"><button class="row-action danger" data-del-dos="${d.id}" title="Löschen">✕</button></td>
+    </tr>`).join("");
+    tbody.querySelectorAll("[data-del-dos]").forEach(btn=>{ btn.onclick=async ()=>{ if(!confirm("Dosierung löschen? Das beeinflusst auch die Verbrauchs-Berechnung."))return; try{ await deleteDosing(btn.dataset.delDos); await refreshAll(); }catch(e){ alert("Fehler: "+e.message); } }; });
   }
 
   // ---------- Konfig pro Nährstoff ----------
@@ -1207,7 +1237,8 @@
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
         fillSettings(); bindSettings(); injectInfo(); bindManualDose();
         document.querySelectorAll(".meas-toggle").forEach(btn=>{ btn.onclick=()=>{ const sec=document.getElementById(btn.dataset.meas); if(!sec) return; const ex=sec.classList.toggle("expanded"); btn.textContent=ex?"Weniger anzeigen ▴":`Alle anzeigen (${btn.dataset.total||""}) ▾`; }; });
-        document.querySelectorAll('[data-df]').forEach(c=>c.addEventListener('change',renderDosingHistory));
+        document.getElementById("hist-prev").onclick=()=>{ _histDayOffset--; renderDosingHistory(); };
+        document.getElementById("hist-next").onclick=()=>{ _histDayOffset++; renderDosingHistory(); };
         loaded=true;
       }
       await refreshAll();
