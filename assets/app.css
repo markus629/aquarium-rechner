@@ -145,6 +145,13 @@ main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
 .data-table tr:hover td { background:#fafbfc; }
 .data-table .empty { text-align:center; color:var(--text-light); padding:1.5rem !important; font-style:italic; }
 
+/* Mess-Sektion: Tabelle mit Kopfzeile; mit .collapse3 zugeklappt nur letzte 3 Zeilen */
+.meas-section { border:1px solid var(--border); border-radius:8px; margin-bottom:0.8rem; overflow:hidden; }
+.meas-head { padding:0.6rem 1rem; background:var(--bg); display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.92rem; }
+.meas-toggle { background:none; border:none; color:var(--blue); cursor:pointer; font-size:0.82rem; font-weight:600; font-family:inherit; padding:0.2rem 0.4rem; }
+.meas-toggle:hover { text-decoration:underline; }
+.meas-section.collapse3:not(.expanded) tbody tr:nth-child(n+4) { display:none; }
+
 /* Chart-Container */
 .chart-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:0.8rem 1rem; margin-bottom:1rem; }
 .chart-box svg { width:100%; height:auto; display:block; }

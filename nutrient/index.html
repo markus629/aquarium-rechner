@@ -47,7 +47,7 @@
   .info-pop{position:fixed;z-index:100;max-width:290px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:0.75rem 0.85rem;font-size:0.82rem;line-height:1.45;color:var(--text);text-transform:none;font-weight:400;letter-spacing:normal}
   .info-pop .ttl{font-weight:700;color:var(--blue-dark);margin-bottom:0.25rem}
 </style>
-  <link rel="stylesheet" href="/assets/app.css?v=20260623">
+  <link rel="stylesheet" href="/assets/app.css?v=20260624">
   <script type="module" src="/assets/nav-menu.js?v=20260623"></script>
 </head>
 <body>
@@ -144,11 +144,26 @@
 
       <div class="card">
         <h2>Messwert-Historie</h2>
-        <div class="filter-row">
-          <label><input type="checkbox" data-mf="no3" checked> NO₃</label>
-          <label><input type="checkbox" data-mf="po4" checked> PO₄</label>
+        <div class="meas-section collapse3" id="meas-no3">
+          <div class="meas-head">
+            <span>NO₃-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="no3-count">0</span>)</span></span>
+            <button class="meas-toggle" data-meas="meas-no3" style="display:none">Alle anzeigen ▾</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th class="num">mg/l</th><th class="act">Löschen</th></tr></thead>
+            <tbody id="no3-hist-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+          </table>
         </div>
-        <div class="tbl-scroll" id="hist-out"><p class="muted" style="padding:0.6rem">—</p></div>
+        <div class="meas-section collapse3" id="meas-po4">
+          <div class="meas-head">
+            <span>PO₄-Messungen <span style="font-weight:400;color:var(--text-light);font-size:0.82rem">(<span id="po4-count">0</span>)</span></span>
+            <button class="meas-toggle" data-meas="meas-po4" style="display:none">Alle anzeigen ▾</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Datum</th><th class="num">mg/l</th><th class="act">Löschen</th></tr></thead>
+            <tbody id="po4-hist-tbody"><tr><td class="empty" colspan="3">Lade …</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="card">
@@ -995,17 +1010,27 @@
 
   // ---------- Historie (gefiltert, scrollbar) ----------
   let _no3=[], _po4=[], _dosings=[];
+  // Zwei Tabellen (NO₃ / PO₄), eingeklappt nur die letzten 3 — wie im Kalk-Rechner.
+  function renderMeasTable(tbodyId, itemsDesc, dp){
+    const tbody=document.getElementById(tbodyId); if(!tbody) return;
+    const sec=tbody.closest(".meas-section");
+    const toggle=sec && sec.querySelector(".meas-toggle");
+    if(toggle){
+      if(itemsDesc.length>3){
+        toggle.style.display="inline-block"; toggle.dataset.total=itemsDesc.length;
+        toggle.textContent=sec.classList.contains("expanded")?"Weniger anzeigen ▴":`Alle anzeigen (${itemsDesc.length}) ▾`;
+      } else { toggle.style.display="none"; sec.classList.remove("expanded"); }
+    }
+    if(!itemsDesc.length){ tbody.innerHTML=`<tr><td class="empty" colspan="3">Keine Messungen erfasst</td></tr>`; return; }
+    tbody.innerHTML=itemsDesc.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleString("de-DE",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</td><td class="num">${fmt(m.value,dp)}</td><td class="act"><button class="row-action danger" data-del="${m.id}" title="Löschen">✕</button></td></tr>`).join("");
+    tbody.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
+  }
   function renderHistory(){
-    const fNo3=document.querySelector('[data-mf="no3"]')?.checked!==false;
-    const fPo4=document.querySelector('[data-mf="po4"]')?.checked!==false;
-    let all=[];
-    if(fNo3) all=all.concat(_no3.map(m=>({...m,typ:"NO₃",dp:1})));
-    if(fPo4) all=all.concat(_po4.map(m=>({...m,typ:"PO₄",dp:3})));
-    all.sort((a,b)=>b.timestamp-a.timestamp); all=all.slice(0,300);
-    const el=document.getElementById("hist-out");
-    if(all.length===0){ el.innerHTML=`<p class="muted" style="padding:0.6rem">Keine Messungen.</p>`; return; }
-    el.innerHTML=`<table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Wert</th><th></th></tr></thead><tbody>${all.map(m=>`<tr><td>${new Date(m.timestamp*1000).toLocaleDateString("de-DE")}</td><td>${m.typ}</td><td class="num">${fmt(m.value,m.dp)}</td><td style="text-align:right"><button class="row-action danger" data-del="${m.id}" title="Löschen">✕</button></td></tr>`).join("")}</tbody></table>`;
-    el.querySelectorAll("[data-del]").forEach(b=>b.onclick=async ()=>{ if(!confirm("Messung löschen?"))return; await deleteMeasurement(b.dataset.del); await refreshAll(); });
+    renderMeasTable("no3-hist-tbody", [..._no3].reverse(), 1);   // neueste zuerst
+    renderMeasTable("po4-hist-tbody", [..._po4].reverse(), 3);
+    const c3=document.getElementById("no3-count"), c4=document.getElementById("po4-count");
+    if(c3) c3.textContent=_no3.length;
+    if(c4) c4.textContent=_po4.length;
   }
   function renderDosingHistory(){
     const checked=new Set([...document.querySelectorAll('[data-df]')].filter(c=>c.checked).map(c=>parseInt(c.dataset.df,10)));
@@ -1178,7 +1203,7 @@
         const cL=await getAquariumLiters();
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
         fillSettings(); bindSettings(); injectInfo(); bindManualDose();
-        document.querySelectorAll('[data-mf]').forEach(c=>c.addEventListener('change',renderHistory));
+        document.querySelectorAll(".meas-toggle").forEach(btn=>{ btn.onclick=()=>{ const sec=document.getElementById(btn.dataset.meas); if(!sec) return; const ex=sec.classList.toggle("expanded"); btn.textContent=ex?"Weniger anzeigen ▴":`Alle anzeigen (${btn.dataset.total||""}) ▾`; }; });
         document.querySelectorAll('[data-df]').forEach(c=>c.addEventListener('change',renderDosingHistory));
         loaded=true;
       }
