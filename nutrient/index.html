@@ -912,8 +912,9 @@
         }
       }
     }
-    // Dauer-Erhaltungsdose (∞)
-    if(maintPerDose>0) out.entries.push({date:0, pump:cfg.up, ml:+maintPerDose.toFixed(3), isMaintenance:true});
+    // Dauer-Erhaltungsdose (∞). Erhaltung = Verbrauch → hält den Wert konstant;
+    // die Rampe parkt ihn vorher auf cfg.target, also ist target der gehaltene Wert.
+    if(maintPerDose>0) out.entries.push({date:0, pump:cfg.up, ml:+maintPerDose.toFixed(3), projected:cfg.target, isMaintenance:true});
     return out;
   }
 
