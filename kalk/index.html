@@ -1926,20 +1926,22 @@
       const settings = await getSettings();
       const next = document.getElementById("dash-next-doses");
       const lines = [];
-      const intH = Math.floor(24 / (parseInt(settings.dosingsPerDay, 10) || 12)) || 2;
+      const dpd = parseInt(settings.dosingsPerDay, 10) || 12;
+      const intH = Math.floor(24 / dpd) || 2;
+      const perDay = (ml) => (Number(ml) * dpd).toFixed(2);
       const savedPlan = await getCurrentPlan();
       const nowTs = Math.floor(Date.now() / 1000);
       if (savedPlan?.khEntries?.length) {
         const future = savedPlan.khEntries.find(e => e.date > nowTs && !e.isMaintenanceDose);
         const maint = savedPlan.khEntries.find(e => e.isMaintenanceDose || e.date === 0);
-        if (future) lines.push(`<li>KH-Dosis <strong>${Number(future.dosageML).toFixed(2)} ml</strong> am ${fmtDateTime(future.date)}</li>`);
-        else if (maint) lines.push(`<li>KH: Nur Erhaltungsdosierung (${Number(maint.dosageML).toFixed(2)} ml alle ${intH} h)</li>`);
+        if (future) lines.push(`<li>KH-Dosis <strong>${Number(future.dosageML).toFixed(2)} ml</strong> am ${fmtDateTime(future.date)} <span style="color:var(--text-light)">· ${perDay(future.dosageML)} ml/Tag</span></li>`);
+        else if (maint) lines.push(`<li>KH: Nur Erhaltungsdosierung (${Number(maint.dosageML).toFixed(2)} ml alle ${intH} h) <span style="color:var(--text-light)">— entspricht ${perDay(maint.dosageML)} ml/Tag</span></li>`);
       }
       if (savedPlan?.caEntries?.length) {
         const future = savedPlan.caEntries.find(e => e.date > nowTs && !e.isMaintenanceDose);
         const maint = savedPlan.caEntries.find(e => e.isMaintenanceDose || e.date === 0);
-        if (future) lines.push(`<li>Ca-Dosis <strong>${Number(future.caDosageML).toFixed(2)} ml</strong> + Mg <strong>${Number(future.mgDosageML).toFixed(2)} ml</strong> am ${fmtDateTime(future.date)}</li>`);
-        else if (maint) lines.push(`<li>Ca: Nur Erhaltungsdosierung (${Number(maint.caDosageML).toFixed(2)} ml alle ${intH} h)</li>`);
+        if (future) lines.push(`<li>Ca-Dosis <strong>${Number(future.caDosageML).toFixed(2)} ml</strong> + Mg <strong>${Number(future.mgDosageML).toFixed(2)} ml</strong> am ${fmtDateTime(future.date)} <span style="color:var(--text-light)">· ${perDay(future.caDosageML)} / ${perDay(future.mgDosageML)} ml/Tag</span></li>`);
+        else if (maint) lines.push(`<li>Ca: Nur Erhaltungsdosierung (${Number(maint.caDosageML).toFixed(2)} ml alle ${intH} h) <span style="color:var(--text-light)">— entspricht ${perDay(maint.caDosageML)} ml/Tag</span></li>`);
       }
       if (lines.length) next.innerHTML = `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`;
       else next.innerHTML = `<div class="center-state"><p>Keine Messung — erst KH/Ca im Tab „Kalkhaushalt" eintragen.</p></div>`;

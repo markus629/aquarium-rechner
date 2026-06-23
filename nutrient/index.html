@@ -1167,15 +1167,17 @@
       const next=document.getElementById("dash-next-doses");
       if(next){
         const nowTs=Math.floor(Date.now()/1000);
-        const intH=Math.max(1,Math.floor(24/(parseInt(settings.dosingsPerDay,10)||12)));
+        const dpd=Math.max(1,parseInt(settings.dosingsPerDay,10)||12);
+        const intH=Math.max(1,Math.floor(24/dpd));
+        const perDay=(ml)=>fmt(Number(ml)*dpd,2);
         let entries=[];
         try { const pd=await getNutriDoc("plan-current"); entries=(pd && pd.data && pd.data.entries)||[]; }catch(_){}
         const lines=[];
         [[PUMP.N,"Stickstoff"],[PUMP.P,"Phosphat"],[PUMP.C,"Kohlenstoff"],[PUMP.LA,"Lanthan"]].forEach(([p,nm])=>{
           const fut=entries.find(e=>e.pump===p && e.date>nowTs && !e.maint);
           const maint=entries.find(e=>e.pump===p && (e.maint||e.date===0));
-          if(fut) lines.push(`<li>${nm}: <strong>${fmt(fut.ml,2)} ml</strong> am ${new Date(fut.date*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</li>`);
-          else if(maint && maint.ml>0) lines.push(`<li>${nm}: Erhaltung ${fmt(maint.ml,2)} ml alle ${intH} h</li>`);
+          if(fut) lines.push(`<li>${nm}: <strong>${fmt(fut.ml,2)} ml</strong> am ${new Date(fut.date*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} <span class="muted">· ${perDay(fut.ml)} ml/Tag</span></li>`);
+          else if(maint && maint.ml>0) lines.push(`<li>${nm}: Erhaltung ${fmt(maint.ml,2)} ml alle ${intH} h <span class="muted">— entspricht ${perDay(maint.ml)} ml/Tag</span></li>`);
         });
         next.innerHTML = lines.length
           ? `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`
