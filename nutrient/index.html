@@ -1062,17 +1062,19 @@
     const all = [...(oNo3.entries||[]), ...(oPo4.entries||[])];
     // dp = Nachkommastellen der zugehörigen Größe (N/C → NO₃, P/La → PO₄)
     const pumps = [
-      { pump: PUMP.N,  name: "Stickstoff (N)",  dp: 1 },
-      { pump: PUMP.P,  name: "Phosphat (P)",    dp: 3 },
-      { pump: PUMP.C,  name: "Kohlenstoff (C)", dp: 1 },
-      { pump: PUMP.LA, name: "Lanthan",         dp: 3 },
+      { pump: PUMP.N,  name: "Stickstoff (N)",  dp: 1, target: settings.targetNO3 },
+      { pump: PUMP.P,  name: "Phosphat (P)",    dp: 3, target: settings.targetPO4 },
+      { pump: PUMP.C,  name: "Kohlenstoff (C)", dp: 1, target: settings.targetNO3 },
+      { pump: PUMP.LA, name: "Lanthan",         dp: 3, target: settings.targetPO4 },
     ];
     return pumps.map(p=>{
       const rows = all.filter(e=>e.pump===p.pump)
         .sort((a,b)=>(a.date===0?Infinity:a.date)-(b.date===0?Infinity:b.date));
+      // Bei Erhaltung ohne berechnete Prognose den zu haltenden Zielwert anzeigen (Info, wie Kalk)
+      const prog=(e)=>{ const v=(e.projected!=null)?e.projected:(e.isMaintenance&&p.target!=null?Number(p.target):null); return v!=null?fmt(v,p.dp):"–"; };
       const body = rows.length
         ? `<table class="data-table"><thead><tr><th>Zeit</th><th class="num">Menge (ml)</th><th class="num">Prognose (mg/l)</th><th>Typ</th></tr></thead><tbody>`
-          + rows.map(e=>`<tr><td>${planTime(e.date)}</td><td class="num">${fmt(e.ml,2)}</td><td class="num">${e.projected!=null?fmt(e.projected,p.dp):"–"}</td><td>${e.isMaintenance?"Erhaltung":"Anpassung"}</td></tr>`).join("")
+          + rows.map(e=>`<tr><td>${planTime(e.date)}</td><td class="num">${fmt(e.ml,2)}</td><td class="num">${prog(e)}</td><td>${e.isMaintenance?"Erhaltung":"Anpassung"}</td></tr>`).join("")
           + `</tbody></table>`
         : `<div class="muted" style="padding:0.2rem 0 0.1rem">Keine Dosierung geplant.</div>`;
       return `<div class="nut-block"><div class="nut-head"><span class="name">${p.name}</span></div>${body}</div>`;
