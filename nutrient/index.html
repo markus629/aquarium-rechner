@@ -62,15 +62,59 @@
 
   <div id="view-main" style="display:none">
     <div class="tabs" id="main-tabs">
-      <button class="tab-btn active" data-tab="tab-plan">Messung &amp; Plan</button>
+      <button class="tab-btn active" data-tab="tab-dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="tab-plan">Messung &amp; Plan</button>
       <button class="tab-btn" data-tab="tab-manual">Manuell</button>
       <button class="tab-btn" data-tab="tab-container">Kanister</button>
       <button class="tab-btn" data-tab="tab-device">Gerät</button>
       <button class="tab-btn" data-tab="tab-settings">Einstellungen</button>
     </div>
 
+    <!-- ===== Tab: Dashboard ===== -->
+    <div id="tab-dashboard" class="tab-content active">
+      <div id="dash-warnings"></div>
+      <div class="card">
+        <h2>Aktueller Stand</h2>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-label">NO₃</div>
+            <div class="stat-value" id="dash-no3">—</div>
+            <div class="stat-meta" id="dash-no3-meta">keine Messung</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">PO₄</div>
+            <div class="stat-value" id="dash-po4">—</div>
+            <div class="stat-meta" id="dash-po4-meta">keine Messung</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">N:P (molar)</div>
+            <div class="stat-value" id="dash-np">—</div>
+            <div class="stat-meta" id="dash-np-meta">—</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">ESP-Status</div>
+            <div class="stat-value" id="dash-esp" style="font-size:1.1rem">—</div>
+            <div class="stat-meta" id="dash-esp-meta">lade …</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Nächste Dosierungen</h2>
+        <div id="dash-next-doses">
+          <div class="center-state"><p>Keine Messung — erst NO₃/PO₄ im Tab „Messung &amp; Plan" eintragen.</p></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Verlauf</h2>
+        <div class="chart-wrap"><div class="chart-title">NO₃ (mg/l)</div><div id="dash-chart-no3"></div></div>
+        <div class="chart-wrap" style="margin-top:1rem"><div class="chart-title">PO₄ (mg/l)</div><div id="dash-chart-po4"></div></div>
+      </div>
+    </div>
+
     <!-- ===== Tab: Messung & Plan ===== -->
-    <div id="tab-plan" class="tab-content active">
+    <div id="tab-plan" class="tab-content">
       <div class="card">
         <h2>Neue Messung</h2>
         <div class="grid2">
@@ -326,7 +370,7 @@
   window.addEventListener("unhandledrejection", e=>{ const vis=document.getElementById("view-main")?.style.display==="block"; if(vis){e.preventDefault();return;} showError("Promise-Fehler: "+(e.reason?.message||e.reason)); });
 
   // Tabs
-  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); if(btn.dataset.tab==="tab-manual") refreshPumpCalibration(); if(btn.dataset.tab==="tab-container") refreshContainers(); }; });
+  document.querySelectorAll("#main-tabs .tab-btn").forEach(btn=>{ btn.onclick=()=>{ document.querySelectorAll("#main-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn)); document.querySelectorAll(".tab-content").forEach(c=>c.classList.toggle("active",c.id===btn.dataset.tab)); if(btn.dataset.tab==="tab-dashboard") refreshDashboard(); if(btn.dataset.tab==="tab-device") refreshDeviceTab(); if(btn.dataset.tab==="tab-manual") refreshPumpCalibration(); if(btn.dataset.tab==="tab-container") refreshContainers(); }; });
 
   // ---------- Kanister / Füllstände ----------
   async function refreshContainers(){
@@ -976,6 +1020,82 @@
     };
   }
 
+  // ---------- Dashboard ----------
+  async function refreshDashboard(){
+    try {
+      const no3=(await listMeasurements("no3",300)).slice().reverse();   // aufsteigend
+      const po4=(await listMeasurements("po4",300)).slice().reverse();
+      const dosings=await listDosings(800);
+      const C=cfgs();
+      const oNo3=controlFor(C.no3,no3,dosings), oPo4=controlFor(C.po4,po4,dosings);
+
+      // --- Stat-Boxen ---
+      const setStat=(idV,idM,arr,dp,unit)=>{
+        const v=document.getElementById(idV), m=document.getElementById(idM);
+        if(!v||!m) return;
+        if(!arr.length){ v.textContent="—"; m.textContent="keine Messung"; return; }
+        const last=arr[arr.length-1];
+        v.textContent=fmt(last.value,dp)+(unit?" "+unit:"");
+        m.textContent=new Date(last.timestamp*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+      };
+      setStat("dash-no3","dash-no3-meta",no3,1,"mg/l");
+      setStat("dash-po4","dash-po4-meta",po4,3,"mg/l");
+
+      // N:P (molar)
+      const npV=document.getElementById("dash-np"), npM=document.getElementById("dash-np-meta");
+      if(npV && npM){
+        const l3=oNo3.level, l4=oPo4.level;
+        if(l3>0 && l4>0){ const molar=(l3/62)/(l4/95); const tgt=parseFloat(settings.npTargetRatio)||16;
+          npV.textContent=fmt(molar, molar<10?1:0)+" : 1"; npM.textContent="Ziel ~"+tgt+":1"; }
+        else { npV.textContent="—"; npM.textContent="NO₃ & PO₄ nötig"; }
+      }
+
+      // ESP-Status (lastSeen < 120 s = online)
+      const espEl=document.getElementById("dash-esp"), espMeta=document.getElementById("dash-esp-meta");
+      try {
+        const info=await getNutriDoc("info");
+        if(!info || !info.data){ espEl.textContent="offline"; espEl.style.color="var(--text-light)"; espMeta.textContent="noch nie verbunden"; }
+        else { const d=info.data; const ts=d.lastSeen?new Date(d.lastSeen<1e12?d.lastSeen*1000:d.lastSeen):null;
+          const on=ts && (Date.now()-ts.getTime())<120000;
+          espEl.textContent=on?"online":"offline"; espEl.style.color=on?"var(--green)":"var(--text-light)";
+          espMeta.textContent=ts?ts.toLocaleString("de-DE"):"—"; }
+      } catch(_){ if(espEl){espEl.textContent="—";} if(espMeta){espMeta.textContent="—";} }
+
+      // --- Warnungen: unkalibrierte Pumpen ---
+      const warnEl=document.getElementById("dash-warnings");
+      if(warnEl){
+        let html="";
+        try { const pumps=await getPumps(); const unc=pumps.filter(p=>!p.stepsPerML||p.stepsPerML<=0);
+          if(unc.length) html=`<div class="info-banner" style="background:#fdf2f0;border-color:var(--red);color:#7a3030"><strong>${unc.length} Pumpe${unc.length>1?'n':''} nicht kalibriert</strong> — Auto-Dosierung läuft dafür <strong>nicht</strong>. Im Tab <strong>Manuell</strong> kalibrieren.</div>`;
+        } catch(_){}
+        warnEl.innerHTML=html;
+      }
+
+      // --- Nächste Dosierungen (aus gespeichertem Plan = was der ESP ausführt) ---
+      const next=document.getElementById("dash-next-doses");
+      if(next){
+        const nowTs=Math.floor(Date.now()/1000);
+        const intH=Math.max(1,Math.floor(24/(parseInt(settings.dosingsPerDay,10)||12)));
+        let entries=[];
+        try { const pd=await getNutriDoc("plan-current"); entries=(pd && pd.data && pd.data.entries)||[]; }catch(_){}
+        const lines=[];
+        [[PUMP.N,"Stickstoff"],[PUMP.P,"Phosphat"],[PUMP.C,"Kohlenstoff"],[PUMP.LA,"Lanthan"]].forEach(([p,nm])=>{
+          const fut=entries.find(e=>e.pump===p && e.date>nowTs && !e.maint);
+          const maint=entries.find(e=>e.pump===p && (e.maint||e.date===0));
+          if(fut) lines.push(`<li>${nm}: <strong>${fmt(fut.ml,2)} ml</strong> am ${new Date(fut.date*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</li>`);
+          else if(maint && maint.ml>0) lines.push(`<li>${nm}: Erhaltung ${fmt(maint.ml,2)} ml alle ${intH} h</li>`);
+        });
+        next.innerHTML = lines.length
+          ? `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`
+          : `<div class="center-state"><p>Keine Messung — erst NO₃/PO₄ im Tab „Messung &amp; Plan" eintragen.</p></div>`;
+      }
+
+      // --- Verlauf-Charts ---
+      renderChart("dash-chart-no3", no3, dosings.filter(d=>d.pump===PUMP.N||d.pump===PUMP.C), C.no3, [{pump:PUMP.N,color:"#e8732a",label:"N"},{pump:PUMP.C,color:"#27ae60",label:"C"}]);
+      renderChart("dash-chart-po4", po4, dosings.filter(d=>d.pump===PUMP.P||d.pump===PUMP.LA), C.po4, [{pump:PUMP.P,color:"#3498db",label:"P"},{pump:PUMP.LA,color:"#27ae60",label:"Lanthan"}]);
+    } catch(e){ console.warn("Dashboard refresh:", e); }
+  }
+
   // ---------- Refresh ----------
   async function refreshAll(){
     _no3=(await listMeasurements("no3",300)).slice().reverse(); // asc
@@ -1028,6 +1148,7 @@
         loaded=true;
       }
       await refreshAll();
+      await refreshDashboard();   // Dashboard ist der Start-Tab
     } else {
       loaded=false; showView("view-login");
     }
