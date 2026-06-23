@@ -34,6 +34,31 @@ footer { text-align:center; padding:1.5rem; font-size:0.8rem; color:var(--text-l
 .back-btn:hover { background:rgba(255,255,255,0.28); }
 .back-btn span { display:block; width:18px; height:2px; background:#fff; border-radius:2px; }
 
+/* Hover-Navigationsmenü am ☰-Button — Inhalt/Verhalten zentral aus /assets/nav-menu.js */
+.nav-dropdown { position:absolute; top:1rem; left:1rem; z-index:20; }
+.nav-dropdown .back-btn { position:static; }   /* Position übernimmt jetzt der Wrapper */
+.nav-dropdown::after {                          /* unsichtbare Brücke über den Spalt zum Menü */
+  content:""; position:absolute; top:100%; left:0; width:220px; max-width:70vw; height:10px;
+}
+.nav-menu {
+  position:absolute; top:calc(100% + 6px); left:0; min-width:220px;
+  background:#fff; border:1px solid var(--border); border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.18); padding:0.35rem;
+  opacity:0; visibility:hidden; transform:translateY(-6px); pointer-events:none;
+  transition:opacity 0.15s, transform 0.15s, visibility 0.15s;
+}
+.nav-dropdown:hover .nav-menu, .nav-dropdown:focus-within .nav-menu {
+  opacity:1; visibility:visible; transform:translateY(0); pointer-events:auto;
+}
+.nav-menu-item {
+  display:block; padding:0.55rem 0.8rem; border-radius:7px; text-decoration:none;
+  color:var(--text); font-size:0.9rem; font-weight:600; white-space:nowrap;
+}
+.nav-menu-item:hover { background:var(--blue-light); color:var(--blue-dark); }
+.nav-menu-item.current { background:var(--blue); color:#fff; }
+.nav-menu-item.overview { color:var(--text-light); border-bottom:1px solid var(--border); border-radius:0; margin-bottom:0.25rem; padding-bottom:0.6rem; }
+.nav-menu-item.overview:hover { color:var(--blue-dark); background:var(--blue-light); }
+
 main { max-width:1000px; margin:0 auto; padding:1.5rem 1rem 3rem; }
 .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:1.5rem; margin-bottom:1.5rem; }
 .card h2 { font-size:1.15rem; color:var(--blue); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--blue-light); display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
