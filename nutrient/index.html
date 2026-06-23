@@ -786,15 +786,13 @@
     const win=measAsc.filter(m=>m.timestamp>=cutoff);
     const out={ key:cfg.key, label:cfg.label, target:cfg.target, n:win.length,
                 level:null, slopePerDay:null, coverage:0, status:"nodata", statusText:"Noch keine Messung im Fenster.",
-                maintMl:(cfg.key+"_maint" in state)?state[cfg.key+"_maint"]:(cfg.startUp||0), maintPump:cfg.up, action:null, badge:"wait" };
+                maintMl:(cfg.startUp||0), maintPump:cfg.up, action:null, badge:"wait" };
     if(win.length===0) return out;
     out.level=win[win.length-1].value;
     const t0=win[0].timestamp, tLast=win[win.length-1].timestamp;
     const pts=win.map(m=>({t:(m.timestamp-t0)/DAY, v:m.value}));
     const reg=linReg(pts);
     const effUp=cfg.coeffUp*100/settings.aquariumVolume; // mg/l je ml
-    let D=(cfg.key+"_maint" in state) ? state[cfg.key+"_maint"] : (cfg.startUp||0);
-
     // --- 1) Netto-Verbrauch lernen (Ansatz A: Massenbilanz) ---
     // Netto-Bedarf [mg/l/Tag] = mittlere Up-Dosierrate − gemessene Steigung.
     // Die Steigung enthält unsere eigene Dosierung; durch Abziehen der Dosierrate
@@ -803,8 +801,14 @@
     const minCover=Math.max(2, Math.min(7, settings.learnWindowDays*0.15));
     const alpha=settings.learnAlpha!=null ? settings.learnAlpha : 0.5;
     const lastLearnKey=cfg.key+"_lastLearnTs";
+    const canLearn = !!(reg && reg.coverage>=minCover);
+    // Erhaltung D: solange die Datenbasis nicht zum Lernen reicht (canLearn=false)
+    // die Start-Dosierung (Warmstart) verwenden — der gespeicherte/gelernte Wert
+    // greift erst, wenn wirklich gelernt werden kann. So folgt der Plan beim Start
+    // exakt der eingestellten Start-Dosierung (statt einem alten gelernten Wert).
+    let D=(canLearn && (cfg.key+"_maint" in state)) ? state[cfg.key+"_maint"] : (cfg.startUp||0);
     let trendNote="";
-    if(reg && reg.coverage>=minCover){
+    if(canLearn){
       out.slopePerDay=reg.slope; out.coverage=reg.coverage;
       const upMl=(dosingsAsc||[]).reduce((s,d)=>(d.pump===cfg.up && d.timestamp>=t0 && d.timestamp<=tLast)?s+(d.ml||0):s, 0);
       const days=Math.max(reg.coverage,1e-6);
