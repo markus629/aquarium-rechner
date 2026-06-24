@@ -628,13 +628,17 @@ void runNutrientPlanForHour(time_t now, struct tm &t) {
     if (!pumpAdj[p] && pumpML[p] <= 0.0f) pumpML[p] = e["ml"] | 0.0f;
   }
 
-  // Dedup + Queue (Reihenfolge N → P → C → La)
+  // Dedup + Queue (Reihenfolge N → P → C → La).
+  // Pro Pumpe nur dosieren, wenn die aktuelle Stunde ein Slot im Zeitfenster der
+  // Gruppe ist (N,C → NO₃-Fenster, P,La → PO₄-Fenster). Volltag 0–24 = wie bisher.
   bool any = false;
   for (int p = 0; p < 4; p++) {
-    if (pumpML[p] > 0.001f && !sameLocalHour(lastDosageTimeCache[p], now)) {
-      enqueueDose(p, pumpML[p], (DosageType)p);
-      any = true;
-    }
+    if (pumpML[p] <= 0.001f || sameLocalHour(lastDosageTimeCache[p], now)) continue;
+    int fH = (p == 0 || p == 2) ? settings_cache::no3FromHour : settings_cache::po4FromHour;
+    int tH = (p == 0 || p == 2) ? settings_cache::no3ToHour   : settings_cache::po4ToHour;
+    if (!settings_cache::hourIsDoseSlot(t.tm_hour, fH, tH, settings_cache::dosingsPerDay)) continue;
+    enqueueDose(p, pumpML[p], (DosageType)p);
+    any = true;
   }
   if (any) {
     Serial.printf("[Plan] Nährstoff-Sequenz Stunde %d: N=%.2f P=%.2f C=%.2f La=%.2f\n",
@@ -659,13 +663,16 @@ void checkAutoDosingSequence() {
   struct tm t;
   localtime_r(&now, &t);
 
-  // Trigger-Fenster: Minute 10-15 in einer Dosier-Stunde (hour % intervalHours == 0)
-  if (settings_cache::intervalHours() <= 0) return;
-  if (t.tm_hour % settings_cache::intervalHours() != 0 ||
-      t.tm_min < 10 || t.tm_min > 15) return;
+  // Gemeinsames Minuten-Fenster: nur :10–:15.
+  if (t.tm_min < 10 || t.tm_min > 15) return;
 
-  // Nährstoff-Rolle: eigenes Plan-Format (entries[]) — danach fertig.
+  // Nährstoff-Rolle: dosiert zu den Slot-Stunden aus dem Zeitfenster — daher JEDE
+  // Stunde prüfen, runNutrientPlanForHour entscheidet pro Pumpe. Danach fertig.
   if (pb_sync::isNutrient()) { runNutrientPlanForHour(now, t); return; }
+
+  // Kalk: nur zu Raster-Stunden (hour % intervalHours == 0).
+  if (settings_cache::intervalHours() <= 0) return;
+  if (t.tm_hour % settings_cache::intervalHours() != 0) return;
 
   JsonDocument doc;
   if (deserializeJson(doc, cachedPlanJson)) return;  // ungültiger Cache → abbrechen

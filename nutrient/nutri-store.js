@@ -209,7 +209,11 @@ export function defaultSettings() {
     coeffLa_PO4: 0.1,               // Lanthan: -0,1 PO4 ("bis zu" -> konservativ)
     cMinML100: 0.2, cMaxML100: 2.0, // C-Pumpe: Dosier-Hüllkurve ml/100 L (unspezifisch)
     // Betrieb
-    dosingsPerDay: 12,              // Erhaltungsdosis über den Tag verteilt
+    dosingsPerDay: 12,              // Erhaltungsdosis über den Tag verteilt (1 = auf einen Schlag)
+    // Dosier-Zeitfenster je Nährstoff-Gruppe (Stunden 0–24). 0–24 = ganzer Tag.
+    // NO₃-Fenster steuert N + C, PO₄-Fenster steuert P + Lanthan.
+    no3FromHour: 0, no3ToHour: 24,
+    po4FromHour: 0, po4ToHour: 24,
     // Start-Dosis ml/Tag je Pumpe (Warmstart; 0 = von 0 lernen).
     // N/P seeden die gelernte Erhaltung; C/La sind die Start-Menge beim Abbau.
     startDoseN: 0, startDoseP: 0, startDoseC: 0, startDoseLa: 0,

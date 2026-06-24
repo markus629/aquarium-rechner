@@ -30,6 +30,10 @@ float phThresholdForKHNight = 8.0f;
 int khNightStart = 19;
 int khNightEnd = 7;
 float magnesiumRatio = 50.0f;  // Prozent
+// Dosier-Zeitfenster je Nährstoff-Gruppe (Stunden 0–24). 0–24 = ganzer Tag.
+// NO₃-Fenster steuert N + C, PO₄-Fenster steuert P + Lanthan. (nur Nährstoff-Rolle)
+int no3FromHour = 0, no3ToHour = 24;
+int po4FromHour = 0, po4ToHour = 24;
 unsigned long lastSyncMs = 0;
 
 // ---------- NVS ----------
@@ -44,6 +48,8 @@ void loadFromNVS() {
   khNightStart = p.getInt("nightSt", 19);
   khNightEnd = p.getInt("nightEnd", 7);
   magnesiumRatio = p.getFloat("mgRatio", 50.0f);
+  no3FromHour = p.getInt("no3From", 0);  no3ToHour = p.getInt("no3To", 24);
+  po4FromHour = p.getInt("po4From", 0);  po4ToHour = p.getInt("po4To", 24);
   pumps::stepsPerSec  = (uint32_t)p.getULong("stepsHz", 400);
   pumps::accelPerSec2 = (uint32_t)p.getULong("accelHz", 200);
   pumps::antiDripEnabled = p.getBool("adEn", true);
@@ -64,6 +70,8 @@ void saveToNVS() {
   p.putInt("nightSt", khNightStart);
   p.putInt("nightEnd", khNightEnd);
   p.putFloat("mgRatio", magnesiumRatio);
+  p.putInt("no3From", no3FromHour);  p.putInt("no3To", no3ToHour);
+  p.putInt("po4From", po4FromHour);  p.putInt("po4To", po4ToHour);
   p.putULong("stepsHz", (unsigned long)pumps::stepsPerSec);
   p.putULong("accelHz", (unsigned long)pumps::accelPerSec2);
   p.putBool("adEn", pumps::antiDripEnabled);
@@ -121,6 +129,11 @@ void sync() {
     float nv = doc["magnesiumRatio"].as<float>();
     if (nv != magnesiumRatio) { magnesiumRatio = nv; changed = true; }
   }
+  // Dosier-Zeitfenster (Nährstoff-Rolle)
+  if (doc["no3FromHour"].is<float>()) { int nv=(int)doc["no3FromHour"].as<float>(); if(nv!=no3FromHour){no3FromHour=nv;changed=true;} }
+  if (doc["no3ToHour"].is<float>())   { int nv=(int)doc["no3ToHour"].as<float>();   if(nv!=no3ToHour){no3ToHour=nv;changed=true;} }
+  if (doc["po4FromHour"].is<float>()) { int nv=(int)doc["po4FromHour"].as<float>(); if(nv!=po4FromHour){po4FromHour=nv;changed=true;} }
+  if (doc["po4ToHour"].is<float>())   { int nv=(int)doc["po4ToHour"].as<float>();   if(nv!=po4ToHour){po4ToHour=nv;changed=true;} }
   // Schritt-Geschwindigkeit / -Beschleunigung
   if (doc["stepsPerSec"].is<float>()) {
     uint32_t nv = (uint32_t)doc["stepsPerSec"].as<float>();
@@ -159,6 +172,33 @@ void sync() {
 int intervalHours() {
   if (dosingsPerDay <= 0 || dosingsPerDay > 24 || (24 % dosingsPerDay != 0)) return 2;
   return 24 / dosingsPerDay;
+}
+
+// Dosier-Slots (ganze Stunden) aus Zeitfenster + Anzahl Dosen → slots[], gibt Anzahl.
+// MUSS identisch zur Web-Funktion doseSlotHours() (nutrient/index.html) sein!
+// Volltag (0–24 / from==to): gleichmäßig über 24 h ab Stunde 0. Fenster: erste am
+// Start, letzte am Ende; n=1 → nur Start. Ganzzahl-Rundung floor((2a+b)/(2b)).
+int doseSlotHours(int fromH, int toH, int n, int *slots) {
+  if (n < 1) n = 1;
+  int f = ((fromH % 24) + 24) % 24;
+  int t = toH;
+  bool full = (f == 0 && (t >= 24 || t == 0)) || ((((t % 24) + 24) % 24) == f);
+  bool used[24] = { false };
+  if (full) {
+    for (int i = 0; i < n; i++) used[ ((2*i*24 + n) / (2*n)) % 24 ] = true;
+  } else {
+    int span = (((t - f) % 24) + 24) % 24;   // 1..23
+    if (n == 1) used[f] = true;
+    else for (int i = 0; i < n; i++) used[ (f + ((2*i*span + (n-1)) / (2*(n-1)))) % 24 ] = true;
+  }
+  int cnt = 0;
+  for (int h = 0; h < 24; h++) if (used[h]) slots[cnt++] = h;
+  return cnt;
+}
+bool hourIsDoseSlot(int hour, int fromH, int toH, int n) {
+  int slots[24]; int c = doseSlotHours(fromH, toH, n, slots);
+  for (int i = 0; i < c; i++) if (slots[i] == hour) return true;
+  return false;
 }
 
 // ---------- Tag/Nacht-Entscheidung ----------
