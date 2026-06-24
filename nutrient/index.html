@@ -780,12 +780,6 @@
     const lastT=pts[n-1].t;
     return { slope, intercept, n, atLast: intercept+slope*lastT, coverage: lastT-pts[0].t };
   }
-  // nächste Dosier-Stunde (Vielfaches von intH, Minute 10) nach now — wie calc.js
-  function nextDoseHour(now, intH){
-    const d=new Date(now*1000); let h=d.getHours(), plus=0;
-    if(h%intH===0){ if(d.getMinutes()>=10) plus=intH; } else { plus=intH-(h%intH); }
-    d.setHours(h+plus,10,0,0); return Math.floor(d.getTime()/1000);
-  }
 
   // Dosier-Slots (ganze Stunden) aus Zeitfenster + Anzahl Dosen.
   // MUSS identisch zur Firmware (plan_executor::doseSlotHours) sein!
@@ -805,6 +799,14 @@
       else for(let i=0;i<n;i++) hours.push((f + (((2*i*span + (n-1))/(2*(n-1)))|0))%24);
     }
     return [...new Set(hours)].sort((a,b)=>a-b);
+  }
+  // Anzahl Dosen/Tag (= Slots) + Fenster-Text für die Anzeige.
+  function scheduleInfo(fromH, toH, dosesPerDay){
+    const n=Math.max(1, doseSlotHours(fromH, toH, dosesPerDay).length);
+    const f=(((Math.round(fromH)%24)+24)%24), t=Math.round(toH);
+    const full=(f===0 && (t>=24 || t===0)) || (((((t%24)+24)%24))===f);
+    const win=full ? "ganztägig" : `${f}–${(t===0?24:t)} Uhr`;
+    return { n, win, full };
   }
   // Nächste `count` Slot-Zeitpunkte (Unix-Sek, Minute :10) ab anchorTs (lokale Zeit).
   function nextSlotTimes(anchorTs, fromH, toH, n, count){
@@ -1006,7 +1008,8 @@
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
     let rec="";
-    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis <span class="muted">(gelernter Netto-Verbrauch)</span>: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} (über ${settings.dosingsPerDay}×/Tag)</div>`;
+    const sch=scheduleInfo(cfg.fromHour, cfg.toHour, Math.max(1,parseInt(settings.dosingsPerDay,10)||12));
+    if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis <span class="muted">(gelernter Netto-Verbrauch)</span>: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} <span class="muted">(${sch.n}×/Tag · ${sch.win})</span></div>`;
     const adj=(o.entries||[]).filter(e=>!e.isMaintenance);
     if(adj.length) rec+=`<div class="rec">Anpassung: <strong>${adj.length} Dosen</strong> ${PUMP_NAMES[adj[0].pump]} über ${fmt(o.durationDays,1)} Tage → Ziel</div>`;
     const slopeTxt = o.slopePerDay==null ? "–" : `${fmt(o.slopePerDay,3)} mg/l/Tag`;
@@ -1220,16 +1223,20 @@
       if(next){
         const nowTs=Math.floor(Date.now()/1000);
         const dpd=Math.max(1,parseInt(settings.dosingsPerDay,10)||12);
-        const intH=Math.max(1,Math.floor(24/dpd));
-        const perDay=(ml)=>fmt(Number(ml)*dpd,2);
+        // Fenster je Gruppe: N,C → NO₃-Fenster · P,La → PO₄-Fenster
+        const grpInfo=(p)=> (p===PUMP.N||p===PUMP.C)
+          ? scheduleInfo(settings.no3FromHour, settings.no3ToHour, dpd)
+          : scheduleInfo(settings.po4FromHour, settings.po4ToHour, dpd);
+        const fmtT=(ts)=>new Date(ts*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
         let entries=[];
         try { const pd=await getNutriDoc("plan-current"); entries=(pd && pd.data && pd.data.entries)||[]; }catch(_){}
         const lines=[];
         [[PUMP.N,"Stickstoff"],[PUMP.P,"Phosphat"],[PUMP.C,"Kohlenstoff"],[PUMP.LA,"Lanthan"]].forEach(([p,nm])=>{
           const fut=entries.find(e=>e.pump===p && e.date>nowTs && !e.maint);
           const maint=entries.find(e=>e.pump===p && (e.maint||e.date===0));
-          if(fut) lines.push(`<li>${nm}: <strong>${fmt(fut.ml,2)} ml</strong> am ${new Date(fut.date*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} <span class="muted">· ${perDay(fut.ml)} ml/Tag</span></li>`);
-          else if(maint && maint.ml>0) lines.push(`<li>${nm}: Erhaltung ${fmt(maint.ml,2)} ml alle ${intH} h <span class="muted">— entspricht ${perDay(maint.ml)} ml/Tag</span></li>`);
+          const s=grpInfo(p);
+          if(fut) lines.push(`<li>${nm}: nächste Dosis <strong>${fmt(fut.ml,2)} ml</strong> am ${fmtT(fut.date)} <span class="muted">(${s.n}×/Tag · ${s.win})</span></li>`);
+          else if(maint && maint.ml>0) lines.push(`<li>${nm}: Erhaltung ${fmt(maint.ml,2)} ml × ${s.n}/Tag <span class="muted">(${s.win}) — entspricht ${fmt(maint.ml*s.n,2)} ml/Tag</span></li>`);
         });
         next.innerHTML = lines.length
           ? `<ul style="margin:0;padding-left:1.2rem;line-height:1.7">${lines.join("")}</ul>`
