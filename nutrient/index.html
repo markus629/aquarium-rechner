@@ -366,7 +366,7 @@
         </div>
 
         <div class="section-title">Dosier-Zeitfenster</div>
-        <p class="muted" style="margin-bottom:0.6rem">In welchem Zeitraum dosiert werden darf. Die Dosierungen/Tag werden gleichmäßig über das Fenster verteilt (erste zur Start-, letzte zur Endzeit). <strong>0–24 = ganzer Tag</strong>. NO₃-Fenster steuert Stickstoff + Kohlenstoff, PO₄-Fenster Phosphat + Lanthan.</p>
+        <p class="muted" style="margin-bottom:0.6rem">In welchem Zeitraum dosiert werden darf. Die Dosierungen/Tag werden gleichmäßig über das Fenster verteilt (erste zur Start-, letzte zur Endzeit). <strong>0–24 = ganzer Tag</strong>. NO₃-Fenster steuert Stickstoff + Kohlenstoff, PO₄-Fenster Phosphat + Lanthan.<br>Es passen max. so viele Dosierungen/Tag hinein, wie ganze Stunden im Fenster liegen (z. B. 10–14 Uhr → max 5); größere Werte sind oben bei „Dosierungen/Tag" deaktiviert.</p>
         <div class="form-grid">
           <div class="form-row"><label>NO₃ (N + C): von / bis Uhr</label><div class="minmax"><input type="number" data-setting="no3FromHour" step="1" min="0" max="24"><input type="number" data-setting="no3ToHour" step="1" min="0" max="24"></div></div>
           <div class="form-row"><label>PO₄ (P + Lanthan): von / bis Uhr</label><div class="minmax"><input type="number" data-setting="po4FromHour" step="1" min="0" max="24"><input type="number" data-setting="po4ToHour" step="1" min="0" max="24"></div></div>
@@ -668,6 +668,7 @@
       if(inp.dataset.pct!=null) v=Math.round(v*100);
       inp.value=v;
     });
+    updateDoseOptions();   // Dropdown an Fenster-Kapazität anpassen
   }
   function bindSettings(){
     document.querySelectorAll("[data-setting]").forEach(inp=>{
@@ -680,6 +681,8 @@
         let v=parseFloat(inp.value); if(isNaN(v)) return;
         if(inp.dataset.pct!=null) v=v/100;
         settings[inp.dataset.setting]=v;
+        // Fenster geändert → max. Dosierungen/Tag neu begrenzen (clampt ggf. dosingsPerDay)
+        if(/^(no3|po4)(From|To)Hour$/.test(inp.dataset.setting)) updateDoseOptions();
         try{ await saveSettings(settings); }catch(e){ toast("Speichern fehlgeschlagen","err"); }
         if(inp.dataset.setting==="aquariumVolume"){ try{ await setAquariumLiters(v); }catch(_){} }
         await refreshAll();
@@ -807,6 +810,26 @@
     const full=(f===0 && (t>=24 || t===0)) || (((((t%24)+24)%24))===f);
     const win=full ? "ganztägig" : `${f}–${(t===0?24:t)} Uhr`;
     return { n, win, full };
+  }
+  // Wie viele ganze Stunden passen ins Fenster (= max. Dosen/Tag). Volltag → 24.
+  function windowCapacity(fromH, toH){
+    const f=(((Math.round(fromH)%24)+24)%24), t=Math.round(toH);
+    const full=(f===0 && (t>=24 || t===0)) || (((((t%24)+24)%24))===f);
+    if(full) return 24;
+    return ((((t-f)%24)+24)%24) + 1;   // erste am Start, letzte am Ende → span+1
+  }
+  // Dropdown „Dosierungen/Tag" auf die Fenster-Kapazität begrenzen (kleineres Fenster gewinnt).
+  function updateDoseOptions(){
+    const sel=document.querySelector('[data-setting="dosingsPerDay"]');
+    if(!sel) return;
+    const cap=Math.min(windowCapacity(settings.no3FromHour, settings.no3ToHour),
+                       windowCapacity(settings.po4FromHour, settings.po4ToHour));
+    let maxAllowed=1;
+    [...sel.options].forEach(o=>{ const v=parseInt(o.value,10); o.disabled=(v>cap); if(!o.disabled) maxAllowed=Math.max(maxAllowed,v); });
+    if((parseInt(sel.value,10)||0)>cap){          // aktuelle Wahl passt nicht mehr → runter
+      sel.value=String(maxAllowed); settings.dosingsPerDay=maxAllowed;
+      saveSettings(settings).catch(()=>{});
+    }
   }
   // Nächste `count` Slot-Zeitpunkte (Unix-Sek, Minute :10) ab anchorTs (lokale Zeit).
   function nextSlotTimes(anchorTs, fromH, toH, n, count){
