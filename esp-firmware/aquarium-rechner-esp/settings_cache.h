@@ -23,7 +23,9 @@
 namespace settings_cache {
 
 bool autoDosing = false;          // Master-Schalter: ESP führt Plan autonom aus
-int dosingsPerDay = 12;           // 2, 3, 4, 6, 8, 12 — Anzahl Dosier-Intervalle pro Tag
+int dosingsPerDay = 12;           // intern: nur OTA-Schutzfenster-Heuristik (intervalHours)
+// Dosierungen/Tag je Pumpe (Nährstoff-Rolle): N und P individuell, C+La gemeinsam.
+int dosesPerDayN = 12, dosesPerDayP = 12, dosesPerDayCLa = 12;
 bool otaAutoUpdate = false;       // Master-Schalter: ESP installiert neuere GitHub-Releases automatisch
 bool usePhBasedKHDosing = false;
 float phThresholdForKHNight = 8.0f;
@@ -42,6 +44,7 @@ void loadFromNVS() {
   p.begin(NVS_NAMESPACE, true);
   autoDosing = p.getBool("autoDose", false);
   dosingsPerDay = p.getInt("dosPerDay", 12);
+  dosesPerDayN = p.getInt("dpdN", 12);  dosesPerDayP = p.getInt("dpdP", 12);  dosesPerDayCLa = p.getInt("dpdCLa", 12);
   otaAutoUpdate = p.getBool("otaAuto", false);
   usePhBasedKHDosing = p.getBool("phMode", false);
   phThresholdForKHNight = p.getFloat("phThr", 8.0f);
@@ -64,6 +67,7 @@ void saveToNVS() {
   p.begin(NVS_NAMESPACE, false);
   p.putBool("autoDose", autoDosing);
   p.putInt("dosPerDay", dosingsPerDay);
+  p.putInt("dpdN", dosesPerDayN);  p.putInt("dpdP", dosesPerDayP);  p.putInt("dpdCLa", dosesPerDayCLa);
   p.putBool("otaAuto", otaAutoUpdate);
   p.putBool("phMode", usePhBasedKHDosing);
   p.putFloat("phThr", phThresholdForKHNight);
@@ -105,6 +109,10 @@ void sync() {
       dosingsPerDay = nv; changed = true;
     }
   }
+  // Dosierungen/Tag je Pumpe (1..24, beliebig — Slot-Logik kommt auch mit Nicht-Teilern klar)
+  if (doc["dosesPerDayN"].is<float>())   { int nv=(int)doc["dosesPerDayN"].as<float>();   if(nv>0&&nv<=24&&nv!=dosesPerDayN){dosesPerDayN=nv;changed=true;} }
+  if (doc["dosesPerDayP"].is<float>())   { int nv=(int)doc["dosesPerDayP"].as<float>();   if(nv>0&&nv<=24&&nv!=dosesPerDayP){dosesPerDayP=nv;changed=true;} }
+  if (doc["dosesPerDayCLa"].is<float>()) { int nv=(int)doc["dosesPerDayCLa"].as<float>(); if(nv>0&&nv<=24&&nv!=dosesPerDayCLa){dosesPerDayCLa=nv;changed=true;} }
   if (doc["otaAutoUpdate"].is<bool>()) {
     bool nv = doc["otaAutoUpdate"].as<bool>();
     if (nv != otaAutoUpdate) { otaAutoUpdate = nv; changed = true; }

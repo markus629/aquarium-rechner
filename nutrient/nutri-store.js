@@ -208,10 +208,12 @@ export function defaultSettings() {
     coeffP_PO4: 0.1,                // P-Pumpe: +0,1 PO4
     coeffLa_PO4: 0.1,               // Lanthan: -0,1 PO4 ("bis zu" -> konservativ)
     cMinML100: 0.2, cMaxML100: 2.0, // C-Pumpe: Dosier-Hüllkurve ml/100 L (unspezifisch)
-    // Betrieb
-    dosingsPerDay: 12,              // Erhaltungsdosis über den Tag verteilt (1 = auf einen Schlag)
-    // Dosier-Zeitfenster je Nährstoff-Gruppe (Stunden 0–24). 0–24 = ganzer Tag.
-    // NO₃-Fenster steuert N + C, PO₄-Fenster steuert P + Lanthan.
+    // Betrieb — Dosierungen/Tag je Pumpe (1 = auf einen Schlag zur Fenster-Startzeit).
+    // N und P individuell (mit eigenem Zeitfenster); C + Lanthan gemeinsam (immer ganztägig).
+    dosesPerDayN: 12, dosesPerDayP: 12, dosesPerDayCLa: 12,
+    dosingsPerDay: 12,             // intern: nur für OTA-Schutzfenster-Heuristik
+    // Dosier-Zeitfenster (Stunden 0–24). 0–24 = ganzer Tag. Nur N (no3*) und P (po4*);
+    // C + Lanthan dosieren immer ganztägig.
     no3FromHour: 0, no3ToHour: 24,
     po4FromHour: 0, po4ToHour: 24,
     // Start-Dosis ml/Tag je Pumpe (Warmstart; 0 = von 0 lernen).

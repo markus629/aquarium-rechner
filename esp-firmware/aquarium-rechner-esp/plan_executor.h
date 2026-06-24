@@ -634,9 +634,12 @@ void runNutrientPlanForHour(time_t now, struct tm &t) {
   bool any = false;
   for (int p = 0; p < 4; p++) {
     if (pumpML[p] <= 0.001f || sameLocalHour(lastDosageTimeCache[p], now)) continue;
-    int fH = (p == 0 || p == 2) ? settings_cache::no3FromHour : settings_cache::po4FromHour;
-    int tH = (p == 0 || p == 2) ? settings_cache::no3ToHour   : settings_cache::po4ToHour;
-    if (!settings_cache::hourIsDoseSlot(t.tm_hour, fH, tH, settings_cache::dosingsPerDay)) continue;
+    // N (0): NO₃-Fenster/Anzahl · P (1): PO₄-Fenster/Anzahl · C (2)+La (3): ganztägig, gemeinsame Anzahl
+    int fH, tH, n;
+    if (p == 0)      { fH = settings_cache::no3FromHour; tH = settings_cache::no3ToHour; n = settings_cache::dosesPerDayN; }
+    else if (p == 1) { fH = settings_cache::po4FromHour; tH = settings_cache::po4ToHour; n = settings_cache::dosesPerDayP; }
+    else             { fH = 0; tH = 24; n = settings_cache::dosesPerDayCLa; }
+    if (!settings_cache::hourIsDoseSlot(t.tm_hour, fH, tH, n)) continue;
     enqueueDose(p, pumpML[p], (DosageType)p);
     any = true;
   }

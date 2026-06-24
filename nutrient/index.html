@@ -346,30 +346,34 @@
         </div>
 
         <div class="section-title">Automatik</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start">
-          <div class="form-toggle" style="margin:0">
-            <input type="checkbox" id="autoDosing" data-setting="autoDosing">
-            <label for="autoDosing">Automatische Dosierung aktivieren <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP führt den Dosierplan selbständig aus</span></label>
-          </div>
-          <div class="form-row" style="margin:0">
-            <label>Dosierungen pro Tag <span class="hint">gleichmäßig über das Zeitfenster verteilt</span></label>
-            <select data-setting="dosingsPerDay" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
-              <option value="12">12× pro Tag</option>
-              <option value="8">8× pro Tag</option>
-              <option value="6">6× pro Tag</option>
-              <option value="4">4× pro Tag</option>
-              <option value="3">3× pro Tag</option>
-              <option value="2">2× pro Tag</option>
-              <option value="1">1× pro Tag (auf einen Schlag)</option>
-            </select>
-          </div>
+        <div class="form-toggle">
+          <input type="checkbox" id="autoDosing" data-setting="autoDosing">
+          <label for="autoDosing">Automatische Dosierung aktivieren <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP führt den Dosierplan selbständig aus</span></label>
         </div>
 
-        <div class="section-title">Dosier-Zeitfenster</div>
-        <p class="muted" style="margin-bottom:0.6rem">In welchem Zeitraum dosiert werden darf. Die Dosierungen/Tag werden gleichmäßig über das Fenster verteilt (erste zur Start-, letzte zur Endzeit). <strong>0–24 = ganzer Tag</strong>. NO₃-Fenster steuert Stickstoff + Kohlenstoff, PO₄-Fenster Phosphat + Lanthan.<br>Es passen max. so viele Dosierungen/Tag hinein, wie ganze Stunden im Fenster liegen (z. B. 10–14 Uhr → max 5); größere Werte sind oben bei „Dosierungen/Tag" deaktiviert.</p>
+        <div class="section-title">Dosierung &amp; Zeitfenster</div>
+        <p class="muted" style="margin-bottom:0.6rem">Pro Nährstoff: wie viele Dosierungen/Tag und in welchem Zeitfenster (gleichmäßig verteilt — erste zur Start-, letzte zur Endzeit). <strong>0–24 = ganzer Tag</strong>. Es passen max. so viele Dosierungen/Tag hinein, wie ganze Stunden im Fenster liegen (z. B. 10–14 Uhr → max 5) — größere Stufen sind ausgegraut. <strong>C &amp; Lanthan</strong> (Abbau) dosieren immer ganztägig.</p>
         <div class="form-grid">
-          <div class="form-row"><label>NO₃ (N + C): von / bis Uhr</label><div class="minmax"><input type="number" data-setting="no3FromHour" step="1" min="0" max="24"><input type="number" data-setting="no3ToHour" step="1" min="0" max="24"></div></div>
-          <div class="form-row"><label>PO₄ (P + Lanthan): von / bis Uhr</label><div class="minmax"><input type="number" data-setting="po4FromHour" step="1" min="0" max="24"><input type="number" data-setting="po4ToHour" step="1" min="0" max="24"></div></div>
+          <div class="form-row">
+            <label>Stickstoff (N) — Dosierungen/Tag</label>
+            <select data-setting="dosesPerDayN" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Stickstoff (N) — Fenster von / bis Uhr</label><div class="minmax"><input type="number" data-setting="no3FromHour" step="1" min="0" max="24"><input type="number" data-setting="no3ToHour" step="1" min="0" max="24"></div></div>
+          <div class="form-row">
+            <label>Phosphat (P) — Dosierungen/Tag</label>
+            <select data-setting="dosesPerDayP" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Phosphat (P) — Fenster von / bis Uhr</label><div class="minmax"><input type="number" data-setting="po4FromHour" step="1" min="0" max="24"><input type="number" data-setting="po4ToHour" step="1" min="0" max="24"></div></div>
+          <div class="form-row">
+            <label>C &amp; Lanthan (Abbau) — Dosierungen/Tag <span class="hint">immer ganztägig</span></label>
+            <select data-setting="dosesPerDayCLa" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
+              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+            </select>
+          </div>
         </div>
 
         <div style="margin-top:1.2rem"><button class="btn btn-ghost" id="btn-reset">↺ Auf Standard zurücksetzen</button></div>
@@ -697,7 +701,11 @@
   // ---------- Info-Popover für Einstellungen ----------
   const HELP = {
     aquariumVolume: ["Nettovolumen (L)", "Wasservolumen des Beckens (Aquarium + Technikbecken, abzüglich Gestein/Sand). Basis für ALLE Mengenberechnungen. Dieser Wert ist zentral und gilt in allen Rechnern gleich."],
-    dosingsPerDay: ["Dosierungen/Tag", "In wie viele kleine Einzelportionen die tägliche Erhaltungsdosis aufgeteilt wird. Mehr Portionen = gleichmäßigere Nährstoffversorgung über den Tag (weniger Schwankung)."],
+    dosesPerDayN: ["Stickstoff (N) — Dosierungen/Tag", "In wie viele Einzelportionen die tägliche N-Menge aufgeteilt wird. Sie werden gleichmäßig über das N-Zeitfenster verteilt (erste zur Start-, letzte zur Endzeit). 1× = alles auf einen Schlag zur Startzeit. Max = Anzahl ganzer Stunden im Fenster."],
+    dosesPerDayP: ["Phosphat (P) — Dosierungen/Tag", "Wie oft P pro Tag dosiert wird, gleichmäßig über das P-Zeitfenster verteilt. 1× = auf einen Schlag. Max = ganze Stunden im Fenster."],
+    dosesPerDayCLa: ["C & Lanthan — Dosierungen/Tag", "Wie oft die Abbau-Pumpen Kohlenstoff (C) und Lanthan pro Tag dosieren. Diese laufen IMMER ganztägig (kein Zeitfenster), gleichmäßig über 24 h verteilt."],
+    no3FromHour: ["Stickstoff (N) — Zeitfenster", "Zeitraum (von/bis Uhr), in dem Stickstoff dosiert werden darf. 0–24 = ganzer Tag. Die Dosierungen/Tag werden gleichmäßig hineingelegt. Pro Tag passen max. so viele Dosen wie ganze Stunden ins Fenster. (C-Abbau läuft separat ganztägig.)"],
+    po4FromHour: ["Phosphat (P) — Zeitfenster", "Zeitraum (von/bis Uhr), in dem P dosiert werden darf. 0–24 = ganzer Tag. Max. Dosen/Tag = ganze Stunden im Fenster."],
     targetNO3: ["NO₃-Ziel", "Wunsch-Konzentration Nitrat, auf die die Regelung hinarbeitet. Die Korrektur zieht den gemessenen Wert dort hin."],
     targetPO4: ["PO₄-Ziel", "Wunsch-Konzentration Phosphat, auf die die Regelung hinarbeitet."],
     npTargetRatio: ["N:P Zielverhältnis (molar)", "Angestrebtes Verhältnis von Stickstoff zu Phosphat in Mol (Redfield ≈ 16:1). Nur zur INFO/Warnung — die Regelung dosiert weiter auf die NO₃-/PO₄-Ziele. Liegt das gemessene N:P deutlich zu hoch (NO₃ dominiert), droht Phosphat-Limitierung; zu niedrig (PO₄ dominiert) eher Stickstoff-Limitierung/Cyano. Als okay gilt der Bereich Ziel/2 bis Ziel×2."],
@@ -761,7 +769,7 @@
     _infoEsc=(e)=>{ if(e.key==="Escape") closeInfo(); }; document.addEventListener("keydown",_infoEsc);
   }
   function injectInfo(){
-    document.querySelectorAll("#tab-settings .field").forEach(f=>{
+    document.querySelectorAll("#tab-settings .field, #tab-settings .form-row").forEach(f=>{
       const inp=f.querySelector("[data-setting]"); if(!inp) return;
       const h=HELP[inp.dataset.setting]; if(!h) return;
       const lbl=f.querySelector("label"); if(!lbl || lbl.querySelector(".info-i")) return;
@@ -818,18 +826,21 @@
     if(full) return 24;
     return ((((t-f)%24)+24)%24) + 1;   // erste am Start, letzte am Ende → span+1
   }
-  // Dropdown „Dosierungen/Tag" auf die Fenster-Kapazität begrenzen (kleineres Fenster gewinnt).
-  function updateDoseOptions(){
-    const sel=document.querySelector('[data-setting="dosingsPerDay"]');
-    if(!sel) return;
-    const cap=Math.min(windowCapacity(settings.no3FromHour, settings.no3ToHour),
-                       windowCapacity(settings.po4FromHour, settings.po4ToHour));
+  // Jedes Dosis-Dropdown auf die Kapazität seines Fensters begrenzen.
+  function capSelect(settingKey, cap){
+    const sel=document.querySelector(`[data-setting="${settingKey}"]`);
+    if(!sel) return false;
     let maxAllowed=1;
     [...sel.options].forEach(o=>{ const v=parseInt(o.value,10); o.disabled=(v>cap); if(!o.disabled) maxAllowed=Math.max(maxAllowed,v); });
-    if((parseInt(sel.value,10)||0)>cap){          // aktuelle Wahl passt nicht mehr → runter
-      sel.value=String(maxAllowed); settings.dosingsPerDay=maxAllowed;
-      saveSettings(settings).catch(()=>{});
-    }
+    if((parseInt(sel.value,10)||0)>cap){ sel.value=String(maxAllowed); settings[settingKey]=maxAllowed; return true; }
+    return false;
+  }
+  function updateDoseOptions(){
+    let clamped=false;
+    clamped = capSelect("dosesPerDayN", windowCapacity(settings.no3FromHour, settings.no3ToHour)) || clamped;
+    clamped = capSelect("dosesPerDayP", windowCapacity(settings.po4FromHour, settings.po4ToHour)) || clamped;
+    clamped = capSelect("dosesPerDayCLa", 24) || clamped;   // C/La immer ganztägig → kein Limit
+    if(clamped) saveSettings(settings).catch(()=>{});
   }
   // Nächste `count` Slot-Zeitpunkte (Unix-Sek, Minute :10) ab anchorTs (lokale Zeit).
   function nextSlotTimes(anchorTs, fromH, toH, n, count){
@@ -926,15 +937,20 @@
 
     // --- 2) Höhe -> kalk-style Plan (Erhaltung ∞ + gerampte Anpassung, max/Tag) ---
     const lvl=out.level, V=settings.aquariumVolume;
-    const dosesPerDay=Math.max(1, parseInt(settings.dosingsPerDay,10)||12);
-    // Dosier-Zeitfenster der Gruppe → konkrete Slot-Uhrzeiten (identisch zur Firmware).
-    const slotHours=doseSlotHours(cfg.fromHour, cfg.toHour, dosesPerDay);
-    const nDoses=Math.max(1, slotHours.length);                        // tatsächliche Dosen/Tag
-    const maintPerDose=D/nDoses;                                       // Erhaltung je Dosis (Up-Pumpe)
-    const maxPerIntC=settings["maxDailyChange"+cfg.suf]/nDoses;        // max mg/l je Dosis
-    // Anker = letzte Messung (tLast): Slot-Zeiten ab dem Messzeitpunkt (verschiebt sich nicht).
-    const slotTimes=nextSlotTimes(tLast, cfg.fromHour, cfg.toHour, dosesPerDay, 400);
-    const slotAt=(i)=> slotTimes[i] != null ? slotTimes[i] : ((slotTimes[slotTimes.length-1]||tLast));
+    // Up-Pumpe (N/P): eigenes Zeitfenster + eigene Dosen/Tag (cfg.upDoses).
+    // Down-Pumpe (C/La): IMMER ganztägig (0–24), gemeinsame Anzahl dosesPerDayCLa.
+    // Slot-Zeiten identisch zur Firmware. Anker = letzte Messung (tLast).
+    const upDoses=Math.max(1, parseInt(cfg.upDoses,10)||12);
+    const nUp=Math.max(1, doseSlotHours(cfg.fromHour, cfg.toHour, upDoses).length);
+    const slotTimesUp=nextSlotTimes(tLast, cfg.fromHour, cfg.toHour, upDoses, 400);
+    const slotAtUp=(i)=> slotTimesUp[i]!=null ? slotTimesUp[i] : (slotTimesUp[slotTimesUp.length-1]||tLast);
+    const downDoses=Math.max(1, parseInt(settings.dosesPerDayCLa,10)||12);
+    const nDown=Math.max(1, doseSlotHours(0,24,downDoses).length);
+    const slotTimesDown=nextSlotTimes(tLast, 0, 24, downDoses, 400);
+    const slotAtDown=(i)=> slotTimesDown[i]!=null ? slotTimesDown[i] : (slotTimesDown[slotTimesDown.length-1]||tLast);
+    const maintPerDose=D/nUp;                                          // Erhaltung je Up-Dosis
+    const maxPerUpC=settings["maxDailyChange"+cfg.suf]/nUp;            // max mg/l je Up-Dosis
+    const maxPerDownC=settings["maxDailyChange"+cfg.suf]/nDown;        // max mg/l je Down-Dosis
     out.maintPerDose=maintPerDose; out.entries=[]; out.durationDays=0;
     const tooLow=lvl<cfg.target, tooHigh=lvl>cfg.target;
 
@@ -943,10 +959,10 @@
       out.statusText=`Im Zielbereich (Gerade ${trendNote||"–"}). Nur Erhaltungsdosierung.`;
     } else if(tooLow){
       out.status="low"; out.badge="low"; state[cfg.key+"_surplusSince"]=0;
-      const diffC=cfg.target-lvl, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerIntC,1e-9)));
+      const diffC=cfg.target-lvl, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerUpC,1e-9)));
       const stepC=diffC/numD, adjMl=stepC/effUp;
-      for(let i=0;i<numD;i++) out.entries.push({date:slotAt(i), pump:cfg.up, ml:+(adjMl+maintPerDose).toFixed(3), projected:lvl+(i+1)*stepC});
-      out.durationDays=numD/nDoses;
+      for(let i=0;i<numD;i++) out.entries.push({date:slotAtUp(i), pump:cfg.up, ml:+(adjMl+maintPerDose).toFixed(3), projected:lvl+(i+1)*stepC});
+      out.durationDays=numD/nUp;
       out.statusText=`Zu niedrig → in ${fmt(out.durationDays,1)} Tagen auf Ziel anheben (${numD}× ${PUMP_NAMES[cfg.up]}, max ${fmt(settings["maxDailyChange"+cfg.suf],cfg.dp)}/Tag).`;
     } else {
       out.status="high"; out.badge="high";
@@ -954,11 +970,11 @@
       const falling=out.slopePerDay!=null && out.slopePerDay<-1e-9;
       if(D>0.01 || falling){
         state[cfg.key+"_surplusSince"]=0;
-        const maxDownC=Math.min(maxPerIntC, naturalC);
+        const maxDownC=Math.min(maxPerUpC, naturalC);
         if(maxDownC>1e-9){
           const numD=Math.max(1,Math.ceil(diffC/maxDownC)); let rem=diffC;
-          for(let i=0;i<numD;i++){ const req=Math.min(rem,maxDownC); const dose=Math.max(0, maintPerDose-req/effUp); rem-=req; out.entries.push({date:slotAt(i), pump:cfg.up, ml:+dose.toFixed(3), projected:Math.max(cfg.target, lvl-(diffC-rem))}); if(rem<=1e-9) break; }
-          out.durationDays=out.entries.length/nDoses;
+          for(let i=0;i<numD;i++){ const req=Math.min(rem,maxDownC); const dose=Math.max(0, maintPerDose-req/effUp); rem-=req; out.entries.push({date:slotAtUp(i), pump:cfg.up, ml:+dose.toFixed(3), projected:Math.max(cfg.target, lvl-(diffC-rem))}); if(rem<=1e-9) break; }
+          out.durationDays=out.entries.length/nUp;
         }
         out.statusText=`Zu hoch → Erhaltung gedrosselt, natürlicher Verbrauch senkt (${falling?"fällt bereits":"beobachten"}). ${cfg.downLabel} erst bei bestätigtem Überschuss.`;
       } else {
@@ -967,10 +983,10 @@
         const days=(now-since)/DAY;
         if(days>=settings.surplusConfirmDays){
           if(cfg.downSpecific){
-            const effDown=cfg.coeffDown*100/V, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerIntC,1e-9)));
+            const effDown=cfg.coeffDown*100/V, numD=Math.max(1,Math.ceil(diffC/Math.max(maxPerDownC,1e-9)));
             const stepC=diffC/numD; let dml=stepC/effDown; if(cfg.startDown>0) dml=Math.min(cfg.startDown, dml);
-            for(let i=0;i<numD;i++) out.entries.push({date:slotAt(i), pump:cfg.down, ml:+dml.toFixed(3), projected:Math.max(cfg.target, lvl-(i+1)*stepC)});
-            out.durationDays=numD/nDoses;
+            for(let i=0;i<numD;i++) out.entries.push({date:slotAtDown(i), pump:cfg.down, ml:+dml.toFixed(3), projected:Math.max(cfg.target, lvl-(i+1)*stepC)});
+            out.durationDays=numD/nDown;
             out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → Abbau mit ${cfg.downLabel}.`;
           } else {
             // C ist unspezifisch → Hüllkurve [cMin..cMax] ml/100 L, skaliert mit der
@@ -981,8 +997,8 @@
             let cDay=cMin+(cMax-cMin)*escalate;
             if(cfg.startDown>0) cDay=Math.max(cDay, cfg.startDown);
             cDay=Math.max(cMin, Math.min(cMax, cDay));   // Hüllkurve erzwingen
-            const cPer=cDay/nDoses;
-            for(let i=0;i<nDoses;i++) out.entries.push({date:slotAt(i), pump:cfg.down, ml:+cPer.toFixed(3), projected:lvl});
+            const cPer=cDay/nDown;
+            for(let i=0;i<nDown;i++) out.entries.push({date:slotAtDown(i), pump:cfg.down, ml:+cPer.toFixed(3), projected:lvl});
             out.durationDays=1;
             out.statusText=`Überschuss bestätigt (${Math.floor(days)} T) → C-Abbau ${fmt(cDay,1)} ml/Tag (Hüllkurve ${fmt(cMin,1)}–${fmt(cMax,1)}).`;
           }
@@ -991,8 +1007,8 @@
         }
       }
     }
-    // Dauer-Erhaltungsdose (∞). Erhaltung = Verbrauch → hält den Wert konstant;
-    // die Rampe parkt ihn vorher auf cfg.target, also ist target der gehaltene Wert.
+    // Dauer-Erhaltungsdose (∞, Up-Pumpe). Erhaltung = Verbrauch → hält den Wert
+    // konstant; die Rampe parkt ihn vorher auf cfg.target.
     if(maintPerDose>0) out.entries.push({date:0, pump:cfg.up, ml:+maintPerDose.toFixed(3), projected:cfg.target, isMaintenance:true});
     return out;
   }
@@ -1031,7 +1047,7 @@
     const bcls={ok:"b-ok",low:"b-low",high:"b-high",wait:"b-wait",nodata:"b-wait"}[o.badge]||"b-wait";
     const btxt={ok:"im Ziel",low:"zu niedrig",high:"zu hoch",wait:"–",nodata:"keine Daten"}[o.badge]||"–";
     let rec="";
-    const sch=scheduleInfo(cfg.fromHour, cfg.toHour, Math.max(1,parseInt(settings.dosingsPerDay,10)||12));
+    const sch=scheduleInfo(cfg.fromHour, cfg.toHour, Math.max(1,parseInt(cfg.upDoses,10)||12));
     if(o.maintMl>0) rec+=`<div class="rec">Erhaltungsdosis <span class="muted">(gelernter Netto-Verbrauch)</span>: <strong>${fmt(o.maintMl,2)} ml/Tag</strong> ${PUMP_NAMES[cfg.up]} <span class="muted">(${sch.n}×/Tag · ${sch.win})</span></div>`;
     const adj=(o.entries||[]).filter(e=>!e.isMaintenance);
     if(adj.length) rec+=`<div class="rec">Anpassung: <strong>${adj.length} Dosen</strong> ${PUMP_NAMES[adj[0].pump]} über ${fmt(o.durationDays,1)} Tage → Ziel</div>`;
@@ -1152,11 +1168,11 @@
     return {
       no3:{ key:"no3", suf:"NO3", label:"NO₃ (Nitrat)", dp:1, color:"#e8732a",
             target:settings.targetNO3, min:settings.no3Min, max:settings.no3Max,
-            fromHour:settings.no3FromHour, toHour:settings.no3ToHour,
+            fromHour:settings.no3FromHour, toHour:settings.no3ToHour, upDoses:settings.dosesPerDayN,
             up:PUMP.N, coeffUp:settings.coeffN_NO3, down:PUMP.C, downLabel:"C (Kohlenstoff)", downSpecific:false, startUp:settings.startDoseN, startDown:settings.startDoseC },
       po4:{ key:"po4", suf:"PO4", label:"PO₄ (Phosphat)", dp:3, color:"#3498db",
             target:settings.targetPO4, min:settings.po4Min, max:settings.po4Max,
-            fromHour:settings.po4FromHour, toHour:settings.po4ToHour,
+            fromHour:settings.po4FromHour, toHour:settings.po4ToHour, upDoses:settings.dosesPerDayP,
             up:PUMP.P, coeffUp:settings.coeffP_PO4, down:PUMP.LA, coeffDown:settings.coeffLa_PO4, downLabel:"Lanthan", downSpecific:true, startUp:settings.startDoseP, startDown:settings.startDoseLa },
     };
   }
@@ -1245,11 +1261,11 @@
       const next=document.getElementById("dash-next-doses");
       if(next){
         const nowTs=Math.floor(Date.now()/1000);
-        const dpd=Math.max(1,parseInt(settings.dosingsPerDay,10)||12);
-        // Fenster je Gruppe: N,C → NO₃-Fenster · P,La → PO₄-Fenster
-        const grpInfo=(p)=> (p===PUMP.N||p===PUMP.C)
-          ? scheduleInfo(settings.no3FromHour, settings.no3ToHour, dpd)
-          : scheduleInfo(settings.po4FromHour, settings.po4ToHour, dpd);
+        // Pro Pumpe: N → N-Fenster/Anzahl, P → P-Fenster/Anzahl, C+La → ganztägig/gemeinsame Anzahl.
+        const grpInfo=(p)=>
+          p===PUMP.N ? scheduleInfo(settings.no3FromHour, settings.no3ToHour, settings.dosesPerDayN) :
+          p===PUMP.P ? scheduleInfo(settings.po4FromHour, settings.po4ToHour, settings.dosesPerDayP) :
+                       scheduleInfo(0, 24, settings.dosesPerDayCLa);
         const fmtT=(ts)=>new Date(ts*1000).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
         let entries=[];
         try { const pd=await getNutriDoc("plan-current"); entries=(pd && pd.data && pd.data.entries)||[]; }catch(_){}
