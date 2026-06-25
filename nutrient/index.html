@@ -12,9 +12,13 @@
   .field label{display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-light);font-weight:600;margin-bottom:0.2rem}
   .field input,.field select{width:100%;padding:0.45rem 0.55rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
   /* Dosier-Zeilen (je Nährstoff eine Zeile: Name · Dosierungen/Tag · Fenster) */
-  .dose-row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:0.4rem 1.2rem;margin-bottom:0.8rem}
-  .dose-name{flex:0 0 130px;font-weight:700;align-self:center}
-  .dose-sel{padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;background:#fff}
+  .dose-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem 1.1rem;margin-bottom:0.7rem}
+  .dose-name{flex:0 0 130px;font-weight:700}
+  /* Label + Eingabe je Block nebeneinander auf einer Linie (statt gestapelt) */
+  .dose-row .form-row{flex-direction:row;align-items:center;gap:0.45rem;margin:0}
+  .dose-row .form-row > label{white-space:nowrap;font-size:0.8rem;font-weight:600;color:#5a6776;margin:0}
+  .dose-sel{padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;background:#fff}
+  .dose-row .minmax input{padding:0.55rem 0.5rem}
   /* Buttons + .hint: zentral aus /assets/app.css */
   /* Pumpen-Kalibrierung (wie Kalk) */
   /* Pumpen-Kalibrier-Wizard: zentral aus /assets/app.css */
