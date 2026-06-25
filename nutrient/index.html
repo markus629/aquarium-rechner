@@ -11,6 +11,10 @@
   @media(max-width:560px){.grid2{grid-template-columns:1fr}}
   .field label{display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-light);font-weight:600;margin-bottom:0.2rem}
   .field input,.field select{width:100%;padding:0.45rem 0.55rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;font-family:inherit;background:#fff}
+  /* Dosier-Zeilen (je Nährstoff eine Zeile: Name · Dosierungen/Tag · Fenster) */
+  .dose-row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:0.4rem 1.2rem;margin-bottom:0.8rem}
+  .dose-name{flex:0 0 130px;font-weight:700;align-self:center}
+  .dose-sel{padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;background:#fff}
   /* Buttons + .hint: zentral aus /assets/app.css */
   /* Pumpen-Kalibrierung (wie Kalk) */
   /* Pumpen-Kalibrier-Wizard: zentral aus /assets/app.css */
@@ -353,27 +357,32 @@
 
         <div class="section-title">Dosierung &amp; Zeitfenster</div>
         <p class="muted" style="margin-bottom:0.6rem">Pro Nährstoff: wie viele Dosierungen/Tag und in welchem Zeitfenster (gleichmäßig verteilt — erste zur Start-, letzte zur Endzeit). <strong>0–24 = ganzer Tag</strong>. Es passen max. so viele Dosierungen/Tag hinein, wie ganze Stunden im Fenster liegen (z. B. 10–14 Uhr → max 5) — größere Stufen sind ausgegraut. <strong>C &amp; Lanthan</strong> (Abbau) dosieren immer ganztägig.</p>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Stickstoff (N) — Dosierungen/Tag</label>
-            <select data-setting="dosesPerDayN" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
-              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+        <div class="dose-row">
+          <div class="dose-name">Stickstoff (N)</div>
+          <div class="form-row"><label>Dosierungen/Tag</label>
+            <select data-setting="dosesPerDayN" class="dose-sel">
+              <option value="12">12×</option><option value="8">8×</option><option value="6">6×</option><option value="4">4×</option><option value="3">3×</option><option value="2">2×</option><option value="1">1× (auf einen Schlag)</option>
             </select>
           </div>
-          <div class="form-row"><label>Stickstoff (N) — Fenster von / bis Uhr</label><div class="minmax"><input type="number" data-setting="no3FromHour" step="1" min="0" max="24"><input type="number" data-setting="no3ToHour" step="1" min="0" max="24"></div></div>
-          <div class="form-row">
-            <label>Phosphat (P) — Dosierungen/Tag</label>
-            <select data-setting="dosesPerDayP" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
-              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+          <div class="form-row"><label>Fenster von / bis Uhr</label><div class="minmax" style="width:140px"><input type="number" data-setting="no3FromHour" step="1" min="0" max="24"><input type="number" data-setting="no3ToHour" step="1" min="0" max="24"></div></div>
+        </div>
+        <div class="dose-row">
+          <div class="dose-name">Phosphat (P)</div>
+          <div class="form-row"><label>Dosierungen/Tag</label>
+            <select data-setting="dosesPerDayP" class="dose-sel">
+              <option value="12">12×</option><option value="8">8×</option><option value="6">6×</option><option value="4">4×</option><option value="3">3×</option><option value="2">2×</option><option value="1">1× (auf einen Schlag)</option>
             </select>
           </div>
-          <div class="form-row"><label>Phosphat (P) — Fenster von / bis Uhr</label><div class="minmax"><input type="number" data-setting="po4FromHour" step="1" min="0" max="24"><input type="number" data-setting="po4ToHour" step="1" min="0" max="24"></div></div>
-          <div class="form-row">
-            <label>C &amp; Lanthan (Abbau) — Dosierungen/Tag <span class="hint">immer ganztägig</span></label>
-            <select data-setting="dosesPerDayCLa" style="padding:0.6rem 0.7rem;border:2px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit">
-              <option value="12">12× pro Tag</option><option value="8">8× pro Tag</option><option value="6">6× pro Tag</option><option value="4">4× pro Tag</option><option value="3">3× pro Tag</option><option value="2">2× pro Tag</option><option value="1">1× pro Tag (auf einen Schlag)</option>
+          <div class="form-row"><label>Fenster von / bis Uhr</label><div class="minmax" style="width:140px"><input type="number" data-setting="po4FromHour" step="1" min="0" max="24"><input type="number" data-setting="po4ToHour" step="1" min="0" max="24"></div></div>
+        </div>
+        <div class="dose-row">
+          <div class="dose-name">C &amp; Lanthan <span class="muted" style="font-weight:400">(Abbau)</span></div>
+          <div class="form-row"><label>Dosierungen/Tag</label>
+            <select data-setting="dosesPerDayCLa" class="dose-sel">
+              <option value="12">12×</option><option value="8">8×</option><option value="6">6×</option><option value="4">4×</option><option value="3">3×</option><option value="2">2×</option><option value="1">1× (auf einen Schlag)</option>
             </select>
           </div>
+          <div class="form-row"><label>Fenster</label><div class="muted" style="padding:0.6rem 0">immer ganztägig (0–24)</div></div>
         </div>
 
         <div style="margin-top:1.2rem"><button class="btn btn-ghost" id="btn-reset">↺ Auf Standard zurücksetzen</button></div>
