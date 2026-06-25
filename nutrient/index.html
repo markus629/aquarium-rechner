@@ -207,6 +207,25 @@
       </div>
 
       <div class="card">
+        <h2>Firmware-Update (OTA via GitHub)</h2>
+        <p class="muted" style="margin-bottom:0.8rem">
+          Der ESP holt sich Firmware-Updates direkt aus den <a href="https://github.com/markus629/aquarium-rechner/releases" target="_blank" style="color:var(--blue)">GitHub-Releases</a>.
+        </p>
+        <div id="fw-current" style="margin-bottom:1rem;padding:0.7rem;background:var(--bg);border-radius:8px;font-size:0.88rem">Lade Firmware-Info …</div>
+        <div class="form-toggle" style="margin-bottom:0.8rem">
+          <input type="checkbox" id="otaAutoUpdate" data-setting="otaAutoUpdate">
+          <label for="otaAutoUpdate">Auto-Update aktivieren
+            <span class="hint" style="font-weight:400;display:block">Wenn AN: ESP installiert neuere Releases automatisch (alle 6 h Check). Nie während der Dosier-Zeit (Schutzfenster).</span>
+          </label>
+        </div>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+          <button class="btn btn-primary" id="fw-update-now">Jetzt prüfen &amp; updaten</button>
+          <button class="btn btn-ghost" id="fw-refresh">Status aktualisieren</button>
+        </div>
+        <div id="fw-status" style="margin-top:0.8rem;font-size:0.88rem"></div>
+      </div>
+
+      <div class="card">
         <h2>ESP einrichten</h2>
         <p class="muted" style="margin-bottom:0.8rem">So verbindest du einen ESP32 mit deinem Account:</p>
         <ol style="line-height:1.8;padding-left:1.2rem;margin-bottom:0.5rem">
@@ -406,7 +425,7 @@
     getAuthInstance, getSettings, saveSettings, defaultSettings,
     addMeasurement, listMeasurements, deleteMeasurement,
     listDosings, deleteDosing, getState, saveState, savePlan, getNutriDoc,
-    sendCommand, watchCommand, deleteCommand, getPumps, savePump, PUMP, PUMP_NAMES
+    sendCommand, watchCommand, deleteCommand, getPumps, savePump, PUMP, PUMP_NAMES, getLatestGithubRelease
   } from "/nutrient/nutri-store.js";
   import { getAquariumLiters, setAquariumLiters } from "/assets/aquarium-profile.js";
   import { renderDeviceRegistry } from "/assets/device-registry.js";
@@ -459,7 +478,7 @@
     if(!statusEl) return;
     try {
       const infoDoc = await getNutriDoc("info");
-      if(!infoDoc || !infoDoc.data){ statusEl.innerHTML = `<p class="muted">Noch nichts vom ESP empfangen.</p>`; return; }
+      if(!infoDoc || !infoDoc.data){ statusEl.innerHTML = `<p class="muted">Noch nichts vom ESP empfangen.</p>`; refreshFirmwareStatus(null); return; }
       const d = infoDoc.data;
       const lastSeenMs = d.lastSeen ? (d.lastSeen < 1e12 ? d.lastSeen*1000 : d.lastSeen) : 0;
       const online = lastSeenMs && (Date.now()-lastSeenMs) < 120000;
@@ -471,7 +490,68 @@
           <div class="field"><label>WLAN</label><div>${d.rssi!=null?d.rssi+" dBm":"—"} <span class="muted">${d.ip||""}</span></div></div>
           <div class="field"><label>Letzte 24 h</label><div>${(d.dosesOk24h||0)} / ${((d.dosesOk24h||0)+(d.dosesFail24h||0))} Dosen ok</div></div>
         </div>`;
+      refreshFirmwareStatus(d.firmware);
     } catch(e){ statusEl.innerHTML = `<p class="muted">ESP-Status nicht ladbar: ${e.message}</p>`; }
+  }
+
+  // ---------- Firmware-Update (OTA via GitHub) ----------
+  const GH_OWNER="markus629", GH_REPO="aquarium-rechner";
+  function semverCompare(a,b){
+    const pa=(a||"0.0.0").split(".").map(n=>parseInt(n,10)||0), pb=(b||"0.0.0").split(".").map(n=>parseInt(n,10)||0);
+    for(let i=0;i<3;i++){ if(pa[i]!==pb[i]) return pa[i]<pb[i]?-1:1; }
+    return 0;
+  }
+  async function refreshFirmwareStatus(espVersion){
+    const cur=document.getElementById("fw-current"); if(!cur) return;
+    const espV=espVersion||"—";
+    try {
+      const latest=await getLatestGithubRelease(GH_OWNER, GH_REPO);
+      if(!latest || !latest.version){ cur.innerHTML=`<strong>ESP-Version:</strong> ${espV} · <em>noch kein GitHub-Release</em>`; return; }
+      if(!latest.url){ cur.innerHTML=`<strong>Release v${latest.version}</strong> gefunden — aber keine <code>.bin</code> als Asset!`; return; }
+      const published=latest.publishedAt?new Date(latest.publishedAt).toLocaleString("de-DE"):"—";
+      const sizeKb=latest.size?`${Math.round(latest.size/1024)} kB`:"?";
+      let cmp;
+      if(!espVersion){ cmp=`<span class="muted">ESP-Status unbekannt (offline?)</span>`; }
+      else { const c=semverCompare(espVersion, latest.version);
+        cmp = c<0 ? `<span style="color:var(--orange)">ESP hat noch ${espV} — Update verfügbar</span>`
+            : c===0 ? `<span style="color:var(--green)">ESP ist aktuell</span>`
+            : `<span class="muted">ESP läuft auf neuerer Version (${espV})</span>`; }
+      cur.innerHTML=`<strong>GitHub-Release:</strong> <a href="${latest.htmlUrl}" target="_blank" style="color:var(--blue)">v${latest.version}</a> · ${sizeKb} · ${published}<br><strong>ESP-Version:</strong> ${espV} — ${cmp}`;
+    } catch(e){ cur.innerHTML=`<strong>ESP-Version:</strong> ${espV} · <span style="color:var(--red)">GitHub-Abruf fehlgeschlagen: ${e.message}</span>`; }
+  }
+  let _otaCheckUnsub=null;
+  function setupFirmwareUpload(){
+    const btnUpdate=document.getElementById("fw-update-now"), btnRefresh=document.getElementById("fw-refresh"), status=document.getElementById("fw-status");
+    if(!btnUpdate) return;
+    btnRefresh.onclick=()=>refreshDeviceTab();
+    btnUpdate.onclick=async ()=>{
+      if(_otaCheckUnsub){ _otaCheckUnsub(); _otaCheckUnsub=null; }
+      btnUpdate.disabled=true; const orig=btnUpdate.textContent; btnUpdate.textContent="Sende an ESP …"; status.innerHTML="";
+      try {
+        const cmdId=await sendCommand({ action:"otaCheck" });
+        btnUpdate.textContent="Warte auf ESP …";
+        const timeout=setTimeout(()=>{ if(_otaCheckUnsub){_otaCheckUnsub();_otaCheckUnsub=null;} btnUpdate.disabled=false; btnUpdate.textContent=orig; status.innerHTML=`<span style="color:var(--orange)">ESP antwortet nicht. Ist er online?</span>`; }, 90000);
+        _otaCheckUnsub=watchCommand(cmdId, async (data)=>{
+          if(!data) return;
+          if(data.status==="running"){ btnUpdate.textContent="ESP prüft GitHub …"; }
+          else if(data.status==="done"){
+            clearTimeout(timeout); _otaCheckUnsub(); _otaCheckUnsub=null;
+            const c=data.result?.currentVersion||"?", av=data.result?.availableVersion||"?", info=data.result?.info||"";
+            if(info){
+              const color=info.includes("läuft")?"var(--green)":info.includes("verschoben")?"var(--orange)":info.includes("fehlgeschlagen")?"var(--red)":"var(--text-light)";
+              status.innerHTML=`<span style="color:${color}">${info} (lokal v${c}, verfügbar v${av})</span>`;
+            } else if(av && av!==c && semverCompare(c,av)<0){ status.innerHTML=`<span style="color:var(--green)">Update auf v${av} läuft — ESP startet gleich neu.</span>`; }
+            else { status.innerHTML=`<span class="muted">✓ ESP ist bereits aktuell (v${c}).</span>`; }
+            btnUpdate.disabled=false; btnUpdate.textContent=orig;
+            setTimeout(()=>refreshDeviceTab(), 8000);
+          } else if(data.status==="failed"){
+            clearTimeout(timeout); _otaCheckUnsub(); _otaCheckUnsub=null;
+            status.innerHTML=`<span style="color:var(--red)">${data.result?.error||"Update fehlgeschlagen"}</span>`;
+            btnUpdate.disabled=false; btnUpdate.textContent=orig;
+          }
+        });
+      } catch(e){ status.innerHTML=`<span style="color:var(--red)">${e.message}</span>`; btnUpdate.disabled=false; btnUpdate.textContent=orig; }
+    };
   }
 
   // ---------- Manuelle Einzeldosis (Command an ESP) ----------
@@ -1348,7 +1428,7 @@
         settings=await getSettings(); state=await getState();
         const cL=await getAquariumLiters();
         if(cL!=null) settings.aquariumVolume=cL; else { try{ await setAquariumLiters(settings.aquariumVolume); }catch(_){} }
-        fillSettings(); bindSettings(); injectInfo(); bindManualDose();
+        fillSettings(); bindSettings(); injectInfo(); bindManualDose(); setupFirmwareUpload();
         document.querySelectorAll(".meas-toggle").forEach(btn=>{ btn.onclick=()=>{ const sec=document.getElementById(btn.dataset.meas); if(!sec) return; const ex=sec.classList.toggle("expanded"); btn.textContent=ex?"Weniger anzeigen ▴":`Alle anzeigen (${btn.dataset.total||""}) ▾`; }; });
         document.getElementById("hist-prev").onclick=()=>{ _histDayOffset--; renderDosingHistory(); };
         document.getElementById("hist-next").onclick=()=>{ _histDayOffset++; renderDosingHistory(); };

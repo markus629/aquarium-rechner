@@ -220,6 +220,7 @@ export function defaultSettings() {
     // N/P seeden die gelernte Erhaltung; C/La sind die Start-Menge beim Abbau.
     startDoseN: 0, startDoseP: 0, startDoseC: 0, startDoseLa: 0,
     autoDosing: false,
+    otaAutoUpdate: false,          // ESP installiert neuere GitHub-Releases automatisch
     espOfflineAlert: true,
     // Pumpen-Hardware (rollen-spezifisch, gleiche Keys wie Kalk → ESP liest sie
     // im Nährstoff-Modus aus nutri_docs/settings)
