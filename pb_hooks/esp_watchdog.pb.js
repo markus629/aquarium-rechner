@@ -17,9 +17,13 @@ cronAdd("esp_watchdog", "*/2 * * * *", () => {
   const DOWN_AFTER_SEC = 300; // 5 Minuten
   const now = Math.floor(Date.now() / 1000);
 
+  // Robust gegen die verschiedenen Rückgabeformen von record.get(jsonField) in der
+  // PB-JSVM (String, JsonRaw/[]byte, bereits dekodiertes Objekt).
   const asObj = (v) => {
+    if (v == null) return {};
     if (typeof v === "string") { try { return JSON.parse(v); } catch (_) { return {}; } }
-    return v || {};
+    try { const s = String(v); if (s && (s.charAt(0) === "{" || s.charAt(0) === "[")) return JSON.parse(s); } catch (_) {}
+    return (typeof v === "object") ? v : {};
   };
 
   let devices = [];
@@ -71,7 +75,7 @@ cronAdd("esp_watchdog", "*/2 * * * *", () => {
         wd.set("key", "_watchdog");
       }
       wdData[deviceId] = isDown;
-      wd.set("data", wdData);
+      wd.set("data", JSON.stringify(wdData));   // als String → zuverlässig wieder lesbar
       $app.save(wd);
     } catch (e) {
       console.log("[watchdog] Status-Speichern fehlgeschlagen:", e);
